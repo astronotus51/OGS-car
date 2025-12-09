@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OGS - Prototype</title>
+  <link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="menuOverlay" class="menu-overlay">
+    <div class="menu-content">
+      <div class="menu-title">OGSCAR</div>
+      <div class="menu-subtitle">Remake de OGS par Oscar</div>
+      <div class="menu-note">Je ne cherche pas à faire mieux,<br>juste à raviver<br>les souvenirs d’enfance.</div>
+
+      <div class="menu-actions">
+        <button id="btnPvp" class="menu-btn primary">1 VS 1</button>
+        <label class="toggle">
+          <input type="checkbox" id="chkHazard" checked>
+          <span>Scorpion noir</span>
+        </label>
+      </div>
+
+      <div class="menu-actions">
+        <button id="btnAI" class="menu-btn">1 VS IA</button>
+        <select id="aiSelect" class="menu-select">
+          <option value="simple">Simple</option>
+          <option value="moyen" selected>Moyen</option>
+          <option value="difficile">Difficile</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+  <script src="main.js"></script>
+</body>
+</html>
