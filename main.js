@@ -62,6 +62,10 @@
     restart: { x: 0, y: 0, w: 0, h: 0 },
     menu: { x: 0, y: 0, w: 0, h: 0 },
   };
+  const pauseOverlayButtons = {
+    restart: null,
+    resume: null,
+  };
 
   // Slot metadata with Og mapping (color + ogId).
   const BOTTOM_SLOT_COLORS = [
@@ -771,6 +775,30 @@
     return false;
   }
 
+  function handlePauseOverlayClick(point) {
+    if (!isPaused || menuOpen || gameOver || countdown > 0) return false;
+    const { resume, restart } = pauseOverlayButtons;
+
+    if (resume) {
+      const hitResume = point.x >= resume.x && point.x <= resume.x + resume.w && point.y >= resume.y && point.y <= resume.y + resume.h;
+      if (hitResume) {
+        isPaused = false;
+        console.log('Lecture reprise (pause overlay)');
+        return true;
+      }
+    }
+
+    if (restart) {
+      const hitRestart = point.x >= restart.x && point.x <= restart.x + restart.w && point.y >= restart.y && point.y <= restart.y + restart.h;
+      if (hitRestart) {
+        startGame(lastGameConfig);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   function renderProjectiles() {
     projectiles.forEach(proj => {
       ctx.save();
@@ -855,32 +883,12 @@
   function renderHazard() {
     if (!hazardState.active) return;
     ctx.save();
-    const body = '#0b0b0b';
-    const outline = '#111827';
     const size = HAZARD_RADIUS * 2;
     ctx.translate(hazardState.x, hazardState.y);
 
-    // Corps du scorpion (carré stylisé).
-    ctx.fillStyle = body;
-    ctx.strokeStyle = outline;
-    ctx.lineWidth = 3;
+    // Bloc noir simple, sans éléments graphiques additionnels.
+    ctx.fillStyle = '#000000';
     ctx.fillRect(-size / 2, -size / 2, size, size);
-    ctx.strokeRect(-size / 2, -size / 2, size, size);
-
-    // Queue relevée.
-    ctx.beginPath();
-    ctx.moveTo(size * 0.1, -size * 0.4);
-    ctx.lineTo(size * 0.35, -size * 0.7);
-    ctx.lineTo(size * 0.55, -size * 0.4);
-    ctx.stroke();
-
-    // Pinces.
-    ctx.beginPath();
-    ctx.moveTo(-size * 0.5, -size * 0.1);
-    ctx.lineTo(-size * 0.8, -size * 0.2);
-    ctx.moveTo(-size * 0.5, size * 0.1);
-    ctx.lineTo(-size * 0.8, size * 0.2);
-    ctx.stroke();
 
     ctx.restore();
   }
@@ -1025,6 +1033,7 @@
     // Health rendered au-dessus des entités pour qu'elles passent dessous.
     renderHealth();
     renderPauseButton();
+    renderPauseOverlay();
     renderCountdown();
     renderGameOver();
   }
@@ -1114,6 +1123,57 @@
     ctx.restore();
   }
 
+  function renderPauseOverlay() {
+    if (!isPaused || menuOpen || gameOver || countdown > 0) {
+      pauseOverlayButtons.restart = null;
+      pauseOverlayButtons.resume = null;
+      return;
+    }
+
+    // Fond léger pour signaler la pause.
+    ctx.save();
+    ctx.fillStyle = 'rgba(11, 16, 33, 0.55)';
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    // Boutons centrés.
+    const btnWidth = 220;
+    const btnHeight = 64;
+    const spacing = 24;
+    const totalWidth = btnWidth * 2 + spacing;
+    const startX = (GAME_WIDTH - totalWidth) / 2;
+    const y = (GAME_HEIGHT - btnHeight) / 2 + 40;
+
+    // Continuer
+    const resumeX = startX;
+    pauseOverlayButtons.resume = { x: resumeX, y, w: btnWidth, h: btnHeight };
+
+    ctx.font = '18px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Style helper
+    function drawButton(x, label) {
+      ctx.fillStyle = '#3f2c1d';
+      ctx.fillRect(x, y, btnWidth, btnHeight);
+      ctx.fillStyle = '#9a6b3d';
+      ctx.fillRect(x + 4, y + 4, btnWidth - 8, btnHeight - 8);
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(x + 2, y + 2, btnWidth - 4, btnHeight - 4);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillText(label, x + btnWidth / 2, y + btnHeight / 2);
+    }
+
+    drawButton(resumeX, 'Continuer');
+
+    // Recommencer
+    const restartX = startX + btnWidth + spacing;
+    pauseOverlayButtons.restart = { x: restartX, y, w: btnWidth, h: btnHeight };
+    drawButton(restartX, 'Recommencer');
+
+    ctx.restore();
+  }
+
   function update(deltaTime) {
     if (gameOver) return;
     // Mana regeneration (base).
@@ -1161,10 +1221,10 @@
           // bounce on left/right
           if (entity.x - entityRadius <= playfield.x) {
             entity.x = playfield.x + entityRadius;
-            entity.vx = Math.abs(entity.vx);
+            applyVioletBounce(entity, Math.abs(entity.vx));
           } else if (entity.x + entityRadius >= playfield.x + playfield.width) {
             entity.x = playfield.x + playfield.width - entityRadius;
-            entity.vx = -Math.abs(entity.vx);
+            applyVioletBounce(entity, -Math.abs(entity.vx));
           }
           break;
         }
@@ -1451,6 +1511,9 @@
       const baseAim = player === 'top' ? Math.PI / 2 : -Math.PI / 2;
       baseEntity.rotation = baseAim;
       baseEntity.rotationTarget = baseAim;
+    } else if (ogId === 2) {
+      // Défenseur violet : rotation dépend du sens (côté gauche du sprite orienté vers le déplacement).
+      baseEntity.rotation = vx >= 0 ? Math.PI : 0;
     } else if (ogId === 4) {
       // Éponge rouge : rotation lente en continu.
       baseEntity.rotation = 0;
@@ -1623,8 +1686,8 @@
     const push = overlap * 0.5;
     a.x += nx * push;
     b.x -= nx * push;
-    a.vx = nx * a.speed;
-    b.vx = -nx * b.speed;
+    applyVioletBounce(a, nx * a.speed);
+    applyVioletBounce(b, -nx * b.speed);
   }
 
   // Bounce violets away from static obstacles with a small horizontal nudge.
@@ -1635,7 +1698,24 @@
     const overlap = Math.max(0, minDist - dist);
     const nx = dx !== 0 ? Math.sign(dx) : (Math.random() < 0.5 ? -1 : 1);
     violet.x += nx * overlap;
-    violet.vx = nx * violet.speed;
+    applyVioletBounce(violet, nx * violet.speed);
+  }
+
+  function applyVioletBounce(violet, newVx) {
+    if (!violet || violet.ogId !== 2) {
+      violet.vx = newVx;
+      return;
+    }
+    const prevSign = Math.sign(violet.vx || 0);
+    const nextSign = Math.sign(newVx || 0);
+    if (prevSign && nextSign && prevSign !== nextSign) {
+      violet.rotation = (violet.rotation || 0) + Math.PI;
+    }
+    violet.vx = newVx;
+    if (nextSign !== 0) {
+      // Côté gauche du sprite pointe vers la direction de déplacement.
+      violet.rotation = nextSign > 0 ? Math.PI : 0;
+    }
   }
 
   function handleYellowVsViolet(toRemove) {
@@ -2499,6 +2579,11 @@
     if (pointInRect(point, uiRects.pauseButton)) {
       isPaused = !isPaused;
       console.log(isPaused ? 'Pause activée' : 'Lecture reprise');
+      return;
+    }
+
+    // Bouton Recommencer visible uniquement pendant la pause.
+    if (handlePauseOverlayClick(point)) {
       return;
     }
 

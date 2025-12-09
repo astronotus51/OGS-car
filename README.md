@@ -24,6 +24,7 @@ Jeu jouable à deux sur le même écran : chaque joueur place des Ogs (unités
 - Les orbes de mana sont toujours au-dessus des Ogs pour rester visibles et cliquables.
 - Barre de mana épaissie et slots agrandis quasi jointifs; barres de PV allongées.
 - Fond du terrain animé façon vagues psychédéliques : multiples lignes ondulantes en mouvement continu.
+- Défenseurs violets pivotent de 180° uniquement à chaque rebond (mur/obstacle/entre eux) pour un feedback visuel immédiat.
 - La pause fige toutes les animations (mana/vagues) et bloque toute action de placement tant qu’elle est active.
 - Plages organiques animées entre la barre de mana et le terrain (top/bottom) avec bord ondulé discret, rubans translucides légers et halos doux pour un rendu organique mais sobre.
 - Slots : fond blanc un peu plus opaque et contour blanc pour une meilleure lisibilité sur la barre de mana.
@@ -96,8 +97,8 @@ Les coûts et comportements sont définis dans `main.js` (constante `OGS`). Sant
    - Tire vers l’avant uniquement sur Og 1/3/6/7 adverses (portée 1 case).  
    - PV : 3. Résiste aux projectiles standards jusqu’à 3 touches.
 
-## Hazard : Scorpion noir
-- Apparition aléatoire (60–90 s). Arrive par la droite, se place au centre, pause 5 s puis fonce vers le haut ou le bas.
+## Hazard : Bloc noir
+- Apparition aléatoire (60–90 s). Arrive par la droite, se place au centre, pause 5 s puis fonce vers le haut ou le bas sous forme d’un simple carré noir.
 - Détruit toute unité sur sa trajectoire. S’il sort côté haut, le joueur haut prend 7 dégâts; côté bas, le joueur bas prend 7.
 - Pendant qu’il est actif, la pose d’unités est verrouillée.
 
@@ -105,7 +106,7 @@ Les coûts et comportements sont définis dans `main.js` (constante `OGS`). Sant
 - Cliquer sur un slot en haut (joueur top) ou bas (joueur bottom) pour sélectionner un Og, puis cliquer une case autorisée de ta moitié pour le poser. Certains Ogs ne se posent que sur la première ligne de leur camp (1, 4, 7).
 - Les sélections top/bottom sont indépendantes : un clic côté adverse ne désélectionne pas ton slot.
 - Cliquer sur une orbe de ton côté pour la ramasser.  
-- Bouton pause à droite : met le jeu en pause/reprise.
+- Bouton pause à droite : met le jeu en pause/reprise. Quand le jeu est en pause, deux boutons apparaissent au centre : « Continuer » (reprend la partie) et « Recommencer » (relance immédiatement la partie avec la même configuration). Ils disparaissent dès que la pause est quittée.
 
 ## Lancement rapide
 Ouvre `index.html` dans un navigateur moderne. Le canvas se redimensionne pour garder le ratio 3:4 (plein écran iPad vertical). Toute la logique côté client est dans `main.js`, le style dans `style.css`.
