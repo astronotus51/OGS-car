@@ -406,10 +406,11 @@
       ctx.fillText(oppLine, W / 2, 130);
       if (view.presence && view.presence[opp] === false) { ctx.fillStyle = '#fca5a5'; ctx.font = 'bold 28px Fredoka, sans-serif'; ctx.fillText('Adversaire déconnecté… (forfait dans 20 s)', W / 2, 172); }
       // Timer (en haut à gauche) et ping.
-      const left = Math.max(0, Math.ceil(view.timeLeft));
+      const unlimited = !isFinite(view.timeLeft);
+      const left = unlimited ? Math.floor(view.elapsed || 0) : Math.max(0, Math.ceil(view.timeLeft));
       const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; roundRect(24, 24, 230, 120, 18); ctx.fill();
-      ctx.fillStyle = left <= 20 && Math.sin(view.time * 8) > 0 ? '#fca5a5' : '#fef3c7';
+      ctx.fillStyle = !unlimited && left <= 20 && Math.sin(view.time * 8) > 0 ? '#fca5a5' : '#fef3c7';
       ctx.font = 'bold 54px "Press Start 2P", monospace'; ctx.textAlign = 'center';
       ctx.fillText(`${mm}:${ss}`, 139, 112);
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; roundRect(W - 254, 24, 230, 120, 18); ctx.fill();

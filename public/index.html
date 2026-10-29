@@ -64,7 +64,9 @@
       <div class="lobby-center">
         <button id="btnPlay" class="btn play">JOUER<span>Partie classée · trophées</span></button>
         <div class="play-options">
-          <label class="toggle"><input type="checkbox" id="chkHazard" checked> Scorpion noir (entraînement & amical)</label>
+          <label class="toggle">Durée (entraînement & amical)
+            <select id="durationSelect" class="select"><option value="120">2 min</option><option value="180" selected>3 min</option><option value="300">5 min</option><option value="0">Illimitée (KO seulement)</option></select>
+          </label>
         </div>
         <div class="row">
           <button id="btnBot" class="btn">Entraînement vs IA</button>

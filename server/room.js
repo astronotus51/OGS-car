@@ -15,12 +15,12 @@ let nextRoomId = 1;
  * onEnd(room, result) appelé une fois à la fin.
  */
 class Room {
-  constructor({ players, mode, hazard = true, botFill = false, onEnd }) {
+  constructor({ players, mode, hazard = false, duration = Sim.RULES.matchDuration, botFill = false, onEnd }) {
     this.id = nextRoomId++;
     this.mode = mode;
     this.botFill = botFill;
     this.seed = (Math.random() * 0xffffffff) >>> 0;
-    this.game = Sim.createGame({ seed: this.seed, hazard });
+    this.game = Sim.createGame({ seed: this.seed, hazard, duration });
     this.players = players.map((p, i) => ({
       side: SIDES[i], client: p.client || null, profile: p.profile, bot: p.bot || null,
       ai: p.bot ? AI.createAI(this.game, SIDES[i], p.bot) : null,

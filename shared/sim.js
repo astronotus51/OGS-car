@@ -42,12 +42,13 @@
     wingedRangeCells: 1,
     projectileSpeed: 700,
     projectileLifetime: 2.5,
-    matchDuration: 180, // s, puis le joueur avec le plus de PV gagne
+    matchDuration: 180, // s par défaut (classée), puis le joueur avec le plus de PV gagne ; 0 = illimité
+    durations: [120, 180, 300, 0], // choix proposés en entraînement / amical
     countdown: 3,
   };
 
   const OGS = {
-    1: { id: 1, key: 'runner', name: 'Og Runner', color: '#fbbf24', cost: 10, speed: SPEED_UNIT * 3, movement: 'straight', hp: 1, baseDamage: 1, frontOnly: true, air: false },
+    1: { id: 1, key: 'runner', name: 'Og Runner', color: '#fbbf24', cost: 10, speed: SPEED_UNIT * 3, movement: 'straight', hp: 1, baseDamage: 1, frontOnly: false, air: false }, // posable sur toute sa moitié (y compris la ligne du fond)
     2: { id: 2, key: 'defenseur', name: 'Og Défenseur', color: '#a78bfa', cost: 20, speed: SPEED_UNIT * 3, movement: 'horizontal', hp: 1, baseDamage: 0, frontOnly: false, air: false },
     3: { id: 3, key: 'tourelle', name: 'Og Tourelle', color: '#fb923c', cost: 30, speed: 0, movement: 'static', hp: 2, baseDamage: 0, frontOnly: false, air: false },
     4: { id: 4, key: 'eponge', name: 'Og Éponge', color: '#ef4444', cost: 40, speed: SPEED_UNIT * 4, movement: 'diagBounce', hp: 3, baseDamage: 2, frontOnly: true, air: false },
@@ -104,7 +105,7 @@
 
   // ---------- Création d'une partie ----------
   function createGame(options) {
-    const opts = Object.assign({ seed: 1, hazard: true, duration: RULES.matchDuration }, options || {});
+    const opts = Object.assign({ seed: 1, hazard: false, duration: RULES.matchDuration }, options || {}); // duration 0 = illimité ; hazard désactivé par défaut (le scorpion cassait le gameplay)
     const rng = createRng(opts.seed);
     const S = {
       time: 0,

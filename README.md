@@ -68,8 +68,8 @@ Chaque joueur se voit **toujours en bas** de l'écran (le monde est retourné po
 ### Modes
 
 - **JOUER** – partie classée : file d'attente par trophées (fenêtre qui s'élargit avec l'attente). Au bout de `BOT_FILL_SECONDS` (15 s par défaut) sans adversaire, un bot de niveau adapté complète la partie (gain de trophées divisé par 2).
-- **Entraînement vs IA** – XP et pièces réduits, pas de trophées.
-- **Partie amicale** – un code à 5 caractères à partager, pas de trophées.
+- **Entraînement vs IA** – XP et pièces réduits, pas de trophées. Durée au choix (2/3/5 min ou illimitée).
+- **Partie amicale** – un code à 5 caractères à partager, pas de trophées. Durée au choix.
 
 Une partie dure **3 minutes** max ; ensuite, celui qui a le plus de PV gagne. Un joueur déconnecté a 20 s pour revenir (rafraîchir la page reprend la partie en cours).
 
@@ -95,8 +95,9 @@ Les règles du jeu d'origine sont conservées (`legacy/README.md`, `legacy/BALAN
 - le Runner jaune **passe au-dessus de ses propres Murs** et ne rebondit que sur les Murs ennemis (en changeant de camp) ;
 - l'Éponge rouge **casse un Mur ennemi mais meurt** sur le coup ; elle **encaisse maintenant les projectiles** (3 PV) au lieu d'y être immunisée ;
 - Tourelle et Tourelle ailée ont **2 PV** ; l'Ailée cible aussi les Ailées adverses (1 / 3 / 6 / 7) ;
-- le scorpion noir n'inflige plus de dégâts à la base (il détruit tout sur son passage et bloque les placements) ;
-- limite de temps de 3 min, compte à rebours de 3 s.
+- le scorpion noir est **désactivé** (il cassait le gameplay ; le code reste dans `sim.js`, option `hazard`) ;
+- le Runner se pose n'importe où sur sa moitié (même la ligne du fond) ; Éponge et Ailée restent sur la ligne avant ;
+- classée : 3 min ; entraînement et amical : 2, 3, 5 min ou illimité (KO seulement).
 
 Tout est réglable dans `RULES` et `OGS` en tête de `shared/sim.js` (le serveur et le client utilisent le même fichier).
 

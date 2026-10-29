@@ -20,11 +20,14 @@ console.log('stats', JSON.stringify(g1.state.stats));
 const g = Sim.createGame({ seed: 1, hazard: false });
 g.state.mana.bottom = 70;
 assert.strictEqual(g.canPlace('bottom', 1, 0, 0).reason, 'side');
-assert.strictEqual(g.canPlace('bottom', 1, 0, 7).reason, 'front');
+assert.ok(g.canPlace('bottom', 1, 0, 7).ok, 'runner posable au fond');
+assert.strictEqual(g.canPlace('bottom', 4, 0, 7).reason, 'front');
 assert.ok(g.place('bottom', 1, 0, 4).ok);
 assert.strictEqual(g.canPlace('bottom', 1, 0, 4).reason, 'occupied');
 assert.strictEqual(g.canPlace('bottom', 7, 1, 4).reason, 'mana');
 assert.strictEqual(g.availableCells('bottom', 5).length, 35);
+assert.strictEqual(g.availableCells('bottom', 1).length, 35);
+const gu = Sim.createGame({ seed: 9, duration: 0 }); for (let i = 0; i < 30 * 400; i++) gu.step(1 / 30); assert.ok(!gu.state.over, 'durée illimitée');
 
 // 3) Runner atteint la base adverse.
 for (let i = 0; i < 30 * 20; i++) g.step(1 / 30);

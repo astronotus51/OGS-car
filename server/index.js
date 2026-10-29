@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const Catalog = require('../shared/catalog.js');
+const Sim = require('../shared/sim.js');
 const { createStore } = require('./db.js');
 const { publicProfile, applyResult, ownedSkins, equippedOf } = require('./profile.js');
 const { Room } = require('./room.js');
@@ -131,7 +132,9 @@ const rooms = new Set();
 const friendly = new Map(); // code -> { host: client, hazard }
 const byUser = new Map(); // userId -> client
 
-function createMatch(entries, { mode, botFill = false, bot = null, hazard = true }) {
+function pickDuration(v) { const d = Number(v); return Sim.RULES.durations.includes(d) ? d : Sim.RULES.matchDuration; }
+
+function createMatch(entries, { mode, botFill = false, bot = null, hazard = false, duration = Sim.RULES.matchDuration }) {
   const players = entries.map(e => ({ client: e.client, profile: e.profile, bot: null }));
   if (bot) {
     const trophies = entries[0].profile.trophies;
@@ -139,7 +142,7 @@ function createMatch(entries, { mode, botFill = false, bot = null, hazard = true
     players.push({ client: null, profile: { id: null, username: names[bot], trophies: Math.max(0, trophies + Math.round((Math.random() - 0.5) * 60)), level: bot === 'simple' ? 3 : bot === 'moyen' ? 12 : 30, rank: Catalog.rankFor(trophies).name, equipped: Catalog.DEFAULT_EQUIP, bot: true, difficulty: bot }, bot });
   }
   if (Math.random() < 0.5) players.reverse();
-  const room = new Room({ players, mode, hazard, botFill, onEnd: endMatch });
+  const room = new Room({ players, mode, hazard, duration, botFill, onEnd: endMatch });
   rooms.add(room);
   for (const p of room.players) if (p.client) { matchmaker.leave(p.client); p.client.room = room; }
   room.start();
@@ -243,14 +246,14 @@ wss.on('connection', (ws) => {
         if (client.room) return;
         matchmaker.leave(client); leaveFriendly(client);
         const diff = ['simple', 'moyen', 'difficile'].includes(msg.difficulty) ? msg.difficulty : 'moyen';
-        createMatch([{ client, profile: client.profile }], { mode: 'bot', bot: diff, hazard: msg.hazard !== false });
+        createMatch([{ client, profile: client.profile }], { mode: 'bot', bot: diff, duration: pickDuration(msg.duration) });
         break;
       }
       case 'friendly_create': {
         if (client.room) return;
         matchmaker.leave(client); leaveFriendly(client);
         const code = makeCode();
-        friendly.set(code, { host: client, hazard: msg.hazard !== false });
+        friendly.set(code, { host: client, duration: pickDuration(msg.duration) });
         client.friendlyCode = code;
         client.send({ t: 'friendly_created', code });
         break;
@@ -263,7 +266,7 @@ wss.on('connection', (ws) => {
         if (entry.host === client) return client.send({ t: 'error', error: 'C’est ta propre salle' });
         matchmaker.leave(client); leaveFriendly(client);
         friendly.delete(code); entry.host.friendlyCode = null;
-        createMatch([{ client: entry.host, profile: entry.host.profile }, { client, profile: client.profile }], { mode: 'friendly', hazard: entry.hazard });
+        createMatch([{ client: entry.host, profile: entry.host.profile }, { client, profile: client.profile }], { mode: 'friendly', duration: entry.duration });
         break;
       }
       case 'friendly_leave': leaveFriendly(client); client.send({ t: 'idle' }); break;

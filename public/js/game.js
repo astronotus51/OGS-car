@@ -25,7 +25,7 @@
       me = msg.side; opp = Sim.other(me);
       snaps = []; latest = null; pending = []; selection = null; result = null;
       phase = msg.countdown > 0 ? 'countdown' : 'playing'; countdown = msg.countdown || 0; goTimer = 0;
-      duration = msg.duration || RULES.matchDuration; mode = msg.mode || 'ranked';
+      duration = msg.duration === 0 ? 0 : (msg.duration || RULES.matchDuration); mode = msg.mode || 'ranked';
       profiles = { me: msg.me, opp: msg.opponent };
       equipped[me] = Object.assign({}, OGSCatalog.DEFAULT_EQUIP, msg.me.equipped || {});
       equipped[opp] = Object.assign({}, OGSCatalog.DEFAULT_EQUIP, msg.opponent.equipped || {});
@@ -219,7 +219,7 @@
       view.me = me; view.time = now - startTime; view.state = state; view.phase = phase; view.countdown = countdown; view.goTimer = goTimer; view.result = result;
       view.selection = selection; view.cursor = (selection || mouseInField) ? cursor : null; view.availableCells = availableCells(); view.pending = pending;
       view.equipped = equipped; view.opponent = profiles.opp; view.meProfile = profiles.me; view.presence = presence;
-      view.timeLeft = Math.max(0, duration - (latest ? latest.t : 0)); view.mode = mode; view.latency = net.latency;
+      view.timeLeft = duration ? Math.max(0, duration - (latest ? latest.t : 0)) : Infinity; view.elapsed = latest ? latest.t : 0; view.mode = mode; view.latency = net.latency;
       renderer.render(view);
       ui.onFrame && ui.onFrame(view);
     }

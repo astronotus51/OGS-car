@@ -62,8 +62,10 @@
   document.querySelectorAll('.emote').forEach(b => b.addEventListener('click', () => game.onEmoteClick(b.dataset.emote)));
   $('btnSurrender').addEventListener('click', () => { if (confirm('Abandonner la partie ?')) Net.send({ t: 'surrender' }); });
   function onGameFrame(view) {
+    const el = $('hudTimer');
+    if (!isFinite(view.timeLeft)) { const e = Math.floor(view.elapsed || 0); el.textContent = `${Math.floor(e / 60)}:${String(e % 60).padStart(2, '0')}`; el.classList.remove('hurry'); return; }
     const left = Math.max(0, Math.ceil(view.timeLeft));
-    const el = $('hudTimer'); el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; el.classList.toggle('hurry', left <= 20 && view.phase !== 'over');
+    el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; el.classList.toggle('hurry', left <= 20 && view.phase !== 'over');
   }
 
   // ----- Auth -----
@@ -117,8 +119,8 @@
   $('lobbyProfile').addEventListener('click', openProfile);
 
   $('btnPlay').addEventListener('click', () => { lastMatchKind = { t: 'queue' }; Net.send({ t: 'queue' }); openQueue('Recherche d’un adversaire…', 'queue'); });
-  $('btnBot').addEventListener('click', () => { const difficulty = $('botLevel').value; lastMatchKind = { t: 'bot', difficulty }; Net.send({ t: 'bot', difficulty, hazard: $('chkHazard').checked }); openQueue('Préparation de l’IA…', 'bot'); });
-  $('btnFriendlyCreate').addEventListener('click', () => { Net.send({ t: 'friendly_create', hazard: $('chkHazard').checked }); openQueue('Partie amicale : partage ce code', 'friendly'); });
+  $('btnBot').addEventListener('click', () => { const difficulty = $('botLevel').value; lastMatchKind = { t: 'bot', difficulty }; Net.send({ t: 'bot', difficulty, duration: Number($('durationSelect').value) }); openQueue('Préparation de l’IA…', 'bot'); });
+  $('btnFriendlyCreate').addEventListener('click', () => { Net.send({ t: 'friendly_create', duration: Number($('durationSelect').value) }); openQueue('Partie amicale : partage ce code', 'friendly'); });
   $('btnFriendlyJoin').addEventListener('click', () => { const code = $('friendlyCode').value.trim().toUpperCase(); if (code.length < 4) return ($('lobbyMsg').textContent = 'Entre le code à 5 caractères'); Net.send({ t: 'friendly_join', code }); $('lobbyMsg').textContent = 'Connexion à la salle…'; });
   $('btnCancelQueue').addEventListener('click', () => { Net.send({ t: queueMode === 'friendly' ? 'friendly_leave' : 'cancel' }); closeQueue(); });
 
@@ -248,7 +250,7 @@
   function renderRules() {
     const og = Sim.OGS;
     const lines = [
-      [1, 'Fonce tout droit vers la base ennemie (1 dégât). Meurt au contact des Défenseurs, Éponges, Tourelles et Chargeurs adverses. Rebondit sur un Mur ennemi en changeant de camp ! Passe au-dessus de tes propres Murs.'],
+      [1, 'Se pose n’importe où sur ta moitié et fonce tout droit vers la base ennemie (1 dégât). Meurt au contact des Défenseurs, Éponges, Tourelles et Chargeurs adverses. Rebondit sur un Mur ennemi en changeant de camp ! Passe au-dessus de tes propres Murs.'],
       [2, 'Patrouille horizontalement, rebondit sur les bords et les obstacles. Mange les Runners adverses. Destruction mutuelle avec une Éponge.'],
       [3, 'Statique, 2 PV. Tire vers l’avant sur les ennemis à 1 case. Détruite au contact d’une Éponge.'],
       [4, 'Avance en diagonale en rebondissant sur les côtés, 3 PV. Détruit Tourelles et Chargeurs au contact (perd 1 PV à chaque fois), casse un Mur mais meurt. 2 dégâts à la base.'],
@@ -257,12 +259,12 @@
       [7, 'Vole tout droit au-dessus de tout. Tire sur les Runners, Tourelles, Chargeurs et Ailées à 1 case. 5 dégâts à la base. 2 PV.'],
     ];
     $('rulesPage').innerHTML = `
-      <h3>But</h3><p>Chaque joueur a <b>30 PV</b>. Pose des Ogs sur ta moitié pour atteindre la base adverse. Après <b>3 minutes</b>, celui qui a le plus de PV gagne.</p>
+      <h3>But</h3><p>Chaque joueur a <b>30 PV</b>. Pose des Ogs sur ta moitié pour atteindre la base adverse. En classée, après <b>3 minutes</b>, celui qui a le plus de PV gagne. En entraînement et en amical, tu choisis la durée (2, 3, 5 min ou illimitée : seul un KO termine la partie).</p>
       <h3>Mana</h3><p>Max 70, +2 / s. Clique (ou touche <kbd>O</kbd>) sur les orbes de ton côté : +10 mana. Chaque Chargeur vivant accélère ta régénération de 50 %.</p>
-      <h3>Contrôles</h3><p><kbd>A</kbd> <kbd>Z</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd> (ou <kbd>1</kbd>–<kbd>7</kbd>, ou clic sur un slot) pour choisir un Og · flèches pour déplacer le curseur · <kbd>Entrée</kbd> / <kbd>Espace</kbd> ou clic pour poser · <kbd>Échap</kbd> annule. Runner, Éponge et Ailée se posent uniquement sur la ligne avant.</p>
+      <h3>Contrôles</h3><p><kbd>A</kbd> <kbd>Z</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd> (ou <kbd>1</kbd>–<kbd>7</kbd>, ou clic sur un slot) pour choisir un Og · flèches pour déplacer le curseur · <kbd>Entrée</kbd> / <kbd>Espace</kbd> ou clic pour poser · <kbd>Échap</kbd> annule. Le Runner se pose n’importe où sur ta moitié (même tout au fond) ; l’Éponge et l’Ailée uniquement sur la ligne avant.</p>
       <h3>Les Ogs</h3>
       ${lines.map(([id, txt]) => `<div class="og-line"><canvas width="112" height="112" data-og="${id}"></canvas><div><b>${esc(og[id].name)}</b> · ${og[id].cost} mana<br>${txt}</div></div>`).join('')}
-      <h3>Scorpion noir</h3><p>Toutes les 60 à 90 s, un bloc noir traverse le centre, s’arrête, puis fonce vers un camp en détruisant tout sur son passage. Les placements sont bloqués pendant son passage.</p>
+      
       <h3>Progression</h3><p>Partie classée : trophées gagnés/perdus selon l’écart (style Brawl Stars), ligues Bronze → Légendaire. XP à chaque partie (niveau), pièces pour la boutique de skins, bonus de série, récompense quotidienne.</p>`;
     $('rulesPage').querySelectorAll('canvas[data-og]').forEach(c => { const id = Number(c.dataset.og); Sprites.ensure(`og${id}_default`).then(() => Sprites.draw(c.getContext('2d'), id, `og${id}_default`, 56, 56, 90, { time: 0 })); });
   }
