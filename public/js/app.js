@@ -313,7 +313,7 @@
   function renderRules() {
     const og = Sim.OGS;
     const lines = [
-      [1, 'Se pose n’importe où sur ta moitié et fonce tout droit vers la base ennemie (1 dégât). Meurt au contact des Défenseurs, Éponges, Tourelles et Chargeurs adverses. Rebondit sur un Mur ennemi en changeant de camp ! Passe au-dessus de tes propres Murs.'],
+      [1, 'Se pose sur la ligne du fond et fonce tout droit vers la base ennemie (1 dégât). Meurt au contact des Défenseurs, Éponges, Tourelles et Chargeurs adverses. Rebondit sur un Mur ennemi en changeant de camp ! Passe au-dessus de tes propres Murs.'],
       [2, 'Patrouille horizontalement, rebondit sur les bords et les obstacles. Mange les Runners adverses. Destruction mutuelle avec une Éponge.'],
       [3, 'Statique, 2 PV. Tire vers l’avant sur les ennemis à 1 case. Détruite au contact d’une Éponge.'],
       [4, 'Avance en diagonale en rebondissant sur les côtés, 3 PV. Détruit Tourelles et Chargeurs au contact (perd 1 PV à chaque fois), casse un Mur mais meurt. 2 dégâts à la base.'],
@@ -324,7 +324,7 @@
     $('rulesPage').innerHTML = `
       <h3>But</h3><p>Chaque joueur a <b>30 PV</b>. Pose des Ogs sur ta moitié pour atteindre la base adverse. En classée, après <b>3 minutes</b>, celui qui a le plus de PV gagne. En entraînement et en amical, tu choisis la durée (2, 3, 5 min ou illimitée : seul un KO termine la partie).</p>
       <h3>Mana</h3><p>Max 70, +2 / s. Clique (ou touche <kbd>O</kbd>) sur les orbes de ton côté : +10 mana. Chaque Chargeur vivant accélère ta régénération de 50 %.</p>
-      <h3>Contrôles</h3><p><kbd>A</kbd> <kbd>Z</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd> (ou <kbd>1</kbd>–<kbd>7</kbd>, ou clic sur un slot) pour choisir un Og · flèches pour déplacer le curseur · <kbd>Entrée</kbd> / <kbd>Espace</kbd> ou clic pour poser · <kbd>Échap</kbd> annule. Le Runner se pose n’importe où sur ta moitié (même tout au fond) ; l’Éponge et l’Ailée uniquement sur la ligne avant.</p>
+      <h3>Contrôles</h3><p><kbd>A</kbd> <kbd>Z</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd> (ou <kbd>1</kbd>–<kbd>7</kbd>, ou clic sur un slot) pour choisir un Og · flèches pour déplacer le curseur · <kbd>Entrée</kbd> / <kbd>Espace</kbd> ou clic pour poser · <kbd>Échap</kbd> annule. Zip, Riko et Zéphir se posent <b>uniquement sur la ligne du fond</b> (la plus éloignée de l’adversaire) ; les autres n’importe où sur ta moitié.</p>
       <h3>Les Ogs</h3>
       ${lines.map(([id, txt]) => `<div class="og-line"><canvas width="112" height="112" data-og="${id}"></canvas><div><b>${esc(Catalog.OG_NAMES[id])}</b> <span style="color:var(--muted)">· ${esc(Catalog.OG_ROLES[id])} · ${og[id].cost} mana</span><br><i style="color:#94a3b8">${esc(Catalog.OG_LORE[id])}</i><br>${txt}</div></div>`).join('')}
       

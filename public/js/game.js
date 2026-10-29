@@ -7,7 +7,7 @@
   const { FIELD, COLS, ROWS, ROWS_PER_SIDE, CELL_W, CELL_H, RADIUS, OGS, RULES } = Sim;
   const INTERP_DELAY = 0.085; // s de retard de rendu pour lisser les snapshots (30 Hz)
   const KEY_TO_OG = { a: 1, q: 1, z: 2, w: 2, e: 3, r: 4, t: 5, y: 6, u: 7 };
-  const REJECT_TEXT = { mana: 'Pas assez de mana', occupied: 'Case occupée', front: 'Cet Og se pose sur la ligne avant', hazard: 'Scorpion noir : placement bloqué', side: 'Pas de ton côté', countdown: 'Attends le départ', over: 'Partie terminée', cell: 'Case invalide', banned: 'Créature bannie par ton adversaire' };
+  const REJECT_TEXT = { mana: 'Pas assez de mana', occupied: 'Case occupée', back: 'Cet Og se pose uniquement sur la ligne du fond', hazard: 'Scorpion noir : placement bloqué', side: 'Pas de ton côté', countdown: 'Attends le départ', over: 'Partie terminée', cell: 'Case invalide', banned: 'Créature bannie par ton adversaire' };
   const ABILITY_TEXT = { cooldown: 'Capacité en recharge', mana: 'Pas assez de mana (10)', none: 'Aucune créature de ce type en jeu', disabled: 'Capacités désactivées dans cette partie' };
 
   function createGame(canvas, renderer, net, ui) {
@@ -34,7 +34,7 @@
       equipped[opp] = Object.assign({}, OGSCatalog.DEFAULT_EQUIP, msg.opponent.equipped || {});
       presence = { top: true, bottom: true }; mouseInField = false;
       renderer.reset();
-      cursor = { col: Math.floor(COLS / 2), row: frontRow() };
+      cursor = { col: Math.floor(COLS / 2), row: backRow() };
       startTime = performance.now() / 1000;
       canvas.classList.remove('hidden');
       renderer.resize();
@@ -46,7 +46,7 @@
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
     }
 
-    function frontRow() { return me === 'top' ? ROWS_PER_SIDE - 1 : ROWS_PER_SIDE; }
+    function backRow() { return me === 'top' ? 0 : ROWS - 1; }
     function myRows() { return me === 'top' ? [0, ROWS_PER_SIDE - 1] : [ROWS_PER_SIDE, ROWS - 1]; }
 
     // ----- Réseau -----
@@ -134,7 +134,7 @@
       const [r0, r1] = myRows();
       const cells = [];
       for (let row = r0; row <= r1; row += 1) {
-        if (og.frontOnly && row !== frontRow()) continue;
+        if (og.backOnly && row !== backRow()) continue;
         for (let col = 0; col < COLS; col += 1) {
           if (!cellOccupied(col, row)) cells.push({ col, row });
           else if (evolvableAt(selection, col, row)) cells.push({ col, row, evolve: true });
@@ -147,7 +147,7 @@
       if (phase === 'draft') return pickBan(ogId);
       if (isBanned(ogId)) return ui.toast(`${OGSCatalog.OG_NAMES[ogId]} est banni dans cette partie`, 'bad');
       selection = selection === ogId ? null : ogId;
-      if (selection && OGS[selection].frontOnly) cursor.row = frontRow();
+      if (selection && OGS[selection].backOnly) cursor.row = backRow();
       ui.onSelection && ui.onSelection(selection);
     }
     function tryPlace(col, row) {
@@ -156,7 +156,7 @@
       const og = OGS[selection];
       const [r0, r1] = myRows();
       if (row < r0 || row > r1) return ui.toast('Pas de ton côté', 'bad');
-      if (og.frontOnly && row !== frontRow()) return ui.toast('Cet Og se pose sur la ligne avant', 'bad');
+      if (og.backOnly && row !== backRow()) return ui.toast('Cet Og se pose uniquement sur la ligne du fond', 'bad');
       if (cellOccupied(col, row) && !evolvableAt(selection, col, row)) return ui.toast('Case occupée', 'bad');
       if (latest && latest.mana[me] < og.cost) return ui.toast(`Pas assez de mana (${og.cost})`, 'bad');
       if (latest && latest.hazard) return ui.toast('Scorpion noir : placement bloqué', 'bad');
@@ -179,7 +179,7 @@
       cursor.col = Math.max(0, Math.min(COLS - 1, cursor.col + dcol));
       const drow = me === 'top' ? dforward : -dforward; // "avant" = vers l'ennemi
       cursor.row = Math.max(r0, Math.min(r1, cursor.row + drow));
-      if (selection && OGS[selection].frontOnly) cursor.row = frontRow();
+      if (selection && OGS[selection].backOnly) cursor.row = backRow();
     }
 
     // ----- Entrées -----
@@ -211,7 +211,7 @@
       if (!active) return;
       const { cell } = pointerCell(ev);
       const [r0, r1] = myRows();
-      if (cell && cell.row >= r0 && cell.row <= r1) { mouseInField = true; cursor.col = cell.col; cursor.row = (selection && OGS[selection].frontOnly) ? frontRow() : cell.row; }
+      if (cell && cell.row >= r0 && cell.row <= r1) { mouseInField = true; cursor.col = cell.col; cursor.row = (selection && OGS[selection].backOnly) ? backRow() : cell.row; }
       else mouseInField = false;
     }
     function onPointerDown(ev) {

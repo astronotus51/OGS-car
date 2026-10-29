@@ -129,7 +129,7 @@ Les règles du jeu d'origine sont conservées (`legacy/README.md`, `legacy/BALAN
 - l'Éponge rouge **casse un Mur ennemi mais meurt** sur le coup ; elle **encaisse maintenant les projectiles** (3 PV) au lieu d'y être immunisée ;
 - Tourelle et Tourelle ailée ont **2 PV** ; l'Ailée cible aussi les Ailées adverses (1 / 3 / 6 / 7) ;
 - le scorpion noir est **désactivé** (il cassait le gameplay ; le code reste dans `sim.js`, option `hazard`) ;
-- le Runner se pose n'importe où sur sa moitié (même la ligne du fond) ; Éponge et Ailée restent sur la ligne avant ;
+- Zip, Riko et Zéphir se posent **uniquement sur la ligne du fond** (la plus éloignée de l'adversaire) ; Gromp, Krak, Blok et Mojo n'importe où sur sa moitié ;
 - classée : 3 min ; entraînement et amical : 2, 3, 5 min ou illimité (KO seulement).
 
 Tout est réglable dans `RULES` et `OGS` en tête de `shared/sim.js` (le serveur et le client utilisent le même fichier).

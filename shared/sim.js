@@ -48,13 +48,13 @@
   };
 
   const OGS = {
-    1: { id: 1, key: 'runner', name: 'Zip', color: '#fbbf24', cost: 10, speed: SPEED_UNIT * 3, movement: 'straight', hp: 1, baseDamage: 1, frontOnly: false, air: false }, // posable sur toute sa moitié (y compris la ligne du fond)
-    2: { id: 2, key: 'defenseur', name: 'Gromp', color: '#a78bfa', cost: 20, speed: SPEED_UNIT * 3, movement: 'horizontal', hp: 1, baseDamage: 0, frontOnly: false, air: false },
-    3: { id: 3, key: 'tourelle', name: 'Krak', color: '#fb923c', cost: 30, speed: 0, movement: 'static', hp: 2, baseDamage: 0, frontOnly: false, air: false },
-    4: { id: 4, key: 'eponge', name: 'Riko', color: '#ef4444', cost: 40, speed: SPEED_UNIT * 4, movement: 'diagBounce', hp: 3, baseDamage: 2, frontOnly: true, air: false },
-    5: { id: 5, key: 'mur', name: 'Blok', color: '#3b82f6', cost: 50, speed: 0, movement: 'static', hp: 3, baseDamage: 0, frontOnly: false, air: false },
-    6: { id: 6, key: 'chargeur', name: 'Mojo', color: '#22c55e', cost: 60, speed: 0, movement: 'static', hp: 3, baseDamage: 0, frontOnly: false, air: false },
-    7: { id: 7, key: 'ailee', name: 'Zéphir', color: '#f97316', cost: 70, speed: SPEED_UNIT * 1.8, movement: 'airStraight', hp: 2, baseDamage: 5, frontOnly: true, air: true },
+    1: { id: 1, key: 'runner', name: 'Zip', color: '#fbbf24', cost: 10, speed: SPEED_UNIT * 3, movement: 'straight', hp: 1, baseDamage: 1, backOnly: true, air: false }, // se pose uniquement sur la ligne du fond (la plus loin de l'adversaire)
+    2: { id: 2, key: 'defenseur', name: 'Gromp', color: '#a78bfa', cost: 20, speed: SPEED_UNIT * 3, movement: 'horizontal', hp: 1, baseDamage: 0, backOnly: false, air: false },
+    3: { id: 3, key: 'tourelle', name: 'Krak', color: '#fb923c', cost: 30, speed: 0, movement: 'static', hp: 2, baseDamage: 0, backOnly: false, air: false },
+    4: { id: 4, key: 'eponge', name: 'Riko', color: '#ef4444', cost: 40, speed: SPEED_UNIT * 4, movement: 'diagBounce', hp: 3, baseDamage: 2, backOnly: true, air: false },
+    5: { id: 5, key: 'mur', name: 'Blok', color: '#3b82f6', cost: 50, speed: 0, movement: 'static', hp: 3, baseDamage: 0, backOnly: false, air: false },
+    6: { id: 6, key: 'chargeur', name: 'Mojo', color: '#22c55e', cost: 60, speed: 0, movement: 'static', hp: 3, baseDamage: 0, backOnly: false, air: false },
+    7: { id: 7, key: 'ailee', name: 'Zéphir', color: '#f97316', cost: 70, speed: SPEED_UNIT * 1.8, movement: 'airStraight', hp: 2, baseDamage: 5, backOnly: true, air: true },
   };
   const OG_IDS = [1, 2, 3, 4, 5, 6, 7];
   const WINGED_TARGETS = new Set([1, 3, 6, 7]);
@@ -170,10 +170,10 @@
       const og = OGS[ogId];
       if (!og || isBanned(player, ogId)) return [];
       const cells = [];
-      const frontRow = player === 'top' ? ROWS_PER_SIDE - 1 : ROWS_PER_SIDE; // ligne au contact du centre
+      const backRow = player === 'top' ? 0 : ROWS - 1; // ligne du fond, la plus loin de l'adversaire
       for (let row = 0; row < ROWS; row += 1) {
         if (sideOfRow(row) !== player) continue;
-        if (og.frontOnly && row !== frontRow) continue;
+        if (og.backOnly && row !== backRow) continue;
         for (let col = 0; col < COLS; col += 1) {
           if (cellOccupied(col, row)) { if (evolvable(player, ogId, col, row)) cells.push({ col, row, evolve: true }); continue; }
           cells.push({ col, row });
@@ -189,8 +189,8 @@
       if (!og) return { ok: false, reason: 'unknown' };
       if (!Number.isInteger(col) || !Number.isInteger(row) || col < 0 || col >= COLS || row < 0 || row >= ROWS) return { ok: false, reason: 'cell' };
       if (sideOfRow(row) !== player) return { ok: false, reason: 'side' };
-      const frontRow = player === 'top' ? ROWS_PER_SIDE - 1 : ROWS_PER_SIDE;
-      if (og.frontOnly && row !== frontRow) return { ok: false, reason: 'front' };
+      const backRow = player === 'top' ? 0 : ROWS - 1;
+      if (og.backOnly && row !== backRow) return { ok: false, reason: 'back' };
       if (isBanned(player, ogId)) return { ok: false, reason: 'banned' };
       const target = cellOccupied(col, row) ? evolvable(player, ogId, col, row) : null;
       if (cellOccupied(col, row) && !target) return { ok: false, reason: 'occupied' };
