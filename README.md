@@ -80,6 +80,25 @@ Une partie dure **3 minutes** max ; ensuite, celui qui a le plus de PV gagne. Un
 - **Pièces** : 20 / 6 / 10 par partie, +25 avec la récompense quotidienne, pour la boutique de skins.
 - **Skins** : 5 variantes par Og (classique, néon, doré, ombre, prisme) + 2 légendaires. Débloqués par pièces, niveau, trophées ou victoires.
 
+## Options de gameplay (expérimentations à cocher)
+
+Tout est piloté par `shared/features.js` : un interrupteur `enabled` par fonctionnalité. **Pour retirer une fonctionnalité, mets `enabled: false`** (elle disparaît du lobby, du serveur et des règles) ; le code reste en place, chaque fonctionnalité est isolée derrière `if (F.xxx)` dans `shared/sim.js` et `if (view.features.xxx)` dans le client. Les cases à cocher du lobby s'appliquent à l'entraînement, l'amical et la survie ; en classée, c'est la colonne `ranked` qui décide.
+
+| Clé | Quoi | Classée |
+| --- | --- | --- |
+| `abilities` | Capacités actives : Maj + touche ou ⚡ sur le slot (10 mana, 20 s). Zip Sprint, Gromp Rage, Krak Tir triple, Riko Rebond fou, Blok Mur de glace (gel), Mojo Burst de mana, Zéphir Bombe | oui |
+| `evolution` | Reposer Krak / Blok / Mojo sur lui-même : niveau 2 puis 3 (+1 PV, Krak tire plus vite, Mojo régénère plus) | oui |
+| `overtime` | Mort subite en cas d'égalité au temps : mana ×3, premier dégât = défaite | oui |
+| `powerPatches` | Gromp renvoie Riko (−1 PV) au lieu de mourir avec ; Mojo soigne +1 PV ses voisins toutes les 5 s ; Zéphir bombarde (−1 PV) chaque Blok ennemi qu'il survole | oui |
+| `draft` | 12 s avant la partie : chacun bannit une créature chez l'adversaire | non |
+| `kingOfCenter` | Les unités dans les deux lignes centrales marquent 1 pt/s, 60 pts = victoire | non |
+| `manaX2`, `fastUnits`, `fog`, `zigzag` | Mutateurs : mana doublée, unités ×1,5, brouillard de guerre (moitié adverse masquée), Zip en zigzag | non |
+| `survival` | Mode Survie solo : vagues croissantes, score = éliminations ×10 + vagues ×50 + secondes, record et classement dédié | – |
+| `quests` | 3 quêtes du jour (pièces à récupérer dans le lobby) | – |
+| `shopDeals` | Un skin payant à −50 % par semaine | – |
+
+Non fait, volontairement : le 2v2 (il faudrait 4 clients par salle et une file d'attente séparée) et le passe de saison.
+
 ## Les créatures
 
 Dessinées en vectoriel dans `public/js/creatures.js` (plus de PNG), animées par parties : Zip court et couche ses oreilles, Gromp claque des griffes, Krak oriente son canon et recule au tir, Riko tourne et a le tournis, Blok se fissure quand il perd des PV, Mojo fait tourner ses étincelles de mana, Zéphir bat des ailes et charge sa boule de feu dans son ventre.

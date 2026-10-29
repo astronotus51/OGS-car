@@ -11,8 +11,9 @@ const jwt = require('jsonwebtoken');
 
 const Catalog = require('../shared/catalog.js');
 const Sim = require('../shared/sim.js');
+const Features = require('../shared/features.js');
 const { createStore } = require('./db.js');
-const { publicProfile, applyResult, ownedSkins, equippedOf } = require('./profile.js');
+const { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView } = require('./profile.js');
 const { Room } = require('./room.js');
 const { Matchmaker } = require('./matchmaking.js');
 
@@ -35,6 +36,7 @@ const db = createStore();
 const app = express();
 app.use(express.json({ limit: '32kb' }));
 app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
+app.use((req, res, next) => { if (/\.(js|css|html)$/.test(req.path) || req.path === '/') res.setHeader('Cache-Control', 'no-cache'); next(); });
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ---------- Auth REST ----------
@@ -85,6 +87,29 @@ app.post('/api/daily', authMiddleware, wrap(async (req, res) => {
   res.json({ coins: DAILY_COINS, profile: publicProfile(user, { dailyAvailable: false, dailyCoins: DAILY_COINS }) });
 }));
 
+app.get('/api/quests', authMiddleware, wrap(async (req, res) => {
+  if (!Features.enabled('quests')) return res.json({ quests: null });
+  res.json({ quests: questsView(req.user) });
+}));
+app.post('/api/quests/claim', authMiddleware, wrap(async (req, res) => {
+  if (!Features.enabled('quests')) return res.status(400).json({ error: 'Quêtes désactivées' });
+  const quests = questsOf(req.user);
+  const item = quests.items.find(q => q.id === String(req.body && req.body.id));
+  const tpl = item && Catalog.questTemplate(item.id);
+  if (!item || !tpl) return res.status(404).json({ error: 'Quête inconnue' });
+  if (item.claimed) return res.status(400).json({ error: 'Déjà récupérée' });
+  if (item.progress < tpl.goal) return res.status(400).json({ error: 'Quête non terminée' });
+  item.claimed = true;
+  const user = await db.updateUser(req.user.id, { coins: (req.user.coins || 0) + tpl.coins, quests });
+  res.json({ coins: tpl.coins, profile: publicProfile(user), quests: questsView(user) });
+}));
+app.get('/api/deal', (req, res) => { res.json({ deal: Features.enabled('shopDeals') ? Catalog.weeklyDeal() : null }); });
+app.get('/api/features', (req, res) => { res.json({ features: Features.matchFeatures(), survival: Features.enabled('survival'), quests: Features.enabled('quests') }); });
+app.get('/api/leaderboard/survival', wrap(async (req, res) => {
+  const rows = await db.survivalBoard(50);
+  res.json({ leaderboard: rows.map((r, i) => ({ rank: i + 1, id: r.id, username: r.username, score: r.survival_best, level: Catalog.levelFromXp(r.xp || 0).level })) });
+}));
+
 app.get('/api/leaderboard', wrap(async (req, res) => {
   const rows = await db.leaderboard(50);
   res.json({ leaderboard: rows.map((r, i) => ({ rank: i + 1, id: r.id, username: r.username, trophies: r.trophies, wins: r.wins, losses: r.losses, level: Catalog.levelFromXp(r.xp || 0).level, league: Catalog.rankFor(r.trophies).name })) });
@@ -105,9 +130,11 @@ app.post('/api/skins/buy', authMiddleware, wrap(async (req, res) => {
   const owned = ownedSkins(req.user);
   if (owned.includes(skin.id)) return res.status(400).json({ error: 'Déjà possédé' });
   if (skin.unlock.type !== 'coins') return res.status(400).json({ error: 'Ce skin se débloque en jouant' });
-  if ((req.user.coins || 0) < skin.unlock.value) return res.status(400).json({ error: 'Pas assez de pièces' });
+  const deal = Features.enabled('shopDeals') ? Catalog.weeklyDeal() : null;
+  const price = deal && deal.skinId === skin.id ? deal.price : skin.unlock.value;
+  if ((req.user.coins || 0) < price) return res.status(400).json({ error: 'Pas assez de pièces' });
   const equipped = equippedOf(req.user); equipped[skin.ogId] = skin.id;
-  const user = await db.updateUser(req.user.id, { coins: req.user.coins - skin.unlock.value, skins: [...owned, skin.id], equipped });
+  const user = await db.updateUser(req.user.id, { coins: req.user.coins - price, skins: [...owned, skin.id], equipped });
   res.json({ profile: publicProfile(user) });
 }));
 
@@ -134,15 +161,18 @@ const byUser = new Map(); // userId -> client
 
 function pickDuration(v) { const d = Number(v); return Sim.RULES.durations.includes(d) ? d : Sim.RULES.matchDuration; }
 
-function createMatch(entries, { mode, botFill = false, bot = null, hazard = false, duration = Sim.RULES.matchDuration }) {
+function createMatch(entries, { mode, botFill = false, bot = null, duration = Sim.RULES.matchDuration, features = null, survival = false }) {
   const players = entries.map(e => ({ client: e.client, profile: e.profile, bot: null }));
   if (bot) {
     const trophies = entries[0].profile.trophies;
     const names = { simple: 'Bot Oggy', moyen: 'Bot Ogma', difficile: 'Bot Ogzilla' };
     players.push({ client: null, profile: { id: null, username: names[bot], trophies: Math.max(0, trophies + Math.round((Math.random() - 0.5) * 60)), level: bot === 'simple' ? 3 : bot === 'moyen' ? 12 : 30, rank: Catalog.rankFor(trophies).name, equipped: Catalog.DEFAULT_EQUIP, bot: true, difficulty: bot }, bot });
   }
-  if (Math.random() < 0.5) players.reverse();
-  const room = new Room({ players, mode, hazard, duration, botFill, onEnd: endMatch });
+  if (survival) players.push({ client: null, profile: { id: null, username: 'Les Vagues', trophies: 0, level: 0, rank: '', equipped: Catalog.DEFAULT_EQUIP, bot: true }, director: true });
+  if (survival) players.reverse(); // le joueur humain est en bas
+  else if (Math.random() < 0.5) players.reverse();
+  const feats = features || Features.resolveOptions(null, mode === 'ranked');
+  const room = new Room({ players, mode, features: feats, duration, botFill, onEnd: endMatch });
   rooms.add(room);
   for (const p of room.players) if (p.client) { matchmaker.leave(p.client); p.client.room = room; }
   room.start();
@@ -155,18 +185,18 @@ async function endMatch(room, result) {
   const outcome = {};
   for (const p of room.players) {
     const opp = room.players.find(x => x !== p);
-    const res = result.winner === 'draw' ? 'draw' : result.winner === p.side ? 'win' : 'loss';
+    const res = room.mode === 'survival' ? 'survival' : result.winner === 'draw' ? 'draw' : result.winner === p.side ? 'win' : 'loss';
     outcome[p.side] = { res, opp };
   }
   const deltas = {};
   const payloads = {};
   for (const p of room.players) {
-    if (p.bot || !p.profile || !p.profile.id) continue;
+    if (p.bot || p.director || !p.profile || !p.profile.id) continue;
     const user = await db.getUserById(p.profile.id);
     if (!user) continue;
     const { res, opp } = outcome[p.side];
     const rewardMode = room.mode;
-    const applied = applyResult(user, opp.profile, res, rewardMode);
+    const applied = applyResult(user, opp.profile, res, rewardMode, { stats: result.stats[p.side], survival: result.survival });
     if (room.botFill && applied.rewards.trophies > 0) {
       applied.rewards.trophies = Math.ceil(applied.rewards.trophies / 2);
       applied.patch.trophies = (user.trophies || 0) + applied.rewards.trophies;
@@ -178,7 +208,7 @@ async function endMatch(room, result) {
     if (p.client) p.client.profile = profile;
     const live = byUser.get(user.id);
     if (live) live.profile = profile;
-    payloads[p.side] = { t: 'match_end', side: p.side, result: res, winner: result.winner, reason: result.reason, duration: Math.round(result.duration), hp: result.hp, stats: result.stats, rewards: applied.rewards, levelUp: applied.levelUp, unlocked: applied.unlocked, profile, opponent: opp.profile };
+    payloads[p.side] = { t: 'match_end', side: p.side, result: res, winner: result.winner, reason: result.reason, duration: Math.round(result.duration), hp: result.hp, points: result.points, stats: result.stats, rewards: applied.rewards, levelUp: applied.levelUp, unlocked: applied.unlocked, newBest: applied.newBest, survival: result.survival, quests: Features.enabled('quests') ? questsView(updated) : null, profile, opponent: opp.profile };
   }
   for (const p of room.players) if (payloads[p.side]) room.send(p, payloads[p.side]);
   try {
@@ -246,14 +276,20 @@ wss.on('connection', (ws) => {
         if (client.room) return;
         matchmaker.leave(client); leaveFriendly(client);
         const diff = ['simple', 'moyen', 'difficile'].includes(msg.difficulty) ? msg.difficulty : 'moyen';
-        createMatch([{ client, profile: client.profile }], { mode: 'bot', bot: diff, duration: pickDuration(msg.duration) });
+        createMatch([{ client, profile: client.profile }], { mode: 'bot', bot: diff, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false) });
+        break;
+      }
+      case 'survival': {
+        if (client.room || !Features.enabled('survival')) return;
+        matchmaker.leave(client); leaveFriendly(client);
+        createMatch([{ client, profile: client.profile }], { mode: 'survival', survival: true, duration: 0, features: Object.assign(Features.resolveOptions(msg.options, false), { draft: false, kingOfCenter: false, overtime: false }) });
         break;
       }
       case 'friendly_create': {
         if (client.room) return;
         matchmaker.leave(client); leaveFriendly(client);
         const code = makeCode();
-        friendly.set(code, { host: client, duration: pickDuration(msg.duration) });
+        friendly.set(code, { host: client, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false) });
         client.friendlyCode = code;
         client.send({ t: 'friendly_created', code });
         break;
@@ -266,11 +302,11 @@ wss.on('connection', (ws) => {
         if (entry.host === client) return client.send({ t: 'error', error: 'C’est ta propre salle' });
         matchmaker.leave(client); leaveFriendly(client);
         friendly.delete(code); entry.host.friendlyCode = null;
-        createMatch([{ client: entry.host, profile: entry.host.profile }, { client, profile: client.profile }], { mode: 'friendly', duration: entry.duration });
+        createMatch([{ client: entry.host, profile: entry.host.profile }, { client, profile: client.profile }], { mode: 'friendly', duration: entry.duration, features: entry.features });
         break;
       }
       case 'friendly_leave': leaveFriendly(client); client.send({ t: 'idle' }); break;
-      case 'place': case 'orb': case 'surrender': case 'emote':
+      case 'place': case 'orb': case 'surrender': case 'emote': case 'ability': case 'ban':
         if (client.room) client.room.handle(client, msg);
         break;
       default: break;

@@ -9,7 +9,7 @@
   <link rel="manifest" href="site.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=3">
 </head>
 <body>
   <canvas id="bg"></canvas>
@@ -76,6 +76,13 @@
             <option value="difficile">Difficile</option>
           </select>
         </div>
+        <div class="row">
+          <button id="btnSurvival" class="btn survival">Survie <span class="small">vagues · solo · record</span></button>
+        </div>
+        <details class="options" id="optionsBox">
+          <summary>Options de partie (entraînement, amical, survie) — expérimentations à cocher</summary>
+          <div id="featureList" class="feature-list"></div>
+        </details>
         <div class="row friendly">
           <button id="btnFriendlyCreate" class="btn">Créer une partie amicale</button>
           <input id="friendlyCode" class="input code" maxlength="5" placeholder="CODE">
@@ -88,6 +95,10 @@
         <div class="card">
           <div class="card-title">Ligue</div>
           <div class="league" id="lobbyLeague"></div>
+        </div>
+        <div class="card" id="questsCard">
+          <div class="card-title">Quêtes du jour</div>
+          <ul id="questList" class="quest-list"></ul>
         </div>
         <div class="card">
           <div class="card-title">Top 5</div>
@@ -125,7 +136,7 @@
       <div class="side-card keys">
         <div class="side-title">Touches</div>
         <div class="keyrow"><kbd>A</kbd><kbd>Z</kbd><kbd>E</kbd><kbd>R</kbd><kbd>T</kbd><kbd>Y</kbd><kbd>U</kbd></div>
-        <div class="keyhelp">ou <kbd>1</kbd>…<kbd>7</kbd> : choisir un Og<br><kbd>←↑↓→</kbd> curseur · <kbd>⏎</kbd>/<kbd>␣</kbd> poser<br><kbd>O</kbd> orbe · <kbd>Échap</kbd> annuler</div>
+        <div class="keyhelp">ou <kbd>1</kbd>…<kbd>7</kbd> : choisir un Og<br><kbd>Maj</kbd>+touche ou ⚡ : capacité<br><kbd>←↑↓→</kbd> curseur · <kbd>⏎</kbd>/<kbd>␣</kbd> poser<br><kbd>O</kbd> orbe · <kbd>Échap</kbd> annuler</div>
       </div>
       <div class="side-card emotes">
         <div class="side-title">Emotes</div>
@@ -147,7 +158,7 @@
     <div class="panel result-panel">
       <div class="result-title" id="resultTitle">VICTOIRE</div>
       <div class="result-sub" id="resultSub"></div>
-      <div class="result-grid">
+      <div class="result-grid" id="resultGrid">
         <div class="reward"><div class="reward-label">Trophées</div><div class="reward-value trophy" id="resTrophies">+0</div></div>
         <div class="reward"><div class="reward-label">XP</div><div class="reward-value" id="resXp">+0</div></div>
         <div class="reward"><div class="reward-label">Pièces</div><div class="reward-value coinv" id="resCoins">+0</div></div>
@@ -192,7 +203,7 @@
 
   <!-- ===== LEADERBOARD ===== -->
   <section id="screen-leaderboard" class="screen hidden">
-    <header class="topbar"><button class="btn back" data-screen="lobby">← Menu</button><h2>Classement</h2></header>
+    <header class="topbar"><button class="btn back" data-screen="lobby">← Menu</button><h2>Classement</h2><div class="og-tabs"><button class="og-tab active" data-board="ranked">Trophées</button><button class="og-tab" data-board="survival">Survie</button></div></header>
     <main class="page"><table class="board" id="boardTable"><thead><tr><th>#</th><th>Joueur</th><th>Ligue</th><th>Niv.</th><th>Trophées</th><th>V / D</th></tr></thead><tbody></tbody></table></main>
   </section>
 
@@ -202,12 +213,13 @@
     <main class="page rules" id="rulesPage"></main>
   </section>
 
-  <script src="shared/sim.js"></script>
-  <script src="shared/catalog.js"></script>
-  <script src="js/net.js"></script>
-  <script src="js/creatures.js"></script>
-  <script src="js/render.js"></script>
-  <script src="js/game.js"></script>
-  <script src="js/app.js"></script>
+  <script src="shared/sim.js?v=3"></script>
+  <script src="shared/catalog.js?v=3"></script>
+  <script src="shared/features.js?v=3"></script>
+  <script src="js/net.js?v=3"></script>
+  <script src="js/creatures.js?v=3"></script>
+  <script src="js/render.js?v=3"></script>
+  <script src="js/game.js?v=3"></script>
+  <script src="js/app.js?v=3"></script>
 </body>
 </html>

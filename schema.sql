@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS users (
   last_daily    DATE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS survival_best INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS quests JSONB NOT NULL DEFAULT '{}'::jsonb;
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower ON users (lower(username));
 CREATE INDEX IF NOT EXISTS users_trophies ON users (trophies DESC, wins DESC);
 

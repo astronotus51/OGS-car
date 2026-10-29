@@ -39,13 +39,35 @@ function publicProfile(user, extra) {
     nextRank: next ? { name: next.name, min: next.min } : null,
     equipped: equippedOf(user),
     skins: ownedSkins(user),
+    survivalBest: user.survival_best || 0,
     createdAt: user.created_at,
   }, extra || {});
 }
 
+// Quêtes du jour de l'utilisateur (régénérées chaque jour).
+function questsOf(user) {
+  const q = user.quests && user.quests.date === Catalog.dayKey() ? user.quests : Catalog.dailyQuests(user.id);
+  return JSON.parse(JSON.stringify(q));
+}
+function questsView(user) {
+  const q = questsOf(user);
+  return { date: q.date, items: q.items.map(it => { const t = Catalog.questTemplate(it.id) || {}; return Object.assign({}, it, { label: t.label, goal: t.goal, coins: t.coins, done: it.progress >= (t.goal || Infinity) }); }) };
+}
+
 // Applique le résultat d'un match : retourne { patch, rewards, levelUp, unlocked }
-function applyResult(user, opponentProfile, result, mode) {
+// result : 'win' | 'loss' | 'draw' | 'survival' ; extra : { stats, survival }
+function applyResult(user, opponentProfile, result, mode, extra) {
   const me = publicProfile(user);
+  const ex = extra || {};
+  if (result === 'survival') {
+    const score = (ex.survival && ex.survival.score) || 0;
+    const rewards = { trophies: 0, xp: Math.min(120, Math.floor(score / 15)), coins: Math.min(60, Math.floor(score / 30)), streakBonus: 0, score };
+    const before = Catalog.levelFromXp(user.xp || 0).level;
+    const patch = { xp: (user.xp || 0) + rewards.xp, coins: (user.coins || 0) + rewards.coins, survival_best: Math.max(user.survival_best || 0, score) };
+    patch.quests = Catalog.advanceQuests(questsOf(user), { result, stats: ex.stats || {}, mode, waves: ex.survival ? ex.survival.wave : 0 });
+    const after = Catalog.levelFromXp(patch.xp).level;
+    return { patch, rewards, levelUp: after > before ? after : null, unlocked: [], newBest: score > (user.survival_best || 0) };
+  }
   const rewards = Catalog.matchRewards(me, opponentProfile || { trophies: me.trophies }, result, mode);
   const before = Catalog.levelFromXp(user.xp || 0).level;
   const patch = {
@@ -68,7 +90,8 @@ function applyResult(user, opponentProfile, result, mode) {
     if (Catalog.canUnlock(skin, tmpProfile).ok) { owned.add(skin.id); unlocked.push(skin.id); }
   }
   if (unlocked.length) patch.skins = [...owned];
+  patch.quests = Catalog.advanceQuests(questsOf(user), { result, stats: ex.stats || {}, mode });
   return { patch, rewards, levelUp: after > before ? after : null, unlocked };
 }
 
-module.exports = { publicProfile, applyResult, ownedSkins, equippedOf };
+module.exports = { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView };

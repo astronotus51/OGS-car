@@ -6,13 +6,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const USER_COLUMNS = `id, username, password_hash, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily`;
+const USER_COLUMNS = `id, username, password_hash, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily, survival_best, quests`;
 
 function defaultUser(username, passwordHash) {
   return {
     username, password_hash: passwordHash,
     trophies: 0, best_trophies: 0, xp: 0, coins: 50, wins: 0, losses: 0, draws: 0, streak: 0,
-    equipped: {}, skins: [], created_at: new Date().toISOString(), last_daily: null,
+    equipped: {}, skins: [], created_at: new Date().toISOString(), last_daily: null, survival_best: 0, quests: {},
   };
 }
 
@@ -46,7 +46,10 @@ function createPgStore(url) {
       return (await q(`UPDATE users SET ${sets.join(', ')} WHERE id = $1 RETURNING ${USER_COLUMNS}`, [id, ...vals]))[0];
     },
     async leaderboard(limit = 50) {
-      return q(`SELECT id, username, trophies, best_trophies, xp, wins, losses FROM users ORDER BY trophies DESC, wins DESC LIMIT $1`, [limit]);
+      return q(`SELECT id, username, trophies, best_trophies, xp, wins, losses, survival_best FROM users ORDER BY trophies DESC, wins DESC LIMIT $1`, [limit]);
+    },
+    async survivalBoard(limit = 50) {
+      return q(`SELECT id, username, trophies, xp, survival_best FROM users WHERE survival_best > 0 ORDER BY survival_best DESC LIMIT $1`, [limit]);
     },
     async countUsers() { return Number((await q(`SELECT count(*)::int AS c FROM users`))[0].c); },
     async rankOf(id) {
@@ -95,7 +98,11 @@ function createJsonStore(file) {
     },
     async leaderboard(limit = 50) {
       return clone([...data.users].sort((a, b) => b.trophies - a.trophies || b.wins - a.wins).slice(0, limit)
-        .map(u => ({ id: u.id, username: u.username, trophies: u.trophies, best_trophies: u.best_trophies, xp: u.xp, wins: u.wins, losses: u.losses })));
+        .map(u => ({ id: u.id, username: u.username, trophies: u.trophies, best_trophies: u.best_trophies, xp: u.xp, wins: u.wins, losses: u.losses, survival_best: u.survival_best || 0 })));
+    },
+    async survivalBoard(limit = 50) {
+      return clone(data.users.filter(u => (u.survival_best || 0) > 0).sort((a, b) => b.survival_best - a.survival_best).slice(0, limit)
+        .map(u => ({ id: u.id, username: u.username, trophies: u.trophies, xp: u.xp, survival_best: u.survival_best })));
     },
     async countUsers() { return data.users.length; },
     async rankOf(id) {

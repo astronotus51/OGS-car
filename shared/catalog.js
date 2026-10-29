@@ -99,5 +99,66 @@
     return { ok: false };
   }
 
-  return { OG_NAMES, OG_ROLES, OG_LORE, THEMES, SKINS, SKIN_BY_ID, DEFAULT_EQUIP, RANKS, rankFor, nextRank, xpForLevel, levelFromXp, matchRewards, canUnlock };
+  // ----- Quêtes du jour -----
+  // kind : 'wins' | 'games' | 'kills' | 'orbs' | 'placed' (ogId) | 'abilities' | 'evolutions' | 'waves' (survie)
+  const QUEST_TEMPLATES = [
+    { id: 'win2', kind: 'wins', goal: 2, label: 'Gagne 2 parties', coins: 40 },
+    { id: 'play3', kind: 'games', goal: 3, label: 'Joue 3 parties', coins: 30 },
+    { id: 'kills20', kind: 'kills', goal: 20, label: 'Élimine 20 unités adverses', coins: 35 },
+    { id: 'orbs10', kind: 'orbs', goal: 10, label: 'Ramasse 10 orbes de mana', coins: 25 },
+    { id: 'zip15', kind: 'placed', ogId: 1, goal: 15, label: 'Pose 15 Zip', coins: 30 },
+    { id: 'gromp8', kind: 'placed', ogId: 2, goal: 8, label: 'Pose 8 Gromp', coins: 30 },
+    { id: 'krak6', kind: 'placed', ogId: 3, goal: 6, label: 'Pose 6 Krak', coins: 30 },
+    { id: 'riko5', kind: 'placed', ogId: 4, goal: 5, label: 'Pose 5 Riko', coins: 30 },
+    { id: 'blok4', kind: 'placed', ogId: 5, goal: 4, label: 'Pose 4 Blok', coins: 30 },
+    { id: 'mojo4', kind: 'placed', ogId: 6, goal: 4, label: 'Pose 4 Mojo', coins: 30 },
+    { id: 'zephir3', kind: 'placed', ogId: 7, goal: 3, label: 'Pose 3 Zéphir', coins: 35 },
+    { id: 'abil5', kind: 'abilities', goal: 5, label: 'Utilise 5 capacités actives', coins: 30 },
+    { id: 'evo3', kind: 'evolutions', goal: 3, label: 'Fais évoluer 3 unités', coins: 35 },
+    { id: 'waves5', kind: 'waves', goal: 5, label: 'Survis à 5 vagues en Survie', coins: 40 },
+  ];
+  function dayKey(d) { return (d || new Date()).toISOString().slice(0, 10); }
+  function hashStr(str) { let h = 2166136261; for (let i = 0; i < str.length; i += 1) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  // 3 quêtes du jour, déterministes par (jour, joueur).
+  function dailyQuests(userId, day) {
+    const key = day || dayKey();
+    let h = hashStr(`${key}:${userId}`);
+    const pool = [...QUEST_TEMPLATES];
+    const picked = [];
+    while (picked.length < 3 && pool.length) { h = (Math.imul(h, 1103515245) + 12345) >>> 0; picked.push(pool.splice(h % pool.length, 1)[0]); }
+    return { date: key, items: picked.map(q => ({ id: q.id, progress: 0, claimed: false })) };
+  }
+  function questTemplate(id) { return QUEST_TEMPLATES.find(q => q.id === id); }
+  // Fait avancer les quêtes à partir des stats d'une partie.
+  function advanceQuests(quests, { result, stats, mode, waves }) {
+    for (const item of quests.items) {
+      const q = questTemplate(item.id);
+      if (!q || item.claimed) continue;
+      let add = 0;
+      switch (q.kind) {
+        case 'wins': add = result === 'win' ? 1 : 0; break;
+        case 'games': add = 1; break;
+        case 'kills': add = stats.kills || 0; break;
+        case 'orbs': add = stats.orbs || 0; break;
+        case 'placed': add = (stats.placedBy && stats.placedBy[q.ogId]) || 0; break;
+        case 'abilities': add = stats.abilities || 0; break;
+        case 'evolutions': add = stats.evolutions || 0; break;
+        case 'waves': add = mode === 'survival' ? Math.max(0, (waves || 0) - item.progress) : 0; break;
+        default: break;
+      }
+      item.progress = Math.min(q.goal, item.progress + add);
+    }
+    return quests;
+  }
+
+  // ----- Offre de la semaine : un skin payant à -50 % -----
+  function weekKey(d) { const date = d || new Date(); const start = new Date(Date.UTC(date.getUTCFullYear(), 0, 1)); return `${date.getUTCFullYear()}-${Math.floor((date - start) / 604800000)}`; }
+  function weeklyDeal(d) {
+    const paid = SKINS.filter(s => !s.hidden && s.unlock.type === 'coins');
+    if (!paid.length) return null;
+    const skin = paid[hashStr(weekKey(d)) % paid.length];
+    return { skinId: skin.id, price: Math.ceil(skin.unlock.value / 2), week: weekKey(d) };
+  }
+
+  return { OG_NAMES, OG_ROLES, OG_LORE, THEMES, SKINS, SKIN_BY_ID, DEFAULT_EQUIP, RANKS, rankFor, nextRank, xpForLevel, levelFromXp, matchRewards, canUnlock, QUEST_TEMPLATES, dailyQuests, questTemplate, advanceQuests, dayKey, weeklyDeal };
 });

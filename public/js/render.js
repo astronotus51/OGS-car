@@ -17,7 +17,7 @@
     let scale = 1, cssW = W, cssH = H;
     const anim = new Map(); // id -> état d'animation
     let particles = [], floaters = [], rings = [], emotes = [];
-    let shake = 0, flashHp = { top: 0, bottom: 0 }, hazardWarn = 0;
+    let shake = 0, flashHp = { top: 0, bottom: 0 }, hazardWarn = 0, overtimeFlash = 0, waveBanner = null;
     let me = 'bottom';
     let waterCache = null;
 
@@ -89,6 +89,16 @@
         }
         case 'orb': { burst(ev.x, ev.y, '#a7f3d0', 14, { speed: 220, life: 0.5, size: 7 }); floater(ev.x, ev.y, `+${ev.mana}`, '#86efac', 52); ring(ev.x, ev.y, '#5eead4', 80, 0.35); break; }
         case 'hazard': { if (ev.phase === 'approach') hazardWarn = 3; if (ev.phase === 'dash') shake = Math.max(shake, 12); break; }
+        case 'ability': {
+          const color = OGS[ev.ogId].color;
+          for (const u of ev.units || []) { ring(u.x, u.y, color, ev.ogId === 5 ? 190 : 130, 0.5); burst(u.x, u.y, ev.ogId === 5 ? '#bae6fd' : color, 10, { speed: 220, life: 0.5, size: 8 }); }
+          if (!ev.passive && ev.units && ev.units[0]) floater(ev.units[0].x, ev.units[0].y, Sim.ABILITIES[ev.ogId] ? Sim.ABILITIES[ev.ogId].name : '⚡', '#fde68a', 48);
+          break;
+        }
+        case 'evolve': { ring(ev.x, ev.y, '#fde68a', 150, 0.6); burst(ev.x, ev.y, '#fde68a', 16, { speed: 260, life: 0.6, size: 9 }); floater(ev.x, ev.y, `NIV. ${ev.level}`, '#fde68a', 56); const a = animOf(ev.id); a.spawn = now; break; }
+        case 'heal': { floater(ev.x, ev.y, '+1', '#86efac', 40); burst(ev.x, ev.y, '#86efac', 5, { speed: 90, life: 0.5, size: 6 }); break; }
+        case 'overtime': { shake = Math.max(shake, 14); overtimeFlash = 3; break; }
+        case 'wave': { waveBanner = { wave: ev.wave, count: ev.count, t: 2.5 }; shake = Math.max(shake, 6); break; }
         default: break;
       }
     }
@@ -106,6 +116,8 @@
       shake = Math.max(0, shake - dt * 40);
       flashHp.top = Math.max(0, flashHp.top - dt * 2.5); flashHp.bottom = Math.max(0, flashHp.bottom - dt * 2.5);
       hazardWarn = Math.max(0, hazardWarn - dt);
+      overtimeFlash = Math.max(0, overtimeFlash - dt);
+      if (waveBanner) { waveBanner.t -= dt; if (waveBanner.t <= 0) waveBanner = null; }
     }
 
     // ----- Décor -----
@@ -158,8 +170,9 @@
         ctx.save();
         for (const c of view.availableCells) {
           const r = cellRect(c.col, c.row);
-          ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(r.x + 4, r.y + 4, r.w - 8, r.h - 8);
-          ctx.strokeStyle = OGS[sel].color; ctx.lineWidth = 3; ctx.globalAlpha = 0.7;
+          ctx.fillStyle = c.evolve ? 'rgba(253,224,71,0.18)' : 'rgba(255,255,255,0.08)'; ctx.fillRect(r.x + 4, r.y + 4, r.w - 8, r.h - 8);
+          if (c.evolve) { ctx.fillStyle = '#fde68a'; ctx.font = 'bold 26px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⬆ NIV.', r.x + r.w / 2, r.y + 30); }
+          ctx.strokeStyle = c.evolve ? '#fde68a' : OGS[sel].color; ctx.lineWidth = 3; ctx.globalAlpha = 0.7;
           const L = 16;
           ctx.beginPath();
           ctx.moveTo(r.x + 6, r.y + 6 + L); ctx.lineTo(r.x + 6, r.y + 6); ctx.lineTo(r.x + 6 + L, r.y + 6);
@@ -267,7 +280,12 @@
         rot: e.ogId === 3 ? vrot(e.rot) : e.ogId === 4 ? vrot(e.rot) : 0,
         hpRatio: e.hpMax ? e.hp / e.hpMax : 1, team: enemy ? 'enemy' : 'me',
       };
-      Creatures.draw(ctx, e.ogId, skin, x + dx, y, size, t, state, { rot: lean, scaleX: sx, scaleY: sy, flash });
+      const lvl = e.level || 1;
+      const lvlScale = 1 + 0.1 * (lvl - 1);
+      if (e.boosted) { ctx.save(); ctx.strokeStyle = 'rgba(254,240,138,0.8)'; ctx.lineWidth = 4; for (let i = 0; i < 3; i += 1) { const off = ((t * 4 + i * 0.33) % 1) * size * 0.5; ctx.beginPath(); ctx.moveTo(x - size * 0.5 + i * size * 0.5, y + size * 0.3 + off); ctx.lineTo(x - size * 0.5 + i * size * 0.5, y + size * 0.3 + off + 18); ctx.stroke(); } ctx.restore(); }
+      Creatures.draw(ctx, e.ogId, skin, x + dx, y, size * lvlScale, t, state, { rot: lean, scaleX: sx, scaleY: sy, flash });
+      if (e.frozen) { ctx.save(); ctx.globalAlpha = 0.55; ctx.fillStyle = '#bae6fd'; ctx.strokeStyle = '#7dd3fc'; ctx.lineWidth = 4; roundRect(x - size * 0.42, y - size * 0.46, size * 0.84, size * 0.9, 14); ctx.fill(); ctx.stroke(); ctx.globalAlpha = 0.9; ctx.fillStyle = '#fff'; ctx.font = 'bold 30px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('❄', x, y + 10); ctx.restore(); }
+      if (lvl > 1) { ctx.save(); ctx.fillStyle = '#fde68a'; ctx.strokeStyle = '#0b1021'; ctx.lineWidth = 3; for (let i = 0; i < lvl - 1; i += 1) { const sx2 = x - (lvl - 2) * 12 + i * 24, sy2 = y - size * 0.6; ctx.beginPath(); for (let k = 0; k < 10; k += 1) { const rr2 = k % 2 ? 5 : 11, a = -Math.PI / 2 + k * Math.PI / 5; ctx.lineTo(sx2 + Math.cos(a) * rr2, sy2 + Math.sin(a) * rr2); } ctx.closePath(); ctx.fill(); ctx.stroke(); } ctx.restore(); }
 
       // Points de vie.
       if (e.hpMax > 1) {
@@ -281,7 +299,9 @@
     }
 
     function drawProjectiles(view) {
+      const fog = view.features && view.features.fog;
       for (const p of view.state.projectiles) {
+        if (fog && ((me === 'top' && p.y >= FIELD.h / 2) || (me === 'bottom' && p.y < FIELD.h / 2))) continue;
         const x = vx(p.x), y = vy(p.y);
         const mine = p.player === me;
         ctx.save();
@@ -365,9 +385,20 @@
         ctx.lineWidth = selected ? 7 : 4; ctx.strokeStyle = selected ? '#fde047' : '#ffffff'; ctx.stroke();
         // Remplissage progressif (mana manquante) en bas du slot.
         if (!affordable) { ctx.fillStyle = 'rgba(15,23,42,0.45)'; const k = 1 - S.mana[me] / og.cost; roundRect(cx - slotSize / 2, cy - slotSize / 2 + lift, slotSize, slotSize * k, 18); ctx.fill(); }
-        Creatures.draw(ctx, ogId, view.equipped[me][ogId], cx, cy + lift + 6, slotSize * 0.7, view.time, { moving: selected, vx: 1, phase: i }, { scaleX: selected ? 1.06 : 1, scaleY: selected ? 1.06 : 1 });
+        const banned = (view.bans && view.bans[me] || []).includes(ogId);
+        Creatures.draw(ctx, ogId, view.equipped[me][ogId], cx, cy + lift + 6, slotSize * 0.7, view.time, { moving: selected, vx: 1, phase: i }, { scaleX: selected ? 1.06 : 1, scaleY: selected ? 1.06 : 1, alpha: banned ? 0.35 : 1 });
+        if (banned) { ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx - 50, cy - 50 + lift); ctx.lineTo(cx + 50, cy + 50 + lift); ctx.moveTo(cx + 50, cy - 50 + lift); ctx.lineTo(cx - 50, cy + 50 + lift); ctx.stroke(); }
         // Touche + coût.
         ctx.globalAlpha = 1;
+        // Capacité active : badge ⚡ en haut à droite avec recharge.
+        if (view.features && view.features.abilities && !banned) {
+          const cd = S.abilities && S.abilities[me] ? S.abilities[me][ogId] : 0;
+          const bx2 = cx + slotSize / 2 - 30, by2 = cy - slotSize / 2 + 30 + lift;
+          ctx.fillStyle = cd ? 'rgba(15,23,42,0.85)' : '#fde047'; ctx.beginPath(); ctx.arc(bx2, by2, 26, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#0b1021'; ctx.lineWidth = 3; ctx.stroke();
+          if (cd) { ctx.strokeStyle = '#fde047'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(bx2, by2, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - cd / Sim.ABILITY_COOLDOWN)); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(Math.ceil(cd)), bx2, by2 + 7); }
+          else { ctx.fillStyle = '#0b1021'; ctx.beginPath(); ctx.moveTo(bx2 + 4, by2 - 16); ctx.lineTo(bx2 - 9, by2 + 3); ctx.lineTo(bx2 - 1, by2 + 3); ctx.lineTo(bx2 - 5, by2 + 16); ctx.lineTo(bx2 + 9, by2 - 3); ctx.lineTo(bx2 + 1, by2 - 3); ctx.closePath(); ctx.fill(); }
+        }
         ctx.fillStyle = '#0b1021'; roundRect(cx - slotSize / 2 + 6, cy - slotSize / 2 + 6 + lift, 44, 40, 8); ctx.fill();
         ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 26px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(KEY_LABELS[i], cx - slotSize / 2 + 28, cy - slotSize / 2 + 35 + lift);
         ctx.fillStyle = affordable ? '#14532d' : '#7f1d1d'; roundRect(cx + slotSize / 2 - 70, cy + slotSize / 2 - 46 + lift, 64, 40, 8); ctx.fill();
@@ -406,7 +437,7 @@
       ctx.fillText(`${mm}:${ss}`, 139, 112);
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; roundRect(W - 254, 24, 230, 120, 18); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 30px Fredoka, sans-serif';
-      ctx.fillText(view.mode === 'ranked' ? 'CLASSÉE' : view.mode === 'bot' ? 'ENTRAÎNEMENT' : 'AMICALE', W - 139, 74);
+      ctx.fillText(view.mode === 'ranked' ? 'CLASSÉE' : view.mode === 'bot' ? 'ENTRAÎNEMENT' : view.mode === 'survival' ? 'SURVIE' : 'AMICALE', W - 139, 74);
       ctx.font = '26px Fredoka, sans-serif'; ctx.fillStyle = '#cbd5e1';
       ctx.fillText(`${Math.round(view.latency || 0)} ms`, W - 139, 118);
 
@@ -426,6 +457,34 @@
         ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         const ty = b.label === 'MOI' ? b.y + barH + 36 : b.y - 14;
         ctx.strokeText(String(b.hp), bx + barW / 2, ty); ctx.fillText(String(b.hp), bx + barW / 2, ty);
+      }
+      // Roi du centre : zone + scores.
+      if (view.features && view.features.kingOfCenter) {
+        const zy = FIELD_Y + (Sim.ROWS_PER_SIDE - 1) * CELL_H;
+        ctx.save(); ctx.fillStyle = `rgba(253,224,71,${0.08 + 0.04 * Math.sin(view.time * 3)})`; ctx.fillRect(0, zy, W, CELL_H * 2);
+        ctx.strokeStyle = 'rgba(253,224,71,0.6)'; ctx.lineWidth = 4; ctx.setLineDash([24, 14]); ctx.strokeRect(6, zy + 3, W - 12, CELL_H * 2 - 6); ctx.restore();
+        const pts = S.points || { top: 0, bottom: 0 };
+        const px = 24, py = FIELD_Y + 20, pw = 300, ph = 26;
+        for (const [side, yy, color] of [[opp, py, '#fca5a5'], [me, py + 36, '#86efac']]) {
+          ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(px, yy, pw, ph, 8); ctx.fill();
+          ctx.fillStyle = color; roundRect(px, yy, pw * Math.min(1, (pts[side] || 0) / Sim.KING_TARGET), ph, 8); ctx.fill();
+          ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Fredoka, sans-serif'; ctx.textAlign = 'left'; ctx.fillText(`${side === me ? 'Moi' : 'Adv.'} ${Math.round(pts[side] || 0)} / ${Sim.KING_TARGET}`, px + 10, yy + 19);
+        }
+      }
+      // Mort subite.
+      if (S.overtime) {
+        ctx.save(); ctx.globalAlpha = 0.7 + 0.3 * Math.sin(view.time * 8);
+        ctx.font = 'bold 44px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#fca5a5'; ctx.lineWidth = 8; ctx.strokeStyle = '#0b1021';
+        ctx.strokeText('MORT SUBITE', W / 2, FIELD_Y + FIELD.h / 2 - 30); ctx.fillText('MORT SUBITE', W / 2, FIELD_Y + FIELD.h / 2 - 30);
+        ctx.font = '26px Fredoka, sans-serif'; ctx.fillStyle = '#fff'; ctx.lineWidth = 4; ctx.strokeText('mana ×3 · premier dégât = défaite', W / 2, FIELD_Y + FIELD.h / 2 + 16); ctx.fillText('mana ×3 · premier dégât = défaite', W / 2, FIELD_Y + FIELD.h / 2 + 16);
+        ctx.restore();
+      }
+      // Survie : vague et score.
+      if (view.survival) {
+        ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(W / 2 - 240, FIELD_Y + 14, 480, 64, 14); ctx.fill();
+        ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 30px Fredoka, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(`Vague ${view.survival.wave}  ·  Score ${view.survival.score}  ·  prochaine dans ${view.survival.next || 0} s`, W / 2, FIELD_Y + 56);
+        if (waveBanner) { ctx.save(); ctx.globalAlpha = Math.min(1, waveBanner.t); ctx.font = 'bold 80px "Press Start 2P", monospace'; ctx.fillStyle = '#fca5a5'; ctx.lineWidth = 10; ctx.strokeStyle = '#0b1021'; ctx.strokeText(`VAGUE ${waveBanner.wave}`, W / 2, FIELD_Y + FIELD.h * 0.35); ctx.fillText(`VAGUE ${waveBanner.wave}`, W / 2, FIELD_Y + FIELD.h * 0.35); ctx.restore(); }
       }
       // Alerte scorpion.
       if (hazardWarn > 0 || (S.hazard && S.hazard.phase !== 'dash')) {
@@ -464,11 +523,23 @@
         ctx.save(); ctx.globalAlpha = Math.min(1, view.goTimer * 2);
         ctx.font = 'bold 200px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#4ade80'; ctx.lineWidth = 14; ctx.strokeStyle = '#14532d';
         ctx.strokeText('GO!', W / 2, FIELD_Y + FIELD.h / 2 + 70); ctx.fillText('GO!', W / 2, FIELD_Y + FIELD.h / 2 + 70); ctx.restore();
+      } else if (view.phase === 'draft' && view.draft) {
+        ctx.save(); ctx.fillStyle = 'rgba(5,8,20,0.62)'; ctx.fillRect(0, FIELD_Y, W, FIELD.h);
+        ctx.textAlign = 'center'; ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 64px "Press Start 2P", monospace'; ctx.lineWidth = 10; ctx.strokeStyle = '#0b1021';
+        ctx.strokeText('DRAFT', W / 2, FIELD_Y + 150); ctx.fillText('DRAFT', W / 2, FIELD_Y + 150);
+        ctx.font = '34px Fredoka, sans-serif'; ctx.fillStyle = '#fff';
+        ctx.fillText(view.draft.myBan ? `Tu bannis ${OGSCatalog.OG_NAMES[view.draft.myBan]} pour ton adversaire` : 'Choisis une créature à BANNIR chez ton adversaire (touche ou clic)', W / 2, FIELD_Y + 230);
+        ctx.fillText(view.draft.oppBan ? `L’adversaire a choisi son bannissement` : 'L’adversaire réfléchit…', W / 2, FIELD_Y + 280);
+        ctx.font = 'bold 120px "Press Start 2P", monospace'; ctx.fillStyle = '#fde68a'; ctx.strokeText(String(Math.ceil(view.draft.timer)), W / 2, FIELD_Y + FIELD.h / 2 + 120); ctx.fillText(String(Math.ceil(view.draft.timer)), W / 2, FIELD_Y + FIELD.h / 2 + 120);
+        // Les 7 créatures en ligne.
+        for (let i = 0; i < 7; i += 1) { const og = i + 1, x = W / 8 * (i + 1), y = FIELD_Y + FIELD.h * 0.72; Creatures.draw(ctx, og, view.equipped[me][og], x, y, 120, view.time, { moving: false, phase: i }, { alpha: view.draft.myBan === og ? 0.3 : 1 }); if (view.draft.myBan === og) { ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(x - 50, y - 50); ctx.lineTo(x + 50, y + 50); ctx.moveTo(x + 50, y - 50); ctx.lineTo(x - 50, y + 50); ctx.stroke(); } ctx.fillStyle = '#fff'; ctx.font = 'bold 24px Fredoka, sans-serif'; ctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${OGSCatalog.OG_NAMES[og]}`, x, y + 95); }
+        ctx.restore();
       } else if (view.phase === 'over' && view.result) {
         ctx.save(); ctx.fillStyle = 'rgba(5,8,20,0.5)'; ctx.fillRect(0, FIELD_Y, W, FIELD.h);
-        const txt = view.result === 'win' ? 'VICTOIRE' : view.result === 'loss' ? 'DÉFAITE' : 'ÉGALITÉ';
+        const txt = view.result === 'win' ? 'VICTOIRE' : view.result === 'loss' ? 'DÉFAITE' : view.result === 'survival' ? 'FIN' : 'ÉGALITÉ';
         ctx.font = 'bold 120px "Press Start 2P", monospace'; ctx.textAlign = 'center';
         ctx.fillStyle = view.result === 'win' ? '#4ade80' : view.result === 'loss' ? '#f87171' : '#fde68a'; ctx.lineWidth = 14; ctx.strokeStyle = '#0b1021';
+        if (view.result === 'survival' && view.survival) { ctx.font = 'bold 40px Fredoka, sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(`Vague ${view.survival.wave} · score ${view.survival.score}`, W / 2, FIELD_Y + FIELD.h / 2 + 120); ctx.font = 'bold 120px "Press Start 2P", monospace'; ctx.fillStyle = '#fde68a'; }
         ctx.strokeText(txt, W / 2, FIELD_Y + FIELD.h / 2 + 40); ctx.fillText(txt, W / 2, FIELD_Y + FIELD.h / 2 + 40); ctx.restore();
       }
     }
@@ -487,7 +558,13 @@
       drawHints(view);
       drawOrbs(view);
       const ground = [], air = [];
-      for (const e of view.state.entities) (OGS[e.ogId].air ? air : ground).push(e);
+      const fog = view.features && view.features.fog;
+      const midY = FIELD.h / 2;
+      for (const e of view.state.entities) {
+        if (fog && e.player !== me && ((me === 'top' && e.y >= midY) || (me === 'bottom' && e.y < midY))) continue;
+        (OGS[e.ogId].air ? air : ground).push(e);
+      }
+      if (fog) { ctx.save(); ctx.fillStyle = 'rgba(5,8,20,0.55)'; ctx.fillRect(0, FIELD_Y, W, FIELD.h / 2); ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = 'bold 30px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('BROUILLARD DE GUERRE', W / 2, FIELD_Y + FIELD.h / 4); ctx.restore(); }
       ground.sort((a, b) => vy(a.y) - vy(b.y));
       for (const e of ground) drawEntity(e, view, now);
       drawProjectiles(view);

@@ -109,6 +109,7 @@
       const { leaderboard } = await Net.api('/api/leaderboard');
       $('lobbyTop').innerHTML = leaderboard.slice(0, 5).map(r => `<li><span>${esc(r.username)}</span><span class="t">${r.trophies}</span></li>`).join('') || '<li>Personne encore… sois le premier !</li>';
     } catch (e) { /* ignore */ }
+    refreshQuests();
   }
   setInterval(() => { if (current === 'lobby') $('onlineCount').textContent = Net.online; }, 1000);
   $('btnDaily').addEventListener('click', async () => {
@@ -117,9 +118,42 @@
   });
   $('lobbyProfile').addEventListener('click', openProfile);
 
+  // ----- Options de partie (features) -----
+  const Features = window.OGSFeatures;
+  function loadOptions() { try { return JSON.parse(localStorage.getItem('ogs_options') || '{}'); } catch (e) { return {}; } }
+  function saveOptions(o) { try { localStorage.setItem('ogs_options', JSON.stringify(o)); } catch (e) { /* ignore */ } }
+  function currentOptions() {
+    const out = {};
+    $('featureList').querySelectorAll('input[data-feature]').forEach(i => { out[i.dataset.feature] = i.checked; });
+    return out;
+  }
+  function renderFeatureList() {
+    const saved = loadOptions();
+    const feats = Features.matchFeatures();
+    const groups = [...new Set(feats.map(f => f.group))];
+    $('featureList').innerHTML = groups.map(g => `<div class="feature-group">${esc(g)}</div>` + feats.filter(f => f.group === g).map(f => `<label class="feature"><input type="checkbox" data-feature="${f.key}" ${(typeof saved[f.key] === 'boolean' ? saved[f.key] : f.default) ? 'checked' : ''}><span>${esc(f.label)}${f.ranked ? ' <small style="display:inline;color:#4ade80">· actif en classée</small>' : ''}<small>${esc(f.desc)}</small></span></label>`).join('')).join('');
+    $('featureList').querySelectorAll('input').forEach(i => i.addEventListener('change', () => saveOptions(currentOptions())));
+    $('optionsBox').classList.toggle('hidden', !feats.length);
+    $('btnSurvival').classList.toggle('hidden', !Features.enabled('survival'));
+    $('questsCard').classList.toggle('hidden', !Features.enabled('quests'));
+  }
+  renderFeatureList();
+
+  // ----- Quêtes du jour -----
+  async function refreshQuests() {
+    if (!Features.enabled('quests')) return;
+    try {
+      const { quests } = await Net.api('/api/quests');
+      if (!quests) return;
+      $('questList').innerHTML = quests.items.map(q => `<li><div class="row"><span>${esc(q.label)}</span><span>${q.claimed ? '✔' : q.done ? `<button class="btn gold" data-claim="${q.id}">+${q.coins} 🪙</button>` : `${q.progress}/${q.goal}`}</span></div><div class="bar"><div style="width:${Math.round(q.progress / q.goal * 100)}%"></div></div></li>`).join('');
+      $('questList').querySelectorAll('[data-claim]').forEach(b => b.addEventListener('click', async () => { try { const d = await Net.api('/api/quests/claim', { id: b.dataset.claim }); profile = d.profile; $('lobbyMsg').textContent = `+${d.coins} pièces !`; refreshLobby(); } catch (e) { $('lobbyMsg').textContent = e.message; } }));
+    } catch (e) { /* ignore */ }
+  }
+
+  $('btnSurvival').addEventListener('click', () => { lastMatchKind = { t: 'survival' }; Net.send({ t: 'survival', options: currentOptions() }); openQueue('Les vagues arrivent…', 'bot'); });
   $('btnPlay').addEventListener('click', () => { lastMatchKind = { t: 'queue' }; Net.send({ t: 'queue' }); openQueue('Recherche d’un adversaire…', 'queue'); });
-  $('btnBot').addEventListener('click', () => { const difficulty = $('botLevel').value; lastMatchKind = { t: 'bot', difficulty }; Net.send({ t: 'bot', difficulty, duration: Number($('durationSelect').value) }); openQueue('Préparation de l’IA…', 'bot'); });
-  $('btnFriendlyCreate').addEventListener('click', () => { Net.send({ t: 'friendly_create', duration: Number($('durationSelect').value) }); openQueue('Partie amicale : partage ce code', 'friendly'); });
+  $('btnBot').addEventListener('click', () => { const difficulty = $('botLevel').value; lastMatchKind = { t: 'bot', difficulty }; Net.send({ t: 'bot', difficulty, duration: Number($('durationSelect').value), options: currentOptions() }); openQueue('Préparation de l’IA…', 'bot'); });
+  $('btnFriendlyCreate').addEventListener('click', () => { Net.send({ t: 'friendly_create', duration: Number($('durationSelect').value), options: currentOptions() }); openQueue('Partie amicale : partage ce code', 'friendly'); });
   $('btnFriendlyJoin').addEventListener('click', () => { const code = $('friendlyCode').value.trim().toUpperCase(); if (code.length < 4) return ($('lobbyMsg').textContent = 'Entre le code à 5 caractères'); Net.send({ t: 'friendly_join', code }); $('lobbyMsg').textContent = 'Connexion à la salle…'; });
   $('btnCancelQueue').addEventListener('click', () => { Net.send({ t: queueMode === 'friendly' ? 'friendly_leave' : 'cancel' }); closeQueue(); });
 
@@ -148,6 +182,10 @@
     show('game'); game.start(msg);
   });
   Net.on('go', () => game.onGo());
+  Net.on('draft_pick', (msg) => game.onDraftPick(msg));
+  Net.on('draft_end', (msg) => { game.onDraftEnd(msg); const mine = (msg.bans && msg.bans[game.side] || []); if (mine.length) toast(`Banni pour toi : ${mine.map(o => Catalog.OG_NAMES[o]).join(', ')}`, 'warn'); });
+  Net.on('ability_rejected', (msg) => game.onAbilityRejected(msg));
+  Net.on('wave', (msg) => game.onWave(msg));
   Net.on('snap', (msg) => game.onSnap(msg));
   Net.on('place_rejected', (msg) => game.onRejected(msg));
   Net.on('presence', (msg) => { game.onPresence(msg); if (!msg.connected) toast('Adversaire déconnecté…', 'warn'); });
@@ -161,10 +199,12 @@
     game.stop();
     profile = msg.profile;
     const title = $('resultTitle');
-    title.textContent = msg.result === 'win' ? 'VICTOIRE' : msg.result === 'loss' ? 'DÉFAITE' : 'ÉGALITÉ';
-    title.className = `result-title ${msg.result}`;
-    const reasons = { ko: 'Base détruite', time: 'Temps écoulé', surrender: 'Abandon', disconnect: 'Déconnexion' };
-    $('resultSub').textContent = `${reasons[msg.reason] || msg.reason} · contre ${msg.opponent.username} · ${Math.floor(msg.duration / 60)}:${String(msg.duration % 60).padStart(2, '0')}`;
+    const isSurvival = msg.result === 'survival';
+    title.textContent = isSurvival ? 'SURVIE' : msg.result === 'win' ? 'VICTOIRE' : msg.result === 'loss' ? 'DÉFAITE' : 'ÉGALITÉ';
+    title.className = `result-title ${isSurvival ? 'draw' : msg.result}`;
+    const reasons = { ko: 'Base détruite', time: 'Temps écoulé', surrender: 'Abandon', disconnect: 'Déconnexion', overtime: 'Mort subite', points: 'Roi du centre' };
+    if (isSurvival && msg.survival) $('resultSub').textContent = `Vague ${msg.survival.wave} · ${msg.survival.kills} éliminations · score ${msg.survival.score}${msg.newBest ? ' · 🏅 NOUVEAU RECORD' : ` · record ${profile.survivalBest}`}`;
+    else $('resultSub').textContent = `${reasons[msg.reason] || msg.reason} · contre ${msg.opponent.username} · ${Math.floor(msg.duration / 60)}:${String(msg.duration % 60).padStart(2, '0')}`;
     const r = msg.rewards;
     $('resTrophies').textContent = `${r.trophies >= 0 ? '+' : ''}${r.trophies}`;
     $('resXp').textContent = `+${r.xp}`; $('resCoins').textContent = `+${r.coins}`;
@@ -174,16 +214,19 @@
     if (msg.levelUp) extra.push(`⬆ Niveau ${msg.levelUp} !`);
     if (r.streakBonus) extra.push(`🔥 Série de victoires : +${r.streakBonus} XP`);
     if (msg.unlocked && msg.unlocked.length) extra.push(`🎁 Débloqué : ${msg.unlocked.map(id => Catalog.SKIN_BY_ID[id] ? Catalog.SKIN_BY_ID[id].name : id).join(', ')}`);
+    if (msg.quests) { const done = msg.quests.items.filter(q => q.done && !q.claimed); if (done.length) extra.push(`📜 Quête terminée : ${done.map(q => q.label).join(', ')} (à récupérer dans le lobby)`); }
+    if (msg.points) extra.push(`👑 Points : ${Math.round(msg.points[msg.side])} contre ${Math.round(msg.points[Sim.other(msg.side)])}`);
     $('resExtra').innerHTML = extra.map(esc).join('<br>');
     const side = msg.side || 'bottom', oppSide = Sim.other(side);
     const mine = msg.stats[side], theirs = msg.stats[oppSide];
-    $('resStats').innerHTML = `<div>Ogs posés : <b>${mine.placed}</b> (adv. ${theirs.placed})</div><div>Éliminations : <b>${mine.kills}</b> (adv. ${theirs.kills})</div><div>Dégâts à la base : <b>${mine.damage}</b> (adv. ${theirs.damage})</div><div>Orbes ramassées : <b>${mine.orbs}</b> (adv. ${theirs.orbs})</div><div>PV restants : <b>${msg.hp[side]}</b> (adv. ${msg.hp[oppSide]})</div><div>Mana dépensée : <b>${mine.manaSpent}</b></div>`;
+    $('resStats').innerHTML = `<div>Ogs posés : <b>${mine.placed}</b> (adv. ${theirs.placed})</div><div>Éliminations : <b>${mine.kills}</b> (adv. ${theirs.kills})</div><div>Dégâts à la base : <b>${mine.damage}</b> (adv. ${theirs.damage})</div><div>Orbes ramassées : <b>${mine.orbs}</b> (adv. ${theirs.orbs})</div><div>PV restants : <b>${msg.hp[side]}</b> (adv. ${msg.hp[oppSide]})</div><div>Mana dépensée : <b>${mine.manaSpent}</b></div><div>Capacités : <b>${mine.abilities || 0}</b> · Évolutions : <b>${mine.evolutions || 0}</b></div>`;
     show('result');
   }
   $('btnResultMenu').addEventListener('click', () => show('lobby'));
   $('btnResultReplay').addEventListener('click', () => {
     show('lobby');
     if (lastMatchKind && lastMatchKind.t === 'bot') $('btnBot').click();
+    else if (lastMatchKind && lastMatchKind.t === 'survival') $('btnSurvival').click();
     else $('btnPlay').click();
   });
 
@@ -197,11 +240,11 @@
     $('profileXp').style.width = `${Math.round(profile.xpInto / profile.xpNeed * 100)}%`;
     $('profileXpText').textContent = `Niveau ${profile.level} · ${profile.xpInto}/${profile.xpNeed} XP`;
     const wr = profile.games ? Math.round(profile.wins / profile.games * 100) : 0;
-    const stats = [['Parties', profile.games], ['Victoires', profile.wins], ['Défaites', profile.losses], ['Égalités', profile.draws], ['Taux de victoire', `${wr} %`], ['Série en cours', profile.streak], ['Pièces', profile.coins], ['Skins', profile.skins.length]];
+    const stats = [['Parties', profile.games], ['Victoires', profile.wins], ['Défaites', profile.losses], ['Égalités', profile.draws], ['Taux de victoire', `${wr} %`], ['Série en cours', profile.streak], ['Pièces', profile.coins], ['Skins', profile.skins.length], ['Record Survie', profile.survivalBest || 0]];
     $('profileStats').innerHTML = stats.map(([l, v]) => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
     try {
       const { history } = await Net.api('/api/history');
-      const labels = { win: 'Victoire', loss: 'Défaite', draw: 'Égalité' };
+      const labels = { win: 'Victoire', loss: 'Défaite', draw: 'Égalité', survival: 'Survie' };
       $('profileHistory').innerHTML = history.map(h => `<li><span class="${h.result}">${labels[h.result]}</span><span>vs ${esc(h.opponent)}</span><span>${h.mode.replace('-botfill', ' (bot)')}</span><span>${h.delta >= 0 ? '+' : ''}${h.delta} 🏆</span><span>${new Date(h.at).toLocaleString('fr-FR')}</span></li>`).join('') || '<li>Aucune partie jouée pour l’instant.</li>';
     } catch (e) { $('profileHistory').innerHTML = '<li>Historique indisponible.</li>'; }
   }
@@ -222,6 +265,9 @@
     $('skinTabs').innerHTML = [1, 2, 3, 4, 5, 6, 7].map(og => `<button class="og-tab ${og === skinTab ? 'active' : ''}" data-og="${og}">${Catalog.OG_NAMES[og]} <small>· ${Catalog.OG_ROLES[og]}</small></button>`).join('');
     $('skinTabs').querySelectorAll('.og-tab').forEach(b => b.addEventListener('click', () => { skinTab = Number(b.dataset.og); openSkins(); }));
     const owned = new Set(profile.skins);
+    let deal = null; try { deal = (await Net.api('/api/deal')).deal; } catch (e) { /* ignore */ }
+    const dealEl = document.querySelector('#screen-skins .deal') || (() => { const d = document.createElement('div'); d.className = 'deal'; $('skinTabs').parentNode.insertBefore(d, $('skinTabs')); return d; })();
+    if (deal && Catalog.SKIN_BY_ID[deal.skinId]) { const ds = Catalog.SKIN_BY_ID[deal.skinId]; dealEl.textContent = `🔥 Offre de la semaine : ${ds.name} à ${deal.price} pièces au lieu de ${ds.unlock.value} (onglet ${Catalog.OG_NAMES[ds.ogId]})`; dealEl.classList.remove('hidden'); } else dealEl.classList.add('hidden');
     const skins = Catalog.SKINS.filter(s => s.ogId === skinTab && !s.hidden);
     const grid = $('skinGrid'); grid.innerHTML = ''; previews = [];
     for (const skin of skins) {
@@ -232,9 +278,9 @@
       let action = '';
       if (isEq) action = '<div class="skin-lock">✔ Équipé</div>';
       else if (isOwned) action = `<button class="btn primary" data-equip="${skin.id}">Équiper</button>`;
-      else if (skin.unlock.type === 'coins') action = `<button class="btn gold" data-buy="${skin.id}" ${unlock.ok ? '' : 'disabled'}>${skin.unlock.value} pièces</button>`;
+      else if (skin.unlock.type === 'coins') { const price = deal && deal.skinId === skin.id ? deal.price : skin.unlock.value; action = `<button class="btn gold" data-buy="${skin.id}" ${profile.coins >= price ? '' : 'disabled'}>${price} pièces${price !== skin.unlock.value ? ` <s>${skin.unlock.value}</s>` : ''}</button>`; }
       else action = `<div class="skin-lock">🔒 ${unlock.label}</div>`;
-      card.innerHTML = `<canvas width="240" height="240"></canvas><div class="skin-name">${esc(skin.name)}</div><div class="skin-rarity r-${skin.rarity}">${skin.rarity}</div>${action}`;
+      card.innerHTML = `${deal && deal.skinId === skin.id && !isOwned ? '<span class="deal-tag">-50 %</span>' : ''}<canvas width="240" height="240"></canvas><div class="skin-name">${esc(skin.name)}</div><div class="skin-rarity r-${skin.rarity}">${skin.rarity}</div>${action}`;
       grid.appendChild(card);
       const c = card.querySelector('canvas');
       previews.push({ canvas: c, skin, owned: isOwned });
@@ -244,11 +290,22 @@
   }
 
   // ----- Classement -----
+  let boardKind = 'ranked';
+  document.querySelectorAll('[data-board]').forEach(b => b.addEventListener('click', () => { boardKind = b.dataset.board; openLeaderboard(); }));
   async function openLeaderboard() {
     show('leaderboard');
+    document.querySelectorAll('[data-board]').forEach(b => b.classList.toggle('active', b.dataset.board === boardKind));
+    const thead = $('boardTable').querySelector('thead');
     try {
-      const { leaderboard } = await Net.api('/api/leaderboard');
-      $('boardTable').querySelector('tbody').innerHTML = leaderboard.map(r => `<tr class="${profile && r.id === profile.id ? 'me' : ''}"><td>${r.rank}</td><td>${esc(r.username)}</td><td>${r.league}</td><td>${r.level}</td><td>🏆 ${r.trophies}</td><td>${r.wins} / ${r.losses}</td></tr>`).join('') || '<tr><td colspan="6">Aucun joueur classé.</td></tr>';
+      if (boardKind === 'survival') {
+        thead.innerHTML = '<tr><th>#</th><th>Joueur</th><th>Niv.</th><th>Record Survie</th></tr>';
+        const { leaderboard } = await Net.api('/api/leaderboard/survival');
+        $('boardTable').querySelector('tbody').innerHTML = leaderboard.map(r => `<tr class="${profile && r.id === profile.id ? 'me' : ''}"><td>${r.rank}</td><td>${esc(r.username)}</td><td>${r.level}</td><td>${r.score}</td></tr>`).join('') || '<tr><td colspan="4">Personne n’a encore survécu…</td></tr>';
+      } else {
+        thead.innerHTML = '<tr><th>#</th><th>Joueur</th><th>Ligue</th><th>Niv.</th><th>Trophées</th><th>V / D</th></tr>';
+        const { leaderboard } = await Net.api('/api/leaderboard');
+        $('boardTable').querySelector('tbody').innerHTML = leaderboard.map(r => `<tr class="${profile && r.id === profile.id ? 'me' : ''}"><td>${r.rank}</td><td>${esc(r.username)}</td><td>${r.league}</td><td>${r.level}</td><td>🏆 ${r.trophies}</td><td>${r.wins} / ${r.losses}</td></tr>`).join('') || '<tr><td colspan="6">Aucun joueur classé.</td></tr>';
+      }
     } catch (e) { /* ignore */ }
   }
 
@@ -271,6 +328,11 @@
       <h3>Les Ogs</h3>
       ${lines.map(([id, txt]) => `<div class="og-line"><canvas width="112" height="112" data-og="${id}"></canvas><div><b>${esc(Catalog.OG_NAMES[id])}</b> <span style="color:var(--muted)">· ${esc(Catalog.OG_ROLES[id])} · ${og[id].cost} mana</span><br><i style="color:#94a3b8">${esc(Catalog.OG_LORE[id])}</i><br>${txt}</div></div>`).join('')}
       
+      <h3>Capacités actives (Maj + touche, ou ⚡ sur le slot)</h3><p>10 mana, 20 s de recharge, il faut au moins une créature de ce type en jeu.</p>
+      ${[1, 2, 3, 4, 5, 6, 7].map(id => `<p><b>${esc(Catalog.OG_NAMES[id])} – ${esc(Sim.ABILITIES[id].name)}</b> : ${esc(Sim.ABILITIES[id].desc)}</p>`).join('')}
+      <h3>Options de partie</h3>
+      ${Features.matchFeatures().map(f => `<p><b>${esc(f.label)}</b>${f.ranked ? ' (actif en classée)' : ''} : ${esc(f.desc)}</p>`).join('')}
+      <p><b>Survie</b> : seul contre des vagues de plus en plus nombreuses, sans limite de temps. Score = éliminations ×10 + vagues ×50 + secondes. XP et pièces selon le score, record sauvegardé, classement dédié.</p>
       <h3>Progression</h3><p>Partie classée : trophées gagnés/perdus selon l’écart (style Brawl Stars), ligues Bronze → Légendaire. XP à chaque partie (niveau), pièces pour la boutique de skins, bonus de série, récompense quotidienne.</p>`;
     $('rulesPage').querySelectorAll('canvas[data-og]').forEach(c => { const id = Number(c.dataset.og); Creatures.draw(c.getContext('2d'), id, profile ? profile.equipped[id] : `og${id}_default`, 56, 60, 84, 0, { moving: false }); });
   }
