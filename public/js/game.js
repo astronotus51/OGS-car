@@ -31,7 +31,6 @@
       equipped[opp] = Object.assign({}, OGSCatalog.DEFAULT_EQUIP, msg.opponent.equipped || {});
       presence = { top: true, bottom: true }; mouseInField = false;
       renderer.reset();
-      Sprites.preload(Object.values(equipped.top).concat(Object.values(equipped.bottom)));
       cursor = { col: Math.floor(COLS / 2), row: frontRow() };
       startTime = performance.now() / 1000;
       canvas.classList.remove('hidden');

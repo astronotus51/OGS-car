@@ -80,13 +80,27 @@ Une partie dure **3 minutes** max ; ensuite, celui qui a le plus de PV gagne. Un
 - **Pièces** : 20 / 6 / 10 par partie, +25 avec la récompense quotidienne, pour la boutique de skins.
 - **Skins** : 5 variantes par Og (classique, néon, doré, ombre, prisme) + 2 légendaires. Débloqués par pièces, niveau, trophées ou victoires.
 
+## Les créatures
+
+Dessinées en vectoriel dans `public/js/creatures.js` (plus de PNG), animées par parties : Zip court et couche ses oreilles, Gromp claque des griffes, Krak oriente son canon et recule au tir, Riko tourne et a le tournis, Blok se fissure quand il perd des PV, Mojo fait tourner ses étincelles de mana, Zéphir bat des ailes et charge sa boule de feu dans son ventre.
+
+| Og | Nom | Rôle |
+| --- | --- | --- |
+| 1 | **Zip** | Runner |
+| 2 | **Gromp** | Défenseur |
+| 3 | **Krak** | Tourelle |
+| 4 | **Riko** | Étoile rebondissante |
+| 5 | **Blok** | Mur |
+| 6 | **Mojo** | Chargeur de mana |
+| 7 | **Zéphir** | Dragonnet volant |
+
+Skins = thèmes dessinés par le même code : classique, **Halloween** (Zip Citrouille, Gromp Vampire, Krak Sorcière, Riko Momie, Blok Frankenstein, Mojo Zombie, Zéphir Chauve-souris), Fantôme, Néon, Robo, Givré, Doré.
+
 ## Ajouter tes propres skins
 
-1. Ajoute une entrée dans `shared/catalog.js` (`SKINS.push({ id: 'og4_pirate', ogId: 4, name: 'Éponge pirate', rarity: 'epique', fx: null, unlock: { type: 'coins', value: 300 } })`).
-2. Dépose l'image `public/assets/skins/og4_pirate.png` (PNG carré, fond transparent, ~512 px).
-3. Sans image, le client applique l'effet `fx` (`neon`, `gold`, `shadow`, `prism`, `champion`, `nova`) au sprite classique.
-
-Les sprites classiques (`og1_default.png` … `og7_default.png`) sont des versions 512 px des PNG de `OGS Skin/`.
+1. Ajoute un thème dans `THEMES` de `shared/catalog.js` (nom, rareté, déblocage).
+2. Dans `public/js/creatures.js`, ajoute sa palette (`THEME_PALETTE`) et, si tu veux, ses accessoires dans `accessories()` ou directement dans le drawer d'une créature (`drawZip`, `drawGromp`, …) avec `if (theme === 'pirate') ...`.
+3. `test/creatures-sheet.js` génère une planche de toutes les créatures × thèmes pour vérifier le rendu.
 
 ## Règles (résumé) et changements d'équilibrage
 

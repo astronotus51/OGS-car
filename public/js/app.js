@@ -87,7 +87,6 @@
     catch (e) { Net.setToken(null); show('auth'); }
   }
   function enterLobby() {
-    Sprites.preload(profile.skins);
     show('lobby');
     Net.connect();
   }
@@ -208,16 +207,23 @@
   }
 
   // ----- Skins -----
-  let skinTab = 1;
+  let skinTab = 1, previews = [];
+  function drawPreviews(ts) {
+    requestAnimationFrame(drawPreviews);
+    if (current !== 'skins') return;
+    const t = ts / 1000;
+    for (const p of previews) { const ctx = p.canvas.getContext('2d'); ctx.clearRect(0, 0, 240, 240); Creatures.draw(ctx, p.skin.ogId, p.skin.id, 120, 125, 150, t, { moving: true, vx: 1, phase: p.skin.ogId }, { alpha: p.owned ? 1 : 0.55 }); }
+  }
+  requestAnimationFrame(drawPreviews);
   async function openSkins() {
     show('skins');
     try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
     $('skinsCoins').textContent = profile.coins;
-    $('skinTabs').innerHTML = [1, 2, 3, 4, 5, 6, 7].map(og => `<button class="og-tab ${og === skinTab ? 'active' : ''}" data-og="${og}">${Catalog.OG_NAMES[og]}</button>`).join('');
+    $('skinTabs').innerHTML = [1, 2, 3, 4, 5, 6, 7].map(og => `<button class="og-tab ${og === skinTab ? 'active' : ''}" data-og="${og}">${Catalog.OG_NAMES[og]} <small>· ${Catalog.OG_ROLES[og]}</small></button>`).join('');
     $('skinTabs').querySelectorAll('.og-tab').forEach(b => b.addEventListener('click', () => { skinTab = Number(b.dataset.og); openSkins(); }));
     const owned = new Set(profile.skins);
-    const skins = Catalog.SKINS.filter(s => s.ogId === skinTab);
-    const grid = $('skinGrid'); grid.innerHTML = '';
+    const skins = Catalog.SKINS.filter(s => s.ogId === skinTab && !s.hidden);
+    const grid = $('skinGrid'); grid.innerHTML = ''; previews = [];
     for (const skin of skins) {
       const card = document.createElement('div');
       const isOwned = owned.has(skin.id), isEq = profile.equipped[skin.ogId] === skin.id;
@@ -231,7 +237,7 @@
       card.innerHTML = `<canvas width="240" height="240"></canvas><div class="skin-name">${esc(skin.name)}</div><div class="skin-rarity r-${skin.rarity}">${skin.rarity}</div>${action}`;
       grid.appendChild(card);
       const c = card.querySelector('canvas');
-      Sprites.ensure(skin.id).then(() => { const ctx = c.getContext('2d'); ctx.clearRect(0, 0, 240, 240); Sprites.draw(ctx, skin.ogId, skin.id, 120, 120, 170, { time: 0, alpha: isOwned ? 1 : 0.55 }); });
+      previews.push({ canvas: c, skin, owned: isOwned });
     }
     grid.querySelectorAll('[data-equip]').forEach(b => b.addEventListener('click', async () => { try { profile = (await Net.api('/api/skins/equip', { skinId: b.dataset.equip })).profile; openSkins(); } catch (e) { alert(e.message); } }));
     grid.querySelectorAll('[data-buy]').forEach(b => b.addEventListener('click', async () => { try { profile = (await Net.api('/api/skins/buy', { skinId: b.dataset.buy })).profile; openSkins(); } catch (e) { alert(e.message); } }));
@@ -263,10 +269,10 @@
       <h3>Mana</h3><p>Max 70, +2 / s. Clique (ou touche <kbd>O</kbd>) sur les orbes de ton côté : +10 mana. Chaque Chargeur vivant accélère ta régénération de 50 %.</p>
       <h3>Contrôles</h3><p><kbd>A</kbd> <kbd>Z</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd> (ou <kbd>1</kbd>–<kbd>7</kbd>, ou clic sur un slot) pour choisir un Og · flèches pour déplacer le curseur · <kbd>Entrée</kbd> / <kbd>Espace</kbd> ou clic pour poser · <kbd>Échap</kbd> annule. Le Runner se pose n’importe où sur ta moitié (même tout au fond) ; l’Éponge et l’Ailée uniquement sur la ligne avant.</p>
       <h3>Les Ogs</h3>
-      ${lines.map(([id, txt]) => `<div class="og-line"><canvas width="112" height="112" data-og="${id}"></canvas><div><b>${esc(og[id].name)}</b> · ${og[id].cost} mana<br>${txt}</div></div>`).join('')}
+      ${lines.map(([id, txt]) => `<div class="og-line"><canvas width="112" height="112" data-og="${id}"></canvas><div><b>${esc(Catalog.OG_NAMES[id])}</b> <span style="color:var(--muted)">· ${esc(Catalog.OG_ROLES[id])} · ${og[id].cost} mana</span><br><i style="color:#94a3b8">${esc(Catalog.OG_LORE[id])}</i><br>${txt}</div></div>`).join('')}
       
       <h3>Progression</h3><p>Partie classée : trophées gagnés/perdus selon l’écart (style Brawl Stars), ligues Bronze → Légendaire. XP à chaque partie (niveau), pièces pour la boutique de skins, bonus de série, récompense quotidienne.</p>`;
-    $('rulesPage').querySelectorAll('canvas[data-og]').forEach(c => { const id = Number(c.dataset.og); Sprites.ensure(`og${id}_default`).then(() => Sprites.draw(c.getContext('2d'), id, `og${id}_default`, 56, 56, 90, { time: 0 })); });
+    $('rulesPage').querySelectorAll('canvas[data-og]').forEach(c => { const id = Number(c.dataset.og); Creatures.draw(c.getContext('2d'), id, profile ? profile.equipped[id] : `og${id}_default`, 56, 60, 84, 0, { moving: false }); });
   }
 
   function esc(s) { return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
@@ -281,20 +287,13 @@
     const slot = w / 7;
     for (let i = 0; i < 7; i += 1) {
       const og = i + 1, x = slot * i + slot / 2, base = h * 0.62;
-      let bob = 0, sx = 1, sy = 1, rot = 0;
-      if (og === 1) { bob = -Math.abs(Math.sin(t * 6 + i)) * 18; sy = 1 + 0.08 * Math.sin(t * 12 + i); sx = 2 - sy; }
-      else if (og === 2) { rot = Math.sin(t * 9) * 0.08; bob = -Math.abs(Math.sin(t * 4.5)) * 8; }
-      else if (og === 4) { rot = t * 0.6; sx = sy = 1 + 0.05 * Math.sin(t * 4); }
-      else if (og === 7) { bob = Math.sin(t * 3 + i) * 14; sx = 1 + 0.1 * Math.sin(t * 16); }
-      else { sx = sy = 1 + 0.03 * Math.sin(t * 2 + i); }
-      sctx.fillStyle = 'rgba(0,0,0,0.25)'; sctx.beginPath(); sctx.ellipse(x, base + 70, 50 * (1 + bob / 80), 14, 0, 0, Math.PI * 2); sctx.fill();
-      Sprites.draw(sctx, og, profile.equipped[og], x, base + bob, 150, { time: t, rot, scaleX: sx, scaleY: sy });
+      sctx.fillStyle = 'rgba(0,0,0,0.25)'; sctx.beginPath(); sctx.ellipse(x, base + 66, 50, 14, 0, 0, Math.PI * 2); sctx.fill();
+      Creatures.draw(sctx, og, profile.equipped[og], x, base, 140, t, { moving: true, vx: 1, phase: i }, {});
       sctx.fillStyle = '#e2e8f0'; sctx.font = 'bold 22px Fredoka, sans-serif'; sctx.textAlign = 'center';
-      sctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${Sim.OGS[og].cost}`, x, h - 14);
+      sctx.fillText(`${Catalog.OG_NAMES[og]}`, x, h - 40); sctx.fillStyle = '#94a3b8'; sctx.font = '18px Fredoka, sans-serif'; sctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${Sim.OGS[og].cost} mana`, x, h - 14);
     }
   }
   requestAnimationFrame(drawShowcase);
 
-  Sprites.preload();
   tryResume();
 })();

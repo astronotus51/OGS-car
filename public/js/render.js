@@ -180,12 +180,12 @@
         ctx.restore();
         if (sel && ok) {
           // Fantôme de l'Og sélectionné.
-          Sprites.draw(ctx, sel, view.equipped[me][sel], r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.8, { alpha: 0.45 + 0.1 * Math.sin(view.time * 6), time: view.time });
+          Creatures.draw(ctx, sel, view.equipped[me][sel], r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.8, view.time, { moving: false }, { alpha: 0.45 + 0.1 * Math.sin(view.time * 6) });
         }
       }
       for (const p of view.pending) {
         const r = cellRect(p.col, p.row);
-        Sprites.draw(ctx, p.ogId, view.equipped[me][p.ogId], r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.85, { alpha: 0.6, time: view.time });
+        Creatures.draw(ctx, p.ogId, view.equipped[me][p.ogId], r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.85, view.time, { moving: false }, { alpha: 0.6 });
       }
     }
 
@@ -217,21 +217,11 @@
       const t = view.time;
       const og = OGS[e.ogId];
       const x = vx(e.x), y = vy(e.y);
-      const size = Math.min(CELL_W, CELL_H) * 0.9;
+      const size = Math.min(CELL_W, CELL_H) * 0.92;
       const enemy = e.player !== me;
       const skin = view.equipped[e.owner] ? view.equipped[e.owner][e.ogId] : undefined;
-      let sx = 1, sy = 1, rot = 0, bob = 0, dx = 0, alpha = 1;
       const moving = og.movement !== 'static';
-      switch (e.ogId) {
-        case 1: { const ph = t * 9 + e.id; bob = -Math.abs(Math.sin(ph)) * 12; sy = 1 + 0.1 * Math.sin(ph * 2); sx = 1 - 0.1 * Math.sin(ph * 2); break; }
-        case 2: { rot = Math.sin(t * 14 + e.id) * 0.07; bob = -Math.abs(Math.sin(t * 7 + e.id)) * 5; break; }
-        case 3: { const s = 1 + 0.025 * Math.sin(t * 2.5 + e.id); sx = sy = s; const k = now - a.shot; if (k < 0.22) { const r = 1 - k / 0.22; sx *= 1 - 0.12 * r; sy *= 1 + 0.22 * r; } break; }
-        case 4: { const s = 1 + 0.06 * Math.sin(t * 6 + e.id); sx = sy = s; break; }
-        case 5: { break; }
-        case 6: { const s = 1 + 0.05 * Math.sin(t * 3 + e.id); sx = sy = s; break; }
-        case 7: { bob = Math.sin(t * 4 + e.id) * 12; sx = 1 + 0.1 * Math.sin(t * 22 + e.id); break; }
-        default: break;
-      }
+      let sx = 1, sy = 1, dx = 0;
       // Rebond : écrasement.
       const kb = now - a.bounce; if (kb < 0.18) { const r = 1 - kb / 0.18; sx *= 1 + 0.25 * r; sy *= 1 - 0.25 * r; }
       // Apparition : pop.
@@ -241,47 +231,48 @@
       // Dégât : flash + tremblement.
       const kh = now - a.hit; let flash = 0;
       if (kh < 0.16) { flash = 1 - kh / 0.16; dx = (Math.random() - 0.5) * 10 * flash; }
-      // Orientation de la tourelle / éponge.
-      let spriteRot = 0;
-      if (e.ogId === 3) spriteRot = vrot(e.rot) + Math.PI / 2;
-      else if (e.ogId === 4) spriteRot = vrot(e.rot);
-      else if (e.ogId === 2) spriteRot = e.rot;
+      const kf = now - a.shot; const shoot = kf < 0.25 ? 1 - kf / 0.25 : 0;
+      // Vitesse en espace écran.
+      const svx = e.vx || 0, svy = (me === 'top' ? -1 : 1) * (e.vy || 0);
+      const lean = moving && e.ogId !== 4 && e.ogId !== 2 ? Math.max(-0.18, Math.min(0.18, svx / 800)) : 0;
 
-      // Ombre.
+      // Ombre + anneau d'équipe.
       ctx.save();
       ctx.fillStyle = 'rgba(0,0,0,0.28)';
       ctx.beginPath();
-      const shadowY = y + size * 0.42 + (og.air ? 28 : 0);
-      ctx.ellipse(x, shadowY, size * (og.air ? 0.32 : 0.4) * (1 + bob / 60), size * (og.air ? 0.09 : 0.13), 0, 0, Math.PI * 2);
+      const shadowY = y + size * 0.42 + (og.air ? 30 : 0);
+      ctx.ellipse(x, shadowY, size * (og.air ? 0.3 : 0.4), size * (og.air ? 0.09 : 0.13), 0, 0, Math.PI * 2);
       ctx.fill();
-      // Anneau d'équipe.
-      ctx.strokeStyle = enemy ? 'rgba(248,113,113,0.75)' : 'rgba(74,222,128,0.75)'; ctx.lineWidth = 4;
+      ctx.strokeStyle = enemy ? 'rgba(248,113,113,0.8)' : 'rgba(74,222,128,0.8)'; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.ellipse(x, shadowY, size * 0.42, size * 0.15, 0, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
 
-      // Aura du Chargeur (régénération).
+      // Aura de Mojo (régénération).
       if (e.ogId === 6) {
         const k = (t * 0.9 + e.id * 0.3) % 1;
         ctx.save(); ctx.strokeStyle = `rgba(134,239,172,${(1 - k) * 0.7})`; ctx.lineWidth = 5;
         ctx.beginPath(); ctx.arc(x, y, size * 0.35 + k * size * 0.5, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
       }
-      // Traînée de l'éponge.
+      // Traînée de Riko.
       if (e.ogId === 4 && moving) {
-        ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = og.color; ctx.beginPath(); ctx.arc(x - (e.vx || 0) * 0.04, y - vrot(1) * (e.vy || 0) * 0.04, size * 0.3, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = og.color; ctx.beginPath(); ctx.arc(x - svx * 0.05, y - svy * 0.05, size * 0.28, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      }
+      // Flèche de direction discrète pour les unités ennemies qui avancent.
+      if (moving && e.ogId !== 2 && enemy) {
+        ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = '#fca5a5'; ctx.translate(x, y + Math.sign(svy) * size * 0.62); ctx.beginPath(); ctx.moveTo(-10, -Math.sign(svy) * 8); ctx.lineTo(10, -Math.sign(svy) * 8); ctx.lineTo(0, Math.sign(svy) * 6); ctx.closePath(); ctx.fill(); ctx.restore();
       }
 
-      Sprites.draw(ctx, e.ogId, skin, x + dx, y + bob, size, { rot: spriteRot + rot, flipV: enemy && e.ogId !== 3, scaleX: sx, scaleY: sy, flash, alpha, time: t, fallbackColor: og.color });
+      const state = {
+        moving, vx: svx, vy: svy, phase: e.id * 0.37, hit: flash, shoot,
+        rot: e.ogId === 3 ? vrot(e.rot) : e.ogId === 4 ? vrot(e.rot) : 0,
+        hpRatio: e.hpMax ? e.hp / e.hpMax : 1, team: enemy ? 'enemy' : 'me',
+      };
+      Creatures.draw(ctx, e.ogId, skin, x + dx, y, size, t, state, { rot: lean, scaleX: sx, scaleY: sy, flash });
 
-      // Flash de tir.
-      const kf = now - a.shot;
-      if (kf < 0.12 && (e.ogId === 3 || e.ogId === 7)) {
-        ctx.save(); ctx.globalAlpha = 1 - kf / 0.12; ctx.fillStyle = '#fef3c7';
-        const dir = (e.player === me) ? -1 : 1; ctx.beginPath(); ctx.arc(x, y + dir * size * 0.5, 18, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-      }
       // Points de vie.
       if (e.hpMax > 1) {
         const pipW = 18, gap = 6, total = e.hpMax * pipW + (e.hpMax - 1) * gap;
-        const px0 = x - total / 2, py = y + size * 0.52;
+        const px0 = x - total / 2, py = y + size * 0.56;
         for (let i = 0; i < e.hpMax; i += 1) {
           ctx.fillStyle = i < e.hp ? (enemy ? '#fca5a5' : '#86efac') : 'rgba(15,23,42,0.6)';
           ctx.fillRect(px0 + i * (pipW + gap), py, pipW, 7);
@@ -374,7 +365,7 @@
         ctx.lineWidth = selected ? 7 : 4; ctx.strokeStyle = selected ? '#fde047' : '#ffffff'; ctx.stroke();
         // Remplissage progressif (mana manquante) en bas du slot.
         if (!affordable) { ctx.fillStyle = 'rgba(15,23,42,0.45)'; const k = 1 - S.mana[me] / og.cost; roundRect(cx - slotSize / 2, cy - slotSize / 2 + lift, slotSize, slotSize * k, 18); ctx.fill(); }
-        Sprites.draw(ctx, ogId, view.equipped[me][ogId], cx, cy + lift, slotSize * 0.78, { time: view.time, scaleX: selected ? 1.06 : 1, scaleY: selected ? 1.06 : 1 });
+        Creatures.draw(ctx, ogId, view.equipped[me][ogId], cx, cy + lift + 6, slotSize * 0.7, view.time, { moving: selected, vx: 1, phase: i }, { scaleX: selected ? 1.06 : 1, scaleY: selected ? 1.06 : 1 });
         // Touche + coût.
         ctx.globalAlpha = 1;
         ctx.fillStyle = '#0b1021'; roundRect(cx - slotSize / 2 + 6, cy - slotSize / 2 + 6 + lift, 44, 40, 8); ctx.fill();
