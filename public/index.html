@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OGS Online</title>
+  <link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <canvas id="gameCanvas" class="hidden"></canvas>
+
+  <!-- ===== AUTH ===== -->
+  <section id="screen-auth" class="screen">
+    <div class="panel auth-panel">
+      <div class="logo">OGS</div>
+      <div class="tagline">Remake online du jeu iPad · 1 contre 1</div>
+      <form id="authForm" autocomplete="on">
+        <label>Pseudo<input id="authUser" name="username" maxlength="16" required autocomplete="username"></label>
+        <label>Mot de passe<input id="authPass" name="password" type="password" minlength="4" required autocomplete="current-password"></label>
+        <div class="row">
+          <button type="submit" class="btn primary" data-action="login">Connexion</button>
+          <button type="button" class="btn" data-action="register">Créer un compte</button>
+        </div>
+        <div id="authError" class="error"></div>
+      </form>
+      <div class="auth-foot">Clavier : <b>A Z E R T Y U</b> (ou 1-7) pour choisir un Og · flèches + Entrée ou clic pour poser · <b>O</b> ramasse une orbe</div>
+    </div>
+  </section>
+
+  <!-- ===== LOBBY ===== -->
+  <section id="screen-lobby" class="screen hidden">
+    <header class="topbar">
+      <div class="chip profile-chip" id="lobbyProfile" title="Voir le profil">
+        <div class="avatar" id="lobbyAvatar"><span id="lobbyLevel">1</span></div>
+        <div class="chip-text">
+          <div class="chip-name" id="lobbyName">—</div>
+          <div class="chip-sub"><span class="trophy" id="lobbyTrophies">0</span> · <span id="lobbyRank">Bronze</span></div>
+        </div>
+      </div>
+      <div class="xpbar" title="Expérience"><div id="lobbyXp" class="xpfill"></div><span id="lobbyXpText"></span></div>
+      <div class="chip coins"><span class="coin"></span><span id="lobbyCoins">0</span></div>
+      <button id="btnDaily" class="btn small gold hidden">Récompense du jour</button>
+      <div class="online"><span class="dot"></span><span id="onlineCount">…</span> en ligne</div>
+    </header>
+
+    <main class="lobby-main">
+      <div class="lobby-left">
+        <div class="logo small">OGS</div>
+        <div class="menu-note">Pose tes Ogs, protège ta base, perce la sienne.</div>
+        <nav class="lobby-nav">
+          <button class="btn nav" data-screen="profile">Profil</button>
+          <button class="btn nav" data-screen="skins">Skins</button>
+          <button class="btn nav" data-screen="leaderboard">Classement</button>
+          <button class="btn nav" data-screen="rules">Règles</button>
+          <button class="btn nav danger" id="btnLogout">Déconnexion</button>
+        </nav>
+      </div>
+      <div class="lobby-center">
+        <button id="btnPlay" class="btn play">JOUER<span>Partie classée · trophées</span></button>
+        <div class="play-options">
+          <label class="toggle"><input type="checkbox" id="chkHazard" checked> Scorpion noir (entraînement & amical)</label>
+        </div>
+        <div class="row">
+          <button id="btnBot" class="btn">Entraînement vs IA</button>
+          <select id="botLevel" class="select">
+            <option value="simple">Simple</option>
+            <option value="moyen" selected>Moyen</option>
+            <option value="difficile">Difficile</option>
+          </select>
+        </div>
+        <div class="row friendly">
+          <button id="btnFriendlyCreate" class="btn">Créer une partie amicale</button>
+          <input id="friendlyCode" class="input code" maxlength="5" placeholder="CODE">
+          <button id="btnFriendlyJoin" class="btn">Rejoindre</button>
+        </div>
+        <div id="lobbyMsg" class="info"></div>
+        <canvas id="lobbyShowcase" width="1400" height="300" title="Tes Ogs équipés"></canvas>
+      </div>
+      <div class="lobby-right">
+        <div class="card">
+          <div class="card-title">Ligue</div>
+          <div class="league" id="lobbyLeague"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Top 5</div>
+          <ol id="lobbyTop" class="top-list"></ol>
+        </div>
+      </div>
+    </main>
+  </section>
+
+  <!-- ===== QUEUE ===== -->
+  <section id="screen-queue" class="screen overlay hidden">
+    <div class="panel queue-panel">
+      <div class="spinner"></div>
+      <div class="queue-title" id="queueTitle">Recherche d’un adversaire…</div>
+      <div class="queue-sub" id="queueSub">0 s</div>
+      <div class="queue-code hidden" id="queueCode"></div>
+      <button id="btnCancelQueue" class="btn">Annuler</button>
+    </div>
+  </section>
+
+  <!-- ===== GAME HUD (DOM) ===== -->
+  <section id="screen-game" class="screen hidden">
+    <div class="game-side left">
+      <div class="side-card" id="hudOpp">
+        <div class="side-name" id="hudOppName">Adversaire</div>
+        <div class="side-sub" id="hudOppSub"></div>
+      </div>
+      <div class="side-card timer" id="hudTimer">3:00</div>
+      <div class="side-card" id="hudMe">
+        <div class="side-name" id="hudMeName">Moi</div>
+        <div class="side-sub" id="hudMeSub"></div>
+      </div>
+    </div>
+    <div class="game-side right">
+      <div class="side-card keys">
+        <div class="side-title">Touches</div>
+        <div class="keyrow"><kbd>A</kbd><kbd>Z</kbd><kbd>E</kbd><kbd>R</kbd><kbd>T</kbd><kbd>Y</kbd><kbd>U</kbd></div>
+        <div class="keyhelp">ou <kbd>1</kbd>…<kbd>7</kbd> : choisir un Og<br><kbd>←↑↓→</kbd> curseur · <kbd>⏎</kbd>/<kbd>␣</kbd> poser<br><kbd>O</kbd> orbe · <kbd>Échap</kbd> annuler</div>
+      </div>
+      <div class="side-card emotes">
+        <div class="side-title">Emotes</div>
+        <div class="emote-row">
+          <button class="emote" data-emote="gg">GG</button>
+          <button class="emote" data-emote="wow">😮</button>
+          <button class="emote" data-emote="lol">😂</button>
+          <button class="emote" data-emote="rage">😡</button>
+          <button class="emote" data-emote="love">💛</button>
+        </div>
+      </div>
+      <button id="btnSurrender" class="btn danger small">Abandonner</button>
+    </div>
+    <div id="gameToast" class="toast hidden"></div>
+  </section>
+
+  <!-- ===== RESULT ===== -->
+  <section id="screen-result" class="screen overlay hidden">
+    <div class="panel result-panel">
+      <div class="result-title" id="resultTitle">VICTOIRE</div>
+      <div class="result-sub" id="resultSub"></div>
+      <div class="result-grid">
+        <div class="reward"><div class="reward-label">Trophées</div><div class="reward-value trophy" id="resTrophies">+0</div></div>
+        <div class="reward"><div class="reward-label">XP</div><div class="reward-value" id="resXp">+0</div></div>
+        <div class="reward"><div class="reward-label">Pièces</div><div class="reward-value coinv" id="resCoins">+0</div></div>
+      </div>
+      <div class="xpbar big"><div id="resXpFill" class="xpfill"></div><span id="resXpText"></span></div>
+      <div id="resExtra" class="result-extra"></div>
+      <div class="result-stats" id="resStats"></div>
+      <div class="row">
+        <button id="btnResultReplay" class="btn primary">Rejouer</button>
+        <button id="btnResultMenu" class="btn">Menu</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== PROFILE ===== -->
+  <section id="screen-profile" class="screen hidden">
+    <header class="topbar"><button class="btn back" data-screen="lobby">← Menu</button><h2>Profil</h2></header>
+    <main class="page">
+      <div class="profile-head">
+        <div class="avatar big" id="profileAvatar"><span id="profileLevel">1</span></div>
+        <div>
+          <div class="profile-name" id="profileName">—</div>
+          <div class="profile-sub" id="profileSub"></div>
+          <div class="xpbar big"><div id="profileXp" class="xpfill"></div><span id="profileXpText"></span></div>
+        </div>
+      </div>
+      <div class="stat-grid" id="profileStats"></div>
+      <h3>Dernières parties</h3>
+      <ul class="history" id="profileHistory"></ul>
+    </main>
+  </section>
+
+  <!-- ===== SKINS ===== -->
+  <section id="screen-skins" class="screen hidden">
+    <header class="topbar"><button class="btn back" data-screen="lobby">← Menu</button><h2>Skins</h2><div class="chip coins"><span class="coin"></span><span id="skinsCoins">0</span></div></header>
+    <main class="page">
+      <div class="og-tabs" id="skinTabs"></div>
+      <div class="skin-grid" id="skinGrid"></div>
+      <p class="hint">Pour ajouter un skin : une entrée dans <code>shared/catalog.js</code> + une image <code>public/assets/skins/&lt;id&gt;.png</code>. Sans image, l’effet du skin est appliqué au sprite classique.</p>
+    </main>
+  </section>
+
+  <!-- ===== LEADERBOARD ===== -->
+  <section id="screen-leaderboard" class="screen hidden">
+    <header class="topbar"><button class="btn back" data-screen="lobby">← Menu</button><h2>Classement</h2></header>
+    <main class="page"><table class="board" id="boardTable"><thead><tr><th>#</th><th>Joueur</th><th>Ligue</th><th>Niv.</th><th>Trophées</th><th>V / D</th></tr></thead><tbody></tbody></table></main>
+  </section>
+
+  <!-- ===== RULES ===== -->
+  <section id="screen-rules" class="screen hidden">
+    <header class="topbar"><button class="btn back" data-screen="lobby">← Menu</button><h2>Règles</h2></header>
+    <main class="page rules" id="rulesPage"></main>
+  </section>
+
+  <script src="shared/sim.js"></script>
+  <script src="shared/catalog.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

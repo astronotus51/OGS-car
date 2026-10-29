@@ -1,0 +1,26 @@
+# Déploiement automatique sur le VPS Hostinger à chaque push sur main.
+# Secrets à créer dans GitHub (Settings → Secrets and variables → Actions) :
+#   VPS_HOST  = IP du VPS        VPS_USER = root        VPS_SSH_KEY = clé privée SSH (contenu complet)
+name: Deploy to Hostinger VPS
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déployer via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /var/www/ogs
+            git fetch --all
+            git reset --hard origin/main
+            npm install --omit=dev --no-audit --no-fund
+            pm2 reload ogs --update-env || pm2 start deploy/ecosystem.config.js
+            pm2 save
