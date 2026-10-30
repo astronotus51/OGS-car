@@ -19,7 +19,7 @@
     let selection = null, cursor = null, pending = [];
     let equipped = { top: {}, bottom: {} }, profiles = { me: null, opp: null }, presence = { top: true, bottom: true };
     let duration = RULES.matchDuration, startTime = 0, mouseInField = false, mode = 'ranked';
-    let features = {}, bans = { top: [], bottom: [] }, draftTimer = 0, myBan = null, oppBan = null, survival = null;
+    let features = {}, bans = { top: [], bottom: [] }, draftTimer = 0, myBan = null, oppBan = null, survival = null, mapId = 'lagoon';
     const view = {};
 
     function start(msg) {
@@ -27,7 +27,7 @@
       me = msg.side; opp = Sim.other(me);
       snaps = []; latest = null; pending = []; selection = null; result = null;
       phase = msg.phase === 'draft' ? 'draft' : (msg.countdown > 0 ? 'countdown' : 'playing'); countdown = msg.countdown || 0; goTimer = 0;
-      features = msg.features || {}; bans = msg.bans || { top: [], bottom: [] }; draftTimer = msg.draftSeconds || 0; myBan = null; oppBan = null; survival = msg.survival || null;
+      mapId = msg.map || 'lagoon'; features = msg.features || {}; bans = msg.bans || { top: [], bottom: [] }; draftTimer = msg.draftSeconds || 0; myBan = null; oppBan = null; survival = msg.survival || null;
       duration = msg.duration === 0 ? 0 : (msg.duration || RULES.matchDuration); mode = msg.mode || 'ranked';
       profiles = { me: msg.me, opp: msg.opponent };
       equipped[me] = Object.assign({}, OGSCatalog.DEFAULT_EQUIP, msg.me.equipped || {});
@@ -270,7 +270,7 @@
       view.selection = selection; view.cursor = (selection || mouseInField) ? cursor : null; view.availableCells = availableCells(); view.pending = pending;
       view.equipped = equipped; view.opponent = profiles.opp; view.meProfile = profiles.me; view.presence = presence;
       view.timeLeft = duration ? Math.max(0, duration - (latest ? latest.t : 0)) : Infinity; view.elapsed = latest ? latest.t : 0; view.mode = mode; view.latency = net.latency;
-      view.features = features; view.bans = bans; view.draft = phase === 'draft' ? { timer: draftTimer, myBan, oppBan } : null; view.survival = survival;
+      view.map = mapId; view.features = features; view.bans = bans; view.draft = phase === 'draft' ? { timer: draftTimer, myBan, oppBan } : null; view.survival = survival;
       renderer.render(view);
       ui.onFrame && ui.onFrame(view);
     }

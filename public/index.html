@@ -74,6 +74,9 @@
       <div class="lobby-center">
         <button id="btnPlay" class="btn play">JOUER<span>Partie classée · trophées</span></button>
         <div class="play-options">
+          <label class="toggle">Arène
+            <select id="mapSelect" class="select"><option value="random" selected>Aléatoire</option></select>
+          </label>
           <label class="toggle">Durée (entraînement & amical)
             <select id="durationSelect" class="select"><option value="120">2 min</option><option value="180" selected>3 min</option><option value="300">5 min</option><option value="0">Illimitée (KO seulement)</option></select>
           </label>
@@ -254,6 +257,7 @@
   <script src="js/net.js?v=10"></script>
   <script src="js/audio.js?v=10"></script>
   <script src="js/creatures.js?v=10"></script>
+  <script src="js/maps.js?v=10"></script>
   <script src="js/render.js?v=10"></script>
   <script src="js/game.js?v=10"></script>
   <script src="js/app.js?v=10"></script>

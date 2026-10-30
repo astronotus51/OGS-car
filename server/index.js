@@ -317,7 +317,7 @@ function botEquipped(seed) {
   return eq;
 }
 
-async function createMatch(entries, { mode, botFill = false, bot = null, duration = Sim.RULES.matchDuration, features = null, survival = false }) {
+async function createMatch(entries, { mode, botFill = false, bot = null, duration = Sim.RULES.matchDuration, features = null, survival = false, map = 'random' }) {
   // Profils relus en base : skins équipés, avatar et trophées à jour au moment du match.
   const players = [];
   for (const e of entries) {
@@ -334,7 +334,7 @@ async function createMatch(entries, { mode, botFill = false, bot = null, duratio
   if (survival) players.reverse(); // le joueur humain est en bas
   else if (Math.random() < 0.5) players.reverse();
   const feats = features || Features.resolveOptions(null, mode === 'ranked');
-  const room = new Room({ players, mode, features: feats, duration, botFill, onEnd: endMatch });
+  const room = new Room({ players, mode, features: feats, duration, botFill, map, onEnd: endMatch });
   rooms.add(room);
   for (const p of room.players) if (p.client) { matchmaker.leave(p.client); p.client.room = room; }
   room.start();
@@ -438,20 +438,20 @@ wss.on('connection', (ws, req) => {
         if (client.room) return;
         matchmaker.leave(client); leaveFriendly(client);
         const diff = ['simple', 'moyen', 'difficile'].includes(msg.difficulty) ? msg.difficulty : 'moyen';
-        await createMatch([{ client, profile: client.profile }], { mode: 'bot', bot: diff, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false) });
+        await createMatch([{ client, profile: client.profile }], { mode: 'bot', bot: diff, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false), map: String(msg.map || 'random') });
         break;
       }
       case 'survival': {
         if (client.room || !Features.enabled('survival')) return;
         matchmaker.leave(client); leaveFriendly(client);
-        await createMatch([{ client, profile: client.profile }], { mode: 'survival', survival: true, duration: 0, features: Object.assign(Features.resolveOptions(msg.options, false), { draft: false, kingOfCenter: false, overtime: false }) });
+        await createMatch([{ client, profile: client.profile }], { mode: 'survival', survival: true, duration: 0, features: Object.assign(Features.resolveOptions(msg.options, false), { draft: false, kingOfCenter: false, overtime: false }), map: String(msg.map || 'random') });
         break;
       }
       case 'friendly_create': {
         if (client.room) return;
         matchmaker.leave(client); leaveFriendly(client);
         const code = makeCode();
-        friendly.set(code, { host: client, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false) });
+        friendly.set(code, { host: client, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false), map: String(msg.map || 'random') });
         client.friendlyCode = code;
         client.send({ t: 'friendly_created', code });
         break;
@@ -464,7 +464,7 @@ wss.on('connection', (ws, req) => {
         if (entry.host === client) return client.send({ t: 'error', error: 'C’est ta propre salle' });
         matchmaker.leave(client); leaveFriendly(client);
         friendly.delete(code); entry.host.friendlyCode = null;
-        await createMatch([{ client: entry.host, profile: entry.host.profile }, { client, profile: client.profile }], { mode: 'friendly', duration: entry.duration, features: entry.features });
+        await createMatch([{ client: entry.host, profile: entry.host.profile }, { client, profile: client.profile }], { mode: 'friendly', duration: entry.duration, features: entry.features, map: entry.map });
         break;
       }
       case 'friendly_leave': leaveFriendly(client); client.send({ t: 'idle' }); break;

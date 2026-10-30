@@ -42,6 +42,8 @@
     { theme: 'toxic', suffix: 'toxic', name: (n) => `${n} Toxique`, rarity: 'rare', unlock: (og) => ({ type: 'level', value: 5 + og }) },
     { theme: 'cyber', suffix: 'cyber', name: (n) => `Cyber-${n}`, rarity: 'legendaire', unlock: (og) => ({ type: 'trophies', value: 700 + og * 80 }) },
   ];
+  // Arènes (décors) : dessinées par public/js/maps.js ; 'random' = tirage au sort par le serveur.
+  const MAPS = [{ id: 'lagoon', name: 'Lagon' }, { id: 'space', name: 'Espace' }, { id: 'lava', name: 'Mer de lave' }, { id: 'halloween', name: 'Cimetière' }, { id: 'farm', name: 'Ferme' }, { id: 'ice', name: 'Banquise' }, { id: 'candy', name: 'Pays des bonbons' }];
   // 15 avatars de profil proposés (dessinés par creatures.js) ; sinon photo importée (data URL).
   const AVATAR_PRESETS = ['og1_default', 'og2_default', 'og3_default', 'og4_default', 'og5_default', 'og6_default', 'og7_default', 'og1_pirate', 'og2_royal', 'og4_candy', 'og7_cyber', 'og6_astro', 'og3_ninja', 'og5_lava', 'og1_halloween'];
   const SKINS = [];
@@ -172,5 +174,5 @@
     return { skinId: skin.id, price: Math.ceil(skin.unlock.value / 2), week: weekKey(d) };
   }
 
-  return { OG_NAMES, OG_ROLES, OG_LORE, THEMES, AVATAR_PRESETS, SKINS, SKIN_BY_ID, DEFAULT_EQUIP, RANKS, rankFor, nextRank, xpForLevel, levelFromXp, matchRewards, canUnlock, QUEST_TEMPLATES, dailyQuests, questTemplate, advanceQuests, dayKey, weeklyDeal };
+  return { OG_NAMES, OG_ROLES, OG_LORE, THEMES, MAPS, AVATAR_PRESETS, SKINS, SKIN_BY_ID, DEFAULT_EQUIP, RANKS, rankFor, nextRank, xpForLevel, levelFromXp, matchRewards, canUnlock, QUEST_TEMPLATES, dailyQuests, questTemplate, advanceQuests, dayKey, weeklyDeal };
 });

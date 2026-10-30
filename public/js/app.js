@@ -227,6 +227,7 @@
     $('questsCard').classList.toggle('hidden', !Features.enabled('quests'));
   }
   renderFeatureList();
+  $('mapSelect').innerHTML = '<option value="random">Aléatoire</option>' + Catalog.MAPS.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
 
   // ----- Quêtes du jour -----
   async function refreshQuests() {
@@ -239,10 +240,10 @@
     } catch (e) { /* ignore */ }
   }
 
-  $('btnSurvival').addEventListener('click', () => { lastMatchKind = { t: 'survival' }; Net.send({ t: 'survival', options: currentOptions() }); openQueue('Les vagues arrivent…', 'bot'); });
+  $('btnSurvival').addEventListener('click', () => { lastMatchKind = { t: 'survival' }; Net.send({ t: 'survival', options: currentOptions(), map: $('mapSelect').value }); openQueue('Les vagues arrivent…', 'bot'); });
   $('btnPlay').addEventListener('click', () => { lastMatchKind = { t: 'queue' }; Net.send({ t: 'queue' }); openQueue('Recherche d’un adversaire…', 'queue'); });
-  $('btnBot').addEventListener('click', () => { const difficulty = $('botLevel').value; lastMatchKind = { t: 'bot', difficulty }; Net.send({ t: 'bot', difficulty, duration: Number($('durationSelect').value), options: currentOptions() }); openQueue('Préparation de l’IA…', 'bot'); });
-  $('btnFriendlyCreate').addEventListener('click', () => { Net.send({ t: 'friendly_create', duration: Number($('durationSelect').value), options: currentOptions() }); openQueue('Partie amicale : partage ce code', 'friendly'); });
+  $('btnBot').addEventListener('click', () => { const difficulty = $('botLevel').value; lastMatchKind = { t: 'bot', difficulty }; Net.send({ t: 'bot', difficulty, duration: Number($('durationSelect').value), options: currentOptions(), map: $('mapSelect').value }); openQueue('Préparation de l’IA…', 'bot'); });
+  $('btnFriendlyCreate').addEventListener('click', () => { Net.send({ t: 'friendly_create', duration: Number($('durationSelect').value), options: currentOptions(), map: $('mapSelect').value }); openQueue('Partie amicale : partage ce code', 'friendly'); });
   $('btnFriendlyJoin').addEventListener('click', () => { const code = $('friendlyCode').value.trim().toUpperCase(); if (code.length < 4) return ($('lobbyMsg').textContent = 'Entre le code à 5 caractères'); Net.send({ t: 'friendly_join', code }); $('lobbyMsg').textContent = 'Connexion à la salle…'; });
   $('btnCancelQueue').addEventListener('click', () => { Net.send({ t: queueMode === 'friendly' ? 'friendly_leave' : 'cancel' }); closeQueue(); });
 
@@ -270,7 +271,7 @@
     $('hudMeName').textContent = msg.me.username; $('hudMeSub').textContent = `🏆 ${msg.me.trophies} · ${msg.me.rank}`;
     $('hudMeAvatar').innerHTML = '<span></span>'; renderAvatar($('hudMeAvatar'), msg.me, msg.me.level); $('hudOppAvatar').innerHTML = '<span></span>'; renderAvatar($('hudOppAvatar'), msg.opponent, msg.opponent.level || '?');
     Audio.setScene('match'); Audio.sfx('match');
-    show('game'); game.start(msg);
+    show('game'); game.start(msg); toast(`Arène : ${(OGSMaps.get(msg.map) || {}).name || msg.map}`, 'ok');
   });
   Net.on('go', () => { game.onGo(); Audio.sfx('go'); });
   Net.on('draft_pick', (msg) => game.onDraftPick(msg));

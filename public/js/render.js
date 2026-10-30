@@ -120,44 +120,35 @@
       if (waveBanner) { waveBanner.t -= dt; if (waveBanner.t <= 0) waveBanner = null; }
     }
 
-    // ----- Décor -----
-    function drawWater(time) {
-      // Fond bleu + vagues (cache du fond pour alléger).
-      if (!waterCache) {
+    // ----- Décor (arène) -----
+    let cachedMapId = null;
+    function drawWater(time, mapId) {
+      const map = (window.OGSMaps && OGSMaps.get(mapId)) || null;
+      if (!waterCache || cachedMapId !== mapId) {
+        cachedMapId = mapId;
         waterCache = document.createElement('canvas'); waterCache.width = Math.round(W * scale); waterCache.height = Math.round(FIELD.h * scale);
         const c = waterCache.getContext('2d'); c.scale(scale, scale);
-        const g = c.createLinearGradient(0, 0, 0, FIELD.h); g.addColorStop(0, '#1e40af'); g.addColorStop(0.5, '#2563eb'); g.addColorStop(1, '#1e40af');
-        c.fillStyle = g; c.fillRect(0, 0, W, FIELD.h);
-        c.strokeStyle = 'rgba(255,255,255,0.06)'; c.lineWidth = 2;
+        if (map) map.base(c, W, FIELD.h);
+        else { const g = c.createLinearGradient(0, 0, 0, FIELD.h); g.addColorStop(0, '#1e40af'); g.addColorStop(0.5, '#2563eb'); g.addColorStop(1, '#1e40af'); c.fillStyle = g; c.fillRect(0, 0, W, FIELD.h); }
+        c.strokeStyle = map ? map.grid : 'rgba(255,255,255,0.06)'; c.lineWidth = 2;
         for (let i = 1; i < COLS; i += 1) { c.beginPath(); c.moveTo(i * CELL_W, 0); c.lineTo(i * CELL_W, FIELD.h); c.stroke(); }
         for (let i = 1; i < ROWS; i += 1) { c.beginPath(); c.moveTo(0, i * CELL_H); c.lineTo(W, i * CELL_H); c.stroke(); }
       }
       ctx.drawImage(waterCache, 0, FIELD_Y, W, FIELD.h);
-      ctx.save(); ctx.beginPath(); ctx.rect(0, FIELD_Y, W, FIELD.h); ctx.clip();
-      ctx.lineCap = 'round'; ctx.lineWidth = 16;
-      const phase = time * 1.6;
-      for (let i = 0; i < 12; i += 1) {
-        const yBase = FIELD_Y + (FIELD.h / 11) * i;
-        ctx.strokeStyle = i % 2 === 0 ? 'rgba(147,197,253,0.15)' : 'rgba(59,130,246,0.2)';
-        ctx.beginPath();
-        for (let x = 0; x <= W; x += 24) {
-          const y = yBase + Math.sin(x / 120 + phase + i * 0.6) * 8;
-          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-      }
+      ctx.save(); ctx.beginPath(); ctx.rect(0, FIELD_Y, W, FIELD.h); ctx.clip(); ctx.translate(0, FIELD_Y);
+      if (map) map.animate(ctx, W, FIELD.h, time);
       ctx.restore();
       // Ligne centrale.
-      ctx.fillStyle = 'rgba(226,232,240,0.7)'; ctx.fillRect(0, FIELD_Y + FIELD.h / 2 - 3, W, 6);
+      ctx.fillStyle = map ? map.line : 'rgba(226,232,240,0.7)'; ctx.fillRect(0, FIELD_Y + FIELD.h / 2 - 3, W, 6);
       // Zones de base (dégradé rouge côté ennemi, vert côté moi).
       const gTop = ctx.createLinearGradient(0, FIELD_Y, 0, FIELD_Y + 120); gTop.addColorStop(0, 'rgba(248,113,113,0.35)'); gTop.addColorStop(1, 'rgba(248,113,113,0)');
       ctx.fillStyle = gTop; ctx.fillRect(0, FIELD_Y, W, 120);
       const gBot = ctx.createLinearGradient(0, FIELD_Y + FIELD.h - 120, 0, FIELD_Y + FIELD.h); gBot.addColorStop(0, 'rgba(74,222,128,0)'); gBot.addColorStop(1, 'rgba(74,222,128,0.35)');
       ctx.fillStyle = gBot; ctx.fillRect(0, FIELD_Y + FIELD.h - 120, W, 120);
-      // Plages.
+      // Bords de l'arène.
       for (const b of [{ y: FIELD_Y - BEACH, dir: 1 }, { y: FIELD_Y + FIELD.h, dir: -1 }]) {
-        ctx.fillStyle = '#f8d99e'; ctx.fillRect(0, b.y, W, BEACH);
-        ctx.strokeStyle = 'rgba(255,239,186,0.7)'; ctx.lineWidth = 2; ctx.beginPath();
+        ctx.fillStyle = map ? map.edge : '#f8d99e'; ctx.fillRect(0, b.y, W, BEACH);
+        ctx.strokeStyle = map ? map.edgeLine : 'rgba(255,239,186,0.7)'; ctx.lineWidth = 2; ctx.beginPath();
         const edge = b.dir === 1 ? b.y + BEACH : b.y;
         for (let x = 0; x <= W; x += 16) { const y = edge + Math.sin(x / 120 + time * 0.55) * 5 * b.dir; if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
         ctx.stroke();
@@ -372,7 +363,8 @@
       const opp = Sim.other(me);
       // Bande du bas : ma mana + mes slots.
       const bandY = H - BAND + BEACH;
-      ctx.fillStyle = '#0f172a'; ctx.fillRect(0, bandY, W, BAND - BEACH);
+      const hudColor = (window.OGSMaps && view.map && OGSMaps.get(view.map).hud) || '#0f172a';
+      ctx.fillStyle = hudColor; ctx.fillRect(0, bandY, W, BAND - BEACH);
       const manaRatio = Math.max(0, Math.min(1, S.mana[me] / RULES.manaMax));
       const g = ctx.createLinearGradient(0, bandY, 0, H); g.addColorStop(0, '#86efac'); g.addColorStop(1, '#10b981');
       ctx.fillStyle = g; ctx.fillRect(0, bandY + 10, W * manaRatio, BAND - BEACH - 20);
@@ -420,7 +412,7 @@
 
       // Bande du haut : adversaire.
       const topH = BAND - BEACH;
-      ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, topH);
+      ctx.fillStyle = hudColor; ctx.fillRect(0, 0, W, topH);
       // Mana adverse : barre fine en bas de la bande, se remplit depuis la droite.
       const oppRatio = Math.max(0, Math.min(1, S.mana[opp] / RULES.manaMax));
       const mbY = topH - 52, mbH = 30;
@@ -566,7 +558,7 @@
       ctx.fillStyle = '#0b1021'; ctx.fillRect(0, 0, W, H);
       ctx.save();
       if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
-      drawWater(view.time);
+      drawWater(view.time, view.map);
       drawHints(view);
       drawOrbs(view);
       const ground = [], air = [];

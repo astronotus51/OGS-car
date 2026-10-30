@@ -1,6 +1,7 @@
 'use strict';
 const Sim = require('../shared/sim.js');
 const AI = require('../shared/ai.js');
+const Catalog = require('../shared/catalog.js');
 
 const TICK_RATE = 30;
 const DISCONNECT_GRACE = 20; // s avant forfait
@@ -25,8 +26,9 @@ function waveComposition(n, rng) {
  * features: objet booléen (shared/features.js, resolveOptions)
  */
 class Room {
-  constructor({ players, mode, features = {}, duration = Sim.RULES.matchDuration, botFill = false, onEnd }) {
+  constructor({ players, mode, features = {}, duration = Sim.RULES.matchDuration, botFill = false, map = 'random', onEnd }) {
     this.id = nextRoomId++;
+    this.map = Catalog.MAPS.some(m => m.id === map) ? map : Catalog.MAPS[Math.floor(Math.random() * Catalog.MAPS.length)].id;
     this.mode = mode;
     this.botFill = botFill;
     this.features = features;
@@ -80,7 +82,7 @@ class Room {
   startMessage(p) {
     const opp = this.players.find(x => x !== p);
     return {
-      t: 'match_start', roomId: this.id, mode: this.mode, side: p.side, seed: this.seed,
+      t: 'match_start', roomId: this.id, mode: this.mode, side: p.side, seed: this.seed, map: this.map,
       phase: this.phase, draftSeconds: this.phase === 'draft' ? Math.ceil(this.draftTimer) : 0,
       countdown: this.countdown, duration: this.duration, features: this.features,
       bans: this.game ? this.game.bans : { top: [], bottom: [] },

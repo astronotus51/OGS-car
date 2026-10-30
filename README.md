@@ -64,6 +64,10 @@ Il n'y a **aucun compte** : pas d'inscription, pas de mot de passe, pas de conne
 - Protections serveur : en-têtes helmet (CSP stricte, pas de framing), limite de requêtes (anti-abus), vérification d'origine sur l'API et le WebSocket, validation des entrées, avatars vérifiés (format, taille ≤ 64 Ko).
 - **HTTPS** : il reste à mettre un domaine + `certbot` (voir le déploiement) pour chiffrer le trafic et marquer le cookie `Secure`.
 
+## Arènes
+
+Le décor change à chaque partie : **Lagon**, **Espace** (nébuleuses, planète, étoiles filantes), **Mer de lave** (fissures qui pulsent, bulles), **Cimetière** (lune, brume, chauves-souris), **Ferme** (champs, blé qui ondule, papillons), **Banquise** (aurore boréale, neige) et **Pays des bonbons**. Le serveur tire l'arène au sort ; en entraînement, amical et survie on peut la choisir dans le lobby. Les arènes sont dessinées en vectoriel dans `public/js/maps.js` (fond statique mis en cache + couche animée) ; la liste est dans `Catalog.MAPS`. Pour en ajouter une : une entrée dans les deux.
+
 ## Avatars, musique et sons
 
 - **Avatar** : profil → avatar : 15 propositions dessinées (créatures et skins) ou une photo importée. Affiché dans le lobby, le profil, le classement et en match.
