@@ -68,6 +68,16 @@ Un seul service Node, qui sert le site **et** le WebSocket :
 
 `ADMIN_USERS=Aluego,AutrePseudo` dans `.env` (par défaut `Aluego`). Un admin possède **tous les skins**, a un badge, voit un panneau « Administration » dans son profil (comptes, joueurs en ligne, parties en cours) et peut donner des pièces ou des trophées à un joueur.
 
+### Mot de passe oublié
+
+Il n'y a pas (encore) d'envoi d'e-mail : la réinitialisation se fait sur le serveur. Sur le VPS :
+
+```bash
+cd /var/www/ogs && node scripts/reset-password.js Aluego
+```
+
+Le script demande le nouveau mot de passe (sans l'afficher) et déconnecte toutes les sessions du compte. En local, pareil depuis le dossier du projet.
+
 ### Connexion Google
 
 1. [console.cloud.google.com](https://console.cloud.google.com) → *APIs et services → Identifiants → Créer → ID client OAuth → Application Web*.

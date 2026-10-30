@@ -32,6 +32,7 @@ function createPgStore(url) {
   return {
     kind: 'postgres',
     init,
+    async close() { await pool.end(); },
     async getUserByUsername(username) { return (await q(`SELECT ${USER_COLUMNS} FROM users WHERE lower(username) = lower($1)`, [username]))[0] || null; },
     async getUserById(id) { return (await q(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1`, [id]))[0] || null; },
     async createUser(username, passwordHash, extra) {
@@ -76,17 +77,21 @@ function createJsonStore(file) {
   function load() {
     try { if (fs.existsSync(file)) data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.warn('[db] store illisible, reset', e.message); }
   }
+  function writeNow() {
+    clearTimeout(saveTimer); saveTimer = null;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const tmp = `${file}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(data)); fs.renameSync(tmp, file); // écriture atomique
+  }
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, JSON.stringify(data));
-    }, 150);
+    saveTimer = setTimeout(writeNow, 150);
   }
   const clone = (x) => (x ? JSON.parse(JSON.stringify(x)) : x);
   return {
     kind: 'json',
     async init() { load(); console.log(`[db] store JSON : ${file} (${data.users.length} comptes)`); },
+    async close() { if (saveTimer) writeNow(); },
     async getUserByUsername(username) { return clone(data.users.find(u => u.username.toLowerCase() === username.toLowerCase()) || null); },
     async getUserById(id) { return clone(data.users.find(u => u.id === id) || null); },
     async createUser(username, passwordHash, extra) {

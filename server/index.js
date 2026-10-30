@@ -520,6 +520,17 @@ setInterval(() => {
 }, 30000);
 wss.on('connection', (ws) => { ws.on('pong', () => { for (const c of clients) if (c.ws === ws) c.pingPending = false; }); });
 
+// Arrêt propre (pm2 reload / Ctrl+C) : on écrit le store JSON en attente avant de quitter.
+let stopping = false;
+async function shutdown(signal) {
+  if (stopping) return; stopping = true;
+  console.log(`[serveur] ${signal} : arrêt propre`);
+  try { for (const room of rooms) room.destroy(); await db.close(); } catch (e) { console.error(e.message); }
+  process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
 db.init().then(() => {
   server.listen(PORT, () => console.log(`Glouglou Arena -> http://localhost:${PORT}  (db: ${db.kind})`));
 }).catch(err => { console.error('Impossible de démarrer la base :', err.message); process.exit(1); });
