@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installation d'OGS Online sur un VPS Hostinger (Ubuntu 22.04 / 24.04), à lancer en root :
+# Installation de Glouglou Arena sur un VPS Hostinger (Ubuntu 22.04 / 24.04), à lancer en root :
 #   bash <(curl -fsSL https://raw.githubusercontent.com/<TON_COMPTE>/<TON_DEPOT>/main/deploy/setup-vps.sh) <TON_COMPTE>/<TON_DEPOT> jeu.tondomaine.fr
 set -euo pipefail
 REPO="${1:?usage: setup-vps.sh <compte/depot> <domaine>}"
@@ -44,4 +44,4 @@ apt-get install -y certbot python3-certbot-nginx
 certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect || echo ">> certbot a échoué : vérifie que le DNS de $DOMAIN pointe bien vers ce VPS, puis relance : certbot --nginx -d $DOMAIN"
 
 echo
-echo "OGS Online tourne sur https://$DOMAIN  (logs : pm2 logs ogs)"
+echo "Glouglou Arena tourne sur https://$DOMAIN  (logs : pm2 logs ogs)"

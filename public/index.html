@@ -2,14 +2,15 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
+  <meta name="description" content="Glouglou Arena : duel en ligne de bestioles rigolotes. Pose tes créatures, protège ta base, perce la sienne.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>OGS Online</title>
+  <title>Glouglou Arena</title>
   <link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="manifest" href="site.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=6">
+  <link rel="stylesheet" href="css/style.css?v=7">
 </head>
 <body>
   <canvas id="bg"></canvas>
@@ -18,8 +19,8 @@
   <!-- ===== AUTH ===== -->
   <section id="screen-auth" class="screen">
     <div class="panel auth-panel">
-      <div class="logo">OGS</div>
-      <div class="tagline">Remake online du jeu iPad · 1 contre 1</div>
+      <div class="logo glou"><span class="g1">GLOUGLOU</span><span class="g2">ARENA</span><span class="bubbles"><i></i><i></i><i></i></span></div>
+      <div class="tagline">Duel de bestioles en 1 contre 1 · inspiré du jeu iPad OGS</div>
       <form id="authForm" autocomplete="on">
         <label>Pseudo<input id="authUser" name="username" maxlength="16" required autocomplete="username"></label>
         <label>Mot de passe<input id="authPass" name="password" type="password" minlength="4" required autocomplete="current-password"></label>
@@ -66,7 +67,7 @@
 
     <main class="lobby-main">
       <div class="lobby-left">
-        <div class="logo small">OGS</div>
+        <div class="logo small glou"><span class="g1">GLOUGLOU</span><span class="g2">ARENA</span></div>
         <div class="menu-note">Pose tes Ogs, protège ta base, perce la sienne.</div>
         <nav class="lobby-nav">
           <button class="btn nav" data-screen="profile">Profil</button>
@@ -252,14 +253,14 @@
     <main class="page rules" id="rulesPage"></main>
   </section>
 
-  <script src="shared/sim.js?v=6"></script>
-  <script src="shared/catalog.js?v=6"></script>
-  <script src="shared/features.js?v=6"></script>
-  <script src="js/net.js?v=6"></script>
-  <script src="js/audio.js?v=6"></script>
-  <script src="js/creatures.js?v=6"></script>
-  <script src="js/render.js?v=6"></script>
-  <script src="js/game.js?v=6"></script>
-  <script src="js/app.js?v=6"></script>
+  <script src="shared/sim.js?v=7"></script>
+  <script src="shared/catalog.js?v=7"></script>
+  <script src="shared/features.js?v=7"></script>
+  <script src="js/net.js?v=7"></script>
+  <script src="js/audio.js?v=7"></script>
+  <script src="js/creatures.js?v=7"></script>
+  <script src="js/render.js?v=7"></script>
+  <script src="js/game.js?v=7"></script>
+  <script src="js/app.js?v=7"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
-# OGS Online
+# Glouglou Arena
 
-Remake **online** du jeu iPad OGS : un 1 contre 1 en temps réel, chacun sur son ordinateur, avec matchmaking façon Brawl Stars, comptes, trophées, niveaux, pièces et skins.
+Duel en ligne de bestioles rigolotes, remake **online** du jeu iPad OGS : un 1 contre 1 en temps réel, chacun sur son ordinateur, avec matchmaking façon Brawl Stars, comptes, trophées, niveaux, pièces et skins.
 
 - `shared/sim.js` – la simulation (règles, collisions, scorpion noir), **déterministe**, utilisée par le serveur (autoritaire) et le client (prédiction d'affichage).
 - `shared/ai.js` – l'IA (simple / moyen / difficile), joue n'importe quel camp.

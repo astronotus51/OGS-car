@@ -504,5 +504,5 @@ setInterval(() => {
 wss.on('connection', (ws) => { ws.on('pong', () => { for (const c of clients) if (c.ws === ws) c.pingPending = false; }); });
 
 db.init().then(() => {
-  server.listen(PORT, () => console.log(`OGS Online -> http://localhost:${PORT}  (db: ${db.kind})`));
+  server.listen(PORT, () => console.log(`Glouglou Arena -> http://localhost:${PORT}  (db: ${db.kind})`));
 }).catch(err => { console.error('Impossible de démarrer la base :', err.message); process.exit(1); });
