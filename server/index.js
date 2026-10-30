@@ -60,12 +60,15 @@ app.use(helmet({
       baseUri: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'none'"],
+      // Pas de forçage HTTPS tant que le site peut être servi en HTTP (sinon le navigateur tente https:// pour le CSS/JS et la page reste nue).
+      upgradeInsecureRequests: null,
     },
   },
   crossOriginEmbedderPolicy: false,
   crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
-  hsts: { maxAge: 15552000, includeSubDomains: true },
+  hsts: false,
 }));
+app.use((req, res, next) => { if (isSecure(req)) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains'); next(); });
 app.use(cookieParser());
 app.use(express.json({ limit: '120kb' }));
 // Anti-CSRF : les requêtes qui modifient quelque chose doivent venir de notre propre origine.
