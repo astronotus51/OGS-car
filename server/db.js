@@ -6,14 +6,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const USER_COLUMNS = `id, username, password_hash, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily, survival_best, quests, google_sub, email, avatar, session_version`;
+const USER_COLUMNS = `id, username, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily, survival_best, quests, avatar, session_version, transfer_code, transfer_expires, is_admin`;
 
-function defaultUser(username, passwordHash, extra) {
+function defaultUser(username, extra) {
   return Object.assign({
-    username, password_hash: passwordHash || '',
+    username,
     trophies: 0, best_trophies: 0, xp: 0, coins: 50, wins: 0, losses: 0, draws: 0, streak: 0,
     equipped: {}, skins: [], created_at: new Date().toISOString(), last_daily: null, survival_best: 0, quests: {},
-    google_sub: null, email: null, avatar: null, session_version: 0,
+    avatar: null, session_version: 0, transfer_code: null, transfer_expires: null, is_admin: false,
   }, extra || {});
 }
 
@@ -35,12 +35,13 @@ function createPgStore(url) {
     async close() { await pool.end(); },
     async getUserByUsername(username) { return (await q(`SELECT ${USER_COLUMNS} FROM users WHERE lower(username) = lower($1)`, [username]))[0] || null; },
     async getUserById(id) { return (await q(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1`, [id]))[0] || null; },
-    async createUser(username, passwordHash, extra) {
-      const u = defaultUser(username, passwordHash, extra);
-      return (await q(`INSERT INTO users (username, password_hash, coins, equipped, skins, google_sub, email) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${USER_COLUMNS}`,
-        [u.username, u.password_hash, u.coins, JSON.stringify(u.equipped), JSON.stringify(u.skins), u.google_sub, u.email]))[0];
+    async createUser(username, extra) {
+      const u = defaultUser(username, extra);
+      return (await q(`INSERT INTO users (username, coins, equipped, skins) VALUES ($1, $2, $3, $4) RETURNING ${USER_COLUMNS}`,
+        [u.username, u.coins, JSON.stringify(u.equipped), JSON.stringify(u.skins)]))[0];
     },
-    async getUserByGoogleSub(sub) { return (await q(`SELECT ${USER_COLUMNS} FROM users WHERE google_sub = $1`, [sub]))[0] || null; },
+    async getUserByTransferCode(code) { return (await q(`SELECT ${USER_COLUMNS} FROM users WHERE transfer_code = $1`, [code]))[0] || null; },
+    async wipe() { await q('DELETE FROM matches'); await q('DELETE FROM users'); },
     async updateUser(id, patch) {
       const keys = Object.keys(patch);
       if (!keys.length) return this.getUserById(id);
@@ -94,11 +95,12 @@ function createJsonStore(file) {
     async close() { if (saveTimer) writeNow(); },
     async getUserByUsername(username) { return clone(data.users.find(u => u.username.toLowerCase() === username.toLowerCase()) || null); },
     async getUserById(id) { return clone(data.users.find(u => u.id === id) || null); },
-    async createUser(username, passwordHash, extra) {
-      const u = Object.assign({ id: data.nextUser++ }, defaultUser(username, passwordHash, extra));
+    async createUser(username, extra) {
+      const u = Object.assign({ id: data.nextUser++ }, defaultUser(username, extra));
       data.users.push(u); save(); return clone(u);
     },
-    async getUserByGoogleSub(sub) { return clone(data.users.find(u => u.google_sub === sub) || null); },
+    async getUserByTransferCode(code) { return clone(data.users.find(u => u.transfer_code === code) || null); },
+    async wipe() { data = { users: [], matches: [], nextUser: 1, nextMatch: 1 }; writeNow(); },
     async updateUser(id, patch) {
       const u = data.users.find(x => x.id === id);
       if (!u) return null;

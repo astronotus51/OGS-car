@@ -6,12 +6,10 @@ const crypto = require('crypto');
 const http = require('http');
 const express = require('express');
 const { WebSocketServer } = require('ws');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
-const { OAuth2Client } = require('google-auth-library');
 
 const Catalog = require('../shared/catalog.js');
 const Sim = require('../shared/sim.js');
@@ -23,10 +21,7 @@ const { Matchmaker } = require('./matchmaking.js');
 
 const PORT = Number(process.env.PORT || 3000);
 const DAILY_COINS = 25;
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 const COOKIE = 'ogs_session';
-const DUMMY_HASH = bcrypt.hashSync(`dummy-${crypto.randomBytes(8).toString('hex')}`, 12);
 const SESSION_DAYS = 30;
 
 // ---------- Secret JWT (env ou fichier persistant) ----------
@@ -40,6 +35,17 @@ function loadSecret() {
   return secret;
 }
 const JWT_SECRET = loadSecret();
+// Clé admin : ADMIN_KEY ou fichier data/admin-key.txt (généré au premier démarrage). À entrer une fois dans le profil.
+function loadAdminKey() {
+  if (process.env.ADMIN_KEY) return process.env.ADMIN_KEY;
+  const file = path.join(__dirname, '..', 'data', 'admin-key.txt');
+  try { return fs.readFileSync(file, 'utf8').trim(); } catch (e) { /* créé ci-dessous */ }
+  const key = crypto.randomBytes(12).toString('base64url');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, key);
+  return key;
+}
+const ADMIN_KEY = loadAdminKey();
 
 const db = createStore();
 const app = express();
@@ -50,12 +56,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", 'https://accounts.google.com'],
-      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://accounts.google.com'],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.googleusercontent.com'],
-      connectSrc: ["'self'", 'ws:', 'wss:', 'https://accounts.google.com'],
-      frameSrc: ['https://accounts.google.com'],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'", 'ws:', 'wss:'],
+      frameSrc: ["'none'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
@@ -65,7 +71,7 @@ app.use(helmet({
     },
   },
   crossOriginEmbedderPolicy: false,
-  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  crossOriginOpenerPolicy: { policy: 'same-origin' },
   hsts: false,
 }));
 app.use((req, res, next) => { if (isSecure(req)) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains'); next(); });
@@ -80,7 +86,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 // Limites de requêtes : connexion/inscription (anti force brute) et API générale.
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 25, standardHeaders: true, legacyHeaders: false, message: { error: 'Trop de tentatives, réessaie dans 15 minutes' } });
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'Trop de tentatives, réessaie dans 15 minutes' } });
 const apiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 240, standardHeaders: true, legacyHeaders: false, message: { error: 'Trop de requêtes' } });
 app.use('/api', apiLimiter);
 app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
@@ -121,98 +127,48 @@ async function authMiddleware(req, res, next) {
 }
 const wrap = fn => (req, res) => fn(req, res).catch(err => { console.error(err); res.status(500).json({ error: 'Erreur serveur' }); });
 
-const COMMON_PASSWORDS = new Set(['12345678', 'password', 'motdepasse', 'azertyuiop', 'qwertyuiop', '123456789', 'abcdefgh', '00000000']);
-function passwordProblem(password, username) {
-  if (typeof password !== 'string' || password.length < 8) return 'Mot de passe : 8 caractères minimum';
-  if (password.length > 128) return 'Mot de passe trop long';
-  if (COMMON_PASSWORDS.has(password.toLowerCase())) return 'Mot de passe trop courant';
-  if (username && password.toLowerCase().includes(String(username).toLowerCase())) return 'Le mot de passe ne doit pas contenir le pseudo';
-  return null;
-}
-app.get('/api/config', (req, res) => { res.json({ googleClientId: GOOGLE_CLIENT_ID || null, avatarPresets: Catalog.AVATAR_PRESETS, secure: isSecure(req) }); });
+app.get('/api/config', (req, res) => { res.json({ avatarPresets: Catalog.AVATAR_PRESETS, secure: isSecure(req) }); });
 
-app.post('/api/register', authLimiter, wrap(async (req, res) => {
-  const { username, password } = req.body || {};
+// ---------- Identité joueur : pas de compte. Un pseudo + un cookie sécurisé sur cet appareil. ----------
+app.post('/api/guest', authLimiter, wrap(async (req, res) => {
+  const { username } = req.body || {};
   if (typeof username !== 'string' || !USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
-  const pb = passwordProblem(password, username);
-  if (pb) return res.status(400).json({ error: pb });
-  if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris' });
-  const user = await db.createUser(username, await bcrypt.hash(password, 12));
+  if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris, choisis-en un autre' });
+  const user = await db.createUser(username);
   setSession(req, res, user);
   res.json({ profile: publicProfile(user) });
 }));
 
-app.post('/api/login', authLimiter, wrap(async (req, res) => {
-  const { username, password } = req.body || {};
-  const user = typeof username === 'string' ? await db.getUserByUsername(username) : null;
-  // Temps de réponse constant (on compare toujours un hash) pour ne pas révéler si le pseudo existe.
-  const hash = user && user.password_hash ? user.password_hash : DUMMY_HASH;
-  const ok = typeof password === 'string' && (await bcrypt.compare(password, hash));
-  if (!user || !user.password_hash || !ok) return res.status(401).json({ error: 'Pseudo ou mot de passe incorrect' });
-  setSession(req, res, user);
-  res.json({ profile: publicProfile(user) });
-}));
-
+// Oublier ce joueur sur cet appareil.
 app.post('/api/logout', wrap(async (req, res) => {
   clearSession(req, res);
   res.json({ ok: true });
 }));
-// Déconnexion de TOUS les appareils : invalide toutes les sessions existantes.
-app.post('/api/logout-all', authMiddleware, wrap(async (req, res) => {
-  await db.updateUser(req.user.id, { session_version: (req.user.session_version || 0) + 1 });
-  const live = byUser.get(req.user.id); if (live) { live.send({ t: 'kicked', reason: 'Déconnecté de tous les appareils' }); live.ws.close(); }
-  clearSession(req, res);
-  res.json({ ok: true });
+
+// ---------- Transfert de progression vers un autre appareil (code à usage unique, 24 h) ----------
+function makeTransferCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 8; i += 1) c += a[crypto.randomInt(a.length)]; return `${c.slice(0, 4)}-${c.slice(4)}`; }
+app.post('/api/transfer/code', authMiddleware, wrap(async (req, res) => {
+  const code = makeTransferCode();
+  await db.updateUser(req.user.id, { transfer_code: code, transfer_expires: new Date(Date.now() + 86400 * 1000).toISOString() });
+  res.json({ code });
+}));
+app.post('/api/transfer/claim', authLimiter, wrap(async (req, res) => {
+  const code = String((req.body && req.body.code) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 8) return res.status(400).json({ error: 'Code invalide' });
+  const user = await db.getUserByTransferCode(`${code.slice(0, 4)}-${code.slice(4)}`);
+  if (!user || !user.transfer_expires || new Date(user.transfer_expires) < new Date()) return res.status(404).json({ error: 'Code inconnu ou expiré' });
+  const updated = await db.updateUser(user.id, { transfer_code: null, transfer_expires: null, session_version: (user.session_version || 0) + 1 }); // l'ancien appareil est déconnecté
+  const prev = byUser.get(user.id); if (prev) { prev.send({ t: 'kicked', reason: 'Progression transférée sur un autre appareil' }); prev.ws.close(); }
+  setSession(req, res, updated);
+  res.json({ profile: publicProfile(updated) });
 }));
 
-app.post('/api/password', authMiddleware, authLimiter, wrap(async (req, res) => {
-  const { current, next } = req.body || {};
-  if (req.user.password_hash && !(typeof current === 'string' && (await bcrypt.compare(current, req.user.password_hash)))) return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
-  const pb = passwordProblem(next, req.user.username);
-  if (pb) return res.status(400).json({ error: pb });
-  const user = await db.updateUser(req.user.id, { password_hash: await bcrypt.hash(next, 12), session_version: (req.user.session_version || 0) + 1 });
-  setSession(req, res, user);
-  res.json({ ok: true });
-}));
-
-// ---------- Connexion Google (Google Identity Services) ----------
-async function verifyGoogle(credential) {
-  if (!googleClient) throw new Error('Google non configuré');
-  const ticket = await googleClient.verifyIdToken({ idToken: String(credential || ''), audience: GOOGLE_CLIENT_ID });
-  const p = ticket.getPayload();
-  if (!p || !p.sub || !p.email_verified) throw new Error('Compte Google non vérifié');
-  return { sub: p.sub, email: p.email, name: p.name || p.given_name || 'Joueur', picture: p.picture || null };
-}
-app.post('/api/auth/google', authLimiter, wrap(async (req, res) => {
-  if (!googleClient) return res.status(400).json({ error: 'Connexion Google non configurée sur ce serveur' });
-  let g;
-  try { g = await verifyGoogle(req.body && req.body.credential); } catch (e) { return res.status(401).json({ error: 'Jeton Google invalide' }); }
-  const existing = await db.getUserByGoogleSub(g.sub);
-  if (existing) { setSession(req, res, existing); return res.json({ profile: publicProfile(existing) }); }
-  // Premier passage : il faut choisir un pseudo. On rend un ticket court (10 min) signé.
-  const ticket = jwt.sign({ g: g.sub, e: g.email, n: g.name }, JWT_SECRET, { expiresIn: '10m' });
-  const suggested = g.name.replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 16);
-  res.json({ needUsername: true, ticket, suggested: suggested.length >= 3 ? suggested : '' });
-}));
-app.post('/api/auth/google/complete', authLimiter, wrap(async (req, res) => {
-  const { ticket, username } = req.body || {};
-  const payload = decodeToken(String(ticket || ''));
-  if (!payload || !payload.g) return res.status(401).json({ error: 'Ticket expiré, recommence la connexion Google' });
-  if (typeof username !== 'string' || !USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
-  if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris' });
-  if (await db.getUserByGoogleSub(payload.g)) return res.status(409).json({ error: 'Ce compte Google est déjà lié' });
-  const user = await db.createUser(username, '', { google_sub: payload.g, email: payload.e });
-  setSession(req, res, user);
-  res.json({ profile: publicProfile(user) });
-}));
-// Lier un compte Google à un compte pseudo/mot de passe existant.
-app.post('/api/auth/google/link', authMiddleware, wrap(async (req, res) => {
-  if (!googleClient) return res.status(400).json({ error: 'Connexion Google non configurée' });
-  let g;
-  try { g = await verifyGoogle(req.body && req.body.credential); } catch (e) { return res.status(401).json({ error: 'Jeton Google invalide' }); }
-  if (await db.getUserByGoogleSub(g.sub)) return res.status(409).json({ error: 'Ce compte Google est déjà lié à un autre joueur' });
-  const user = await db.updateUser(req.user.id, { google_sub: g.sub, email: g.email });
-  res.json({ profile: publicProfile(user) });
+// ---------- Clé admin ----------
+app.post('/api/admin/activate', authMiddleware, authLimiter, wrap(async (req, res) => {
+  const key = String((req.body && req.body.key) || '');
+  if (!key || key.length !== ADMIN_KEY.length || !crypto.timingSafeEqual(Buffer.from(key), Buffer.from(ADMIN_KEY))) return res.status(403).json({ error: 'Clé incorrecte' });
+  const user = await db.updateUser(req.user.id, { is_admin: true });
+  res.json({ profile: refreshLiveProfile(user) });
 }));
 
 // ---------- Avatar : 15 propositions ou photo importée (data URL, redimensionnée côté client) ----------
@@ -230,7 +186,7 @@ app.post('/api/avatar', authMiddleware, wrap(async (req, res) => {
     if (!(png || jpg || webp)) return res.status(400).json({ error: 'Format d’image non reconnu' });
   }
   const user = await db.updateUser(req.user.id, { avatar });
-  res.json({ profile: publicProfile(user) });
+  res.json({ profile: refreshLiveProfile(user) });
 }));
 
 app.get('/api/me', authMiddleware, wrap(async (req, res) => {
@@ -296,7 +252,7 @@ app.post('/api/skins/buy', authMiddleware, wrap(async (req, res) => {
   if ((req.user.coins || 0) < price) return res.status(400).json({ error: 'Pas assez de pièces' });
   const equipped = equippedOf(req.user); equipped[skin.ogId] = skin.id;
   const user = await db.updateUser(req.user.id, { coins: req.user.coins - price, skins: [...owned, skin.id], equipped });
-  res.json({ profile: publicProfile(user) });
+  res.json({ profile: refreshLiveProfile(user) });
 }));
 
 app.post('/api/skins/equip', authMiddleware, wrap(async (req, res) => {
@@ -305,7 +261,7 @@ app.post('/api/skins/equip', authMiddleware, wrap(async (req, res) => {
   if (!ownedSkins(req.user).includes(skin.id)) return res.status(403).json({ error: 'Skin non possédé' });
   const equipped = equippedOf(req.user); equipped[skin.ogId] = skin.id;
   const user = await db.updateUser(req.user.id, { equipped });
-  res.json({ profile: publicProfile(user) });
+  res.json({ profile: refreshLiveProfile(user) });
 }));
 
 // ---------- Admin ----------
@@ -345,14 +301,36 @@ const byUser = new Map(); // userId -> client
 
 function pickDuration(v) { const d = Number(v); return Sim.RULES.durations.includes(d) ? d : Sim.RULES.matchDuration; }
 
-function createMatch(entries, { mode, botFill = false, bot = null, duration = Sim.RULES.matchDuration, features = null, survival = false }) {
-  const players = entries.map(e => ({ client: e.client, profile: e.profile, bot: null }));
+// Met à jour le profil vivant (session WebSocket) d'un joueur après un changement (skin, avatar, pièces…).
+function refreshLiveProfile(user) {
+  const profile = publicProfile(user);
+  const live = byUser.get(user.id);
+  if (live) live.profile = profile;
+  return profile;
+}
+
+// Skins aléatoires (mais stables) pour les bots, pour que les parties contre l'IA soient variées.
+function botEquipped(seed) {
+  const themes = Catalog.THEMES.map(t => t.suffix).filter(t => t !== 'default');
+  const eq = {};
+  for (let og = 1; og <= 7; og += 1) { const r = (Math.imul((seed + og) * 2654435761, 1) >>> 0) % (themes.length + 2); eq[og] = r < themes.length ? `og${og}_${themes[r]}` : `og${og}_default`; }
+  return eq;
+}
+
+async function createMatch(entries, { mode, botFill = false, bot = null, duration = Sim.RULES.matchDuration, features = null, survival = false }) {
+  // Profils relus en base : skins équipés, avatar et trophées à jour au moment du match.
+  const players = [];
+  for (const e of entries) {
+    let profile = e.profile;
+    if (profile && profile.id) { const fresh = await db.getUserById(profile.id); if (fresh) profile = refreshLiveProfile(fresh); }
+    players.push({ client: e.client, profile, bot: null });
+  }
   if (bot) {
     const trophies = entries[0].profile.trophies;
     const names = { simple: 'Bot Oggy', moyen: 'Bot Ogma', difficile: 'Bot Ogzilla' };
-    players.push({ client: null, profile: { id: null, username: names[bot], trophies: Math.max(0, trophies + Math.round((Math.random() - 0.5) * 60)), level: bot === 'simple' ? 3 : bot === 'moyen' ? 12 : 30, rank: Catalog.rankFor(trophies).name, equipped: Catalog.DEFAULT_EQUIP, bot: true, difficulty: bot }, bot });
+    players.push({ client: null, profile: { id: null, username: names[bot], trophies: Math.max(0, trophies + Math.round((Math.random() - 0.5) * 60)), level: bot === 'simple' ? 3 : bot === 'moyen' ? 12 : 30, rank: Catalog.rankFor(trophies).name, equipped: botEquipped(Date.now() % 1000), avatar: `preset:og${1 + (Date.now() % 7)}_default`, bot: true, difficulty: bot }, bot });
   }
-  if (survival) players.push({ client: null, profile: { id: null, username: 'Les Vagues', trophies: 0, level: 0, rank: '', equipped: Catalog.DEFAULT_EQUIP, bot: true }, director: true });
+  if (survival) players.push({ client: null, profile: { id: null, username: 'Les Vagues', trophies: 0, level: 0, rank: '', equipped: botEquipped(Date.now() % 1000), avatar: 'preset:og7_halloween', bot: true }, director: true });
   if (survival) players.reverse(); // le joueur humain est en bas
   else if (Math.random() < 0.5) players.reverse();
   const feats = features || Features.resolveOptions(null, mode === 'ranked');
@@ -406,7 +384,7 @@ async function endMatch(room, result) {
   room.destroy();
 }
 
-const matchmaker = new Matchmaker({ createMatch });
+const matchmaker = new Matchmaker({ createMatch: (entries, opts) => createMatch(entries, opts).catch(err => console.error('[match]', err)) });
 
 function makeCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -460,13 +438,13 @@ wss.on('connection', (ws, req) => {
         if (client.room) return;
         matchmaker.leave(client); leaveFriendly(client);
         const diff = ['simple', 'moyen', 'difficile'].includes(msg.difficulty) ? msg.difficulty : 'moyen';
-        createMatch([{ client, profile: client.profile }], { mode: 'bot', bot: diff, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false) });
+        await createMatch([{ client, profile: client.profile }], { mode: 'bot', bot: diff, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false) });
         break;
       }
       case 'survival': {
         if (client.room || !Features.enabled('survival')) return;
         matchmaker.leave(client); leaveFriendly(client);
-        createMatch([{ client, profile: client.profile }], { mode: 'survival', survival: true, duration: 0, features: Object.assign(Features.resolveOptions(msg.options, false), { draft: false, kingOfCenter: false, overtime: false }) });
+        await createMatch([{ client, profile: client.profile }], { mode: 'survival', survival: true, duration: 0, features: Object.assign(Features.resolveOptions(msg.options, false), { draft: false, kingOfCenter: false, overtime: false }) });
         break;
       }
       case 'friendly_create': {
@@ -486,7 +464,7 @@ wss.on('connection', (ws, req) => {
         if (entry.host === client) return client.send({ t: 'error', error: 'C’est ta propre salle' });
         matchmaker.leave(client); leaveFriendly(client);
         friendly.delete(code); entry.host.friendlyCode = null;
-        createMatch([{ client: entry.host, profile: entry.host.profile }, { client, profile: client.profile }], { mode: 'friendly', duration: entry.duration, features: entry.features });
+        await createMatch([{ client: entry.host, profile: entry.host.profile }, { client, profile: client.profile }], { mode: 'friendly', duration: entry.duration, features: entry.features });
         break;
       }
       case 'friendly_leave': leaveFriendly(client); client.send({ t: 'idle' }); break;

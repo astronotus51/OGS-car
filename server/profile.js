@@ -1,9 +1,8 @@
 'use strict';
 const Catalog = require('../shared/catalog.js');
 
-// Administrateurs : pseudos listés dans ADMIN_USERS (séparés par des virgules). Ils ont tous les skins et un badge.
-const ADMINS = new Set(String(process.env.ADMIN_USERS || 'Aluego').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
-function isAdmin(user) { return !!user && ADMINS.has(String(user.username || '').toLowerCase()); }
+// Administrateurs : joueurs ayant activé la clé admin dans leur profil. Ils ont tous les skins et un badge.
+function isAdmin(user) { return !!(user && user.is_admin); }
 
 function ownedSkins(user) {
   if (isAdmin(user)) return Catalog.SKINS.filter(s => !s.hidden).map(s => s.id);
@@ -46,8 +45,6 @@ function publicProfile(user, extra) {
     skins: ownedSkins(user),
     survivalBest: user.survival_best || 0,
     avatar: user.avatar || null,
-    hasPassword: !!user.password_hash,
-    googleLinked: !!user.google_sub,
     admin: isAdmin(user),
     createdAt: user.created_at,
   }, extra || {});

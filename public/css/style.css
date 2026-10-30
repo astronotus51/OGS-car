@@ -228,3 +228,7 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 5px; border-radius: 5
 .badge-admin { display: inline-block; font-size: 10px; letter-spacing: 1px; background: linear-gradient(90deg, #f59e0b, #ef4444); color: #fff; padding: 2px 7px; border-radius: 999px; vertical-align: middle; font-weight: 800; }
 
 .sound-hint { margin-top: 12px; color: #7dd3fc; font-size: 13px; animation: pulse 1.6s infinite; }
+
+.transfer { margin-top: 14px; color: var(--muted); font-size: 13px; }
+.transfer summary { cursor: pointer; }
+.transfer .input.code { width: 160px; margin: 6px auto; }

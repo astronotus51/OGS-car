@@ -10,7 +10,7 @@
   <link rel="manifest" href="site.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=8">
+  <link rel="stylesheet" href="css/style.css?v=10">
 </head>
 <body>
   <canvas id="bg"></canvas>
@@ -21,24 +21,17 @@
     <div class="panel auth-panel">
       <div class="logo glou"><span class="g1">GLOUGLOU</span><span class="g2">ARENA</span><span class="bubbles"><i></i><i></i><i></i></span></div>
       <div class="tagline">Duel de bestioles en 1 contre 1 · inspiré du jeu iPad OGS</div>
-      <form id="authForm" autocomplete="on">
-        <label>Pseudo<input id="authUser" name="username" maxlength="16" required autocomplete="username"></label>
-        <label>Mot de passe<input id="authPass" name="password" type="password" minlength="4" required autocomplete="current-password"></label>
+      <form id="authForm" autocomplete="off">
+        <div class="info">Pas de compte, pas de mot de passe : choisis un pseudo et joue. Ta progression reste sur cet appareil.</div>
+        <label>Pseudo<input id="authUser" name="username" maxlength="16" required autocomplete="off" placeholder="3 à 16 caractères"></label>
         <div class="row">
-          <button type="submit" class="btn primary" data-action="login">Connexion</button>
-          <button type="button" class="btn" data-action="register">Créer un compte</button>
+          <button type="submit" class="btn primary">Jouer</button>
         </div>
         <div id="authError" class="error"></div>
       </form>
-      <div class="or"><span>ou</span></div>
-      <div id="googleBtn" class="google-btn"></div>
-      <div id="googleNote" class="auth-foot hidden">Connexion Google : disponible une fois le site en HTTPS avec un domaine (voir README).</div>
-      <form id="usernameForm" class="hidden" autocomplete="off">
-        <div class="info">Bienvenue ! Choisis ton pseudo de joueur :</div>
-        <label>Pseudo<input id="pickUser" maxlength="16" required></label>
-        <div class="row"><button type="submit" class="btn primary">C’est parti</button></div>
-        <div id="pickError" class="error"></div>
-      </form>
+      <details class="transfer"><summary>J’ai un code de transfert (progression venue d’un autre appareil)</summary>
+        <form id="transferForm"><label>Code<input id="transferCode" class="input code" maxlength="9" placeholder="XXXX-XXXX"></label><div class="row"><button type="submit" class="btn small">Récupérer ma progression</button></div><div id="transferError" class="error"></div></form>
+      </details>
       <div id="soundHint" class="sound-hint">♪ Clique n’importe où pour lancer la musique</div>
       <div class="auth-foot">Clavier : <b>A Z E R T Y U</b> (ou 1-7) pour choisir un Og · flèches + Entrée ou clic pour poser · <b>O</b> ramasse une orbe</div>
     </div>
@@ -75,7 +68,7 @@
           <button class="btn nav" data-screen="skins">Skins</button>
           <button class="btn nav" data-screen="leaderboard">Classement</button>
           <button class="btn nav" data-screen="rules">Règles</button>
-          <button class="btn nav danger" id="btnLogout">Déconnexion</button>
+          <button class="btn nav danger" id="btnLogout">Changer de joueur</button>
         </nav>
       </div>
       <div class="lobby-center">
@@ -193,7 +186,7 @@
 
   <!-- ===== PROFILE ===== -->
   <section id="screen-profile" class="screen hidden">
-    <header class="topbar"><button class="btn back" data-screen="lobby">← Menu</button><h2>Profil</h2><button id="btnLogout2" class="btn small danger" style="margin-left:auto">Déconnexion</button></header>
+    <header class="topbar"><button class="btn back" data-screen="lobby">← Menu</button><h2>Profil</h2></header>
     <main class="page">
       <div class="profile-head">
         <div class="avatar big clickable" id="profileAvatar" title="Changer d’avatar"><span id="profileLevel">1</span><span class="avatar-edit">✎</span></div>
@@ -209,14 +202,12 @@
       <h3>Compte et sécurité</h3>
       <div class="account">
         <div class="card"><div class="card-title">Avatar</div><button class="btn small" id="btnAvatar">Choisir un avatar ou une photo</button></div>
-        <div class="card" id="cardGoogle"><div class="card-title">Compte Google</div><div id="googleLinkState" class="info"></div><div id="googleLinkBtn" class="google-btn"></div></div>
-        <div class="card"><div class="card-title">Mot de passe</div>
-          <form id="pwdForm"><label id="pwdCurrentLabel">Actuel<input id="pwdCurrent" type="password" autocomplete="current-password"></label><label>Nouveau (8 caractères min.)<input id="pwdNext" type="password" minlength="8" required autocomplete="new-password"></label><div class="row"><button class="btn small primary" type="submit">Changer</button></div><div id="pwdMsg" class="info"></div></form>
-        </div>
+        <div class="card"><div class="card-title">Transférer ma progression</div><p class="info" style="text-align:left">Pas de compte : ta progression est liée à cet appareil. Pour la retrouver ailleurs, génère un code (valable 24 h, usage unique) et entre-le sur l’autre appareil à l’écran d’accueil.</p><button class="btn small" id="btnTransfer">Générer un code</button><div id="transferOut" class="queue-code hidden" style="font-size:22px"></div></div>
+        <div class="card"><div class="card-title">Administration</div><form id="adminKeyForm" class="row" style="justify-content:flex-start"><input id="adminKey" class="input" type="password" style="width:200px" placeholder="Clé admin"><button class="btn small" type="submit">Activer</button></form><div id="adminKeyMsg" class="info"></div></div>
         <div class="card hidden" id="adminCard" style="grid-column: 1 / -1"><div class="card-title">Administration</div><div id="adminInfo" class="info" style="text-align:left"></div>
           <form id="adminGrant" class="row" style="justify-content:flex-start"><input id="grantUser" class="input" style="width:160px" placeholder="Pseudo"><input id="grantCoins" class="input" style="width:110px" type="number" placeholder="+ pièces"><input id="grantTrophies" class="input" style="width:110px" type="number" placeholder="+ trophées"><button class="btn small gold" type="submit">Donner</button></form><div id="adminMsg" class="info"></div>
-          <p class="info" style="text-align:left">Admins : variable <code>ADMIN_USERS</code> du serveur (par défaut : Aluego). Un admin possède tous les skins.</p></div>
-        <div class="card"><div class="card-title">Sessions</div><p class="info">Ta session est un cookie sécurisé (httpOnly, 30 jours).</p><button class="btn small danger" id="btnLogoutAll">Se déconnecter de tous les appareils</button></div>
+          <p class="info" style="text-align:left">Clé admin : fichier <code>data/admin-key.txt</code> du serveur (ou variable <code>ADMIN_KEY</code>). Un admin possède tous les skins.</p></div>
+        <div class="card"><div class="card-title">Cet appareil</div><p class="info" style="text-align:left">Ton pseudo est mémorisé ici par un cookie sécurisé. « Changer de joueur » l’oublie sur cet appareil (génère un code de transfert avant si tu veux garder ta progression).</p><button class="btn small danger" id="btnLogout2">Changer de joueur</button></div>
       </div>
     </main>
   </section>
@@ -257,14 +248,14 @@
     <main class="page rules" id="rulesPage"></main>
   </section>
 
-  <script src="shared/sim.js?v=8"></script>
-  <script src="shared/catalog.js?v=8"></script>
-  <script src="shared/features.js?v=8"></script>
-  <script src="js/net.js?v=8"></script>
-  <script src="js/audio.js?v=8"></script>
-  <script src="js/creatures.js?v=8"></script>
-  <script src="js/render.js?v=8"></script>
-  <script src="js/game.js?v=8"></script>
-  <script src="js/app.js?v=8"></script>
+  <script src="shared/sim.js?v=10"></script>
+  <script src="shared/catalog.js?v=10"></script>
+  <script src="shared/features.js?v=10"></script>
+  <script src="js/net.js?v=10"></script>
+  <script src="js/audio.js?v=10"></script>
+  <script src="js/creatures.js?v=10"></script>
+  <script src="js/render.js?v=10"></script>
+  <script src="js/game.js?v=10"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>

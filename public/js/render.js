@@ -184,6 +184,18 @@
         }
         ctx.restore();
       }
+      // Zone de tir de Krak (2 cases de côté, 3 devant) : à la pose, et au survol d'un Krak existant.
+      const krakZone = (col, row, alpha) => {
+        const c0 = Math.max(0, col - RULES.orangeRangeSide), c1 = Math.min(COLS - 1, col + RULES.orangeRangeSide);
+        const fwd = me === 'top' ? 1 : -1;
+        const r0 = Math.max(0, Math.min(row, row + fwd * RULES.orangeRangeForward)), r1 = Math.min(ROWS - 1, Math.max(row, row + fwd * RULES.orangeRangeForward));
+        const a1 = cellRect(c0, r0), a2 = cellRect(c1, r1);
+        const x = Math.min(a1.x, a2.x), y = Math.min(a1.y, a2.y), w = Math.abs(a2.x - a1.x) + CELL_W, h = Math.abs(a2.y - a1.y) + CELL_H;
+        ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = 'rgba(251,146,60,0.18)'; ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = 'rgba(251,146,60,0.9)'; ctx.lineWidth = 4; ctx.setLineDash([14, 10]); ctx.strokeRect(x + 2, y + 2, w - 4, h - 4); ctx.restore();
+      };
+      if (sel === 3 && view.cursor) krakZone(view.cursor.col, view.cursor.row, 0.8 + 0.2 * Math.sin(view.time * 4));
+      if (view.cursor && !sel) { const c = Sim.cellCenter(view.cursor.col, view.cursor.row); const k = view.state.entities.find(e => e.ogId === 3 && e.player === me && Math.abs(e.x - c.x) < CELL_W / 2 && Math.abs(e.y - c.y) < CELL_H / 2); if (k) krakZone(view.cursor.col, view.cursor.row, 0.6); }
       if (view.cursor) {
         const r = cellRect(view.cursor.col, view.cursor.row);
         const ok = !sel || view.availableCells.some(c => c.col === view.cursor.col && c.row === view.cursor.row);

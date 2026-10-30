@@ -69,24 +69,33 @@
     el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; el.classList.toggle('hurry', left <= 20 && view.phase !== 'over');
   }
 
-  // ----- Auth -----
-  $('authForm').addEventListener('submit', (ev) => { ev.preventDefault(); auth('login'); });
-  document.querySelector('[data-action="register"]').addEventListener('click', () => auth('register'));
-  async function auth(kind) {
-    $('authError').textContent = '';
-    try {
-      const data = await Net.api(`/api/${kind}`, { username: $('authUser').value.trim(), password: $('authPass').value });
-      profile = data.profile; $('authPass').value = '';
-      enterLobby();
-    } catch (err) { $('authError').textContent = err.message; }
-  }
+  // ----- Identité joueur (pas de compte) -----
+  $('authForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault(); $('authError').textContent = '';
+    try { profile = (await Net.api('/api/guest', { username: $('authUser').value.trim() })).profile; enterLobby(); }
+    catch (err) { $('authError').textContent = err.message; }
+  });
+  $('transferForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault(); $('transferError').textContent = '';
+    try { profile = (await Net.api('/api/transfer/claim', { code: $('transferCode').value.trim() })).profile; $('transferCode').value = ''; enterLobby(); }
+    catch (err) { $('transferError').textContent = err.message; }
+  });
   async function logout() {
+    if (!confirm('Oublier ce joueur sur cet appareil ? (génère un code de transfert avant si tu veux garder ta progression)')) return;
     try { await Net.api('/api/logout', {}); } catch (e) { /* ignore */ }
-    Net.disconnect(); Net.setToken(null); profile = null; show('auth');
+    Net.disconnect(); profile = null; show('auth');
   }
   $('btnLogout').addEventListener('click', logout);
   $('btnLogout2').addEventListener('click', logout);
-  $('btnLogoutAll').addEventListener('click', async () => { if (!confirm('Déconnecter ce compte de tous les appareils ?')) return; try { await Net.api('/api/logout-all', {}); } catch (e) { /* ignore */ } Net.disconnect(); profile = null; show('auth'); });
+  $('btnTransfer').addEventListener('click', async () => {
+    try { const d = await Net.api('/api/transfer/code', {}); $('transferOut').textContent = d.code; $('transferOut').classList.remove('hidden'); }
+    catch (e) { $('transferOut').textContent = e.message; $('transferOut').classList.remove('hidden'); }
+  });
+  $('adminKeyForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault(); $('adminKeyMsg').textContent = '';
+    try { profile = (await Net.api('/api/admin/activate', { key: $('adminKey').value })).profile; $('adminKey').value = ''; $('adminKeyMsg').textContent = 'Mode admin activé !'; openProfile(); }
+    catch (e) { $('adminKeyMsg').textContent = e.message; }
+  });
 
   async function tryResume() {
     try { const data = await Net.api('/api/me'); profile = data.profile; enterLobby(); }
@@ -96,34 +105,7 @@
     show('lobby');
     Net.connect();
   }
-
-  // ----- Google Identity Services -----
-  let config = { googleClientId: null, avatarPresets: [] };
-  let googleTicket = null;
-  function loadGoogle() {
-    if (!config.googleClientId) { $('googleNote').classList.remove('hidden'); return; }
-    if (location.protocol !== 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) { $('googleNote').classList.remove('hidden'); return; }
-    const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true;
-    sc.onload = () => {
-      window.google.accounts.id.initialize({ client_id: config.googleClientId, callback: onGoogleCredential, ux_mode: 'popup', auto_select: false });
-      window.google.accounts.id.renderButton($('googleBtn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', locale: 'fr' });
-    };
-    document.head.appendChild(sc);
-  }
-  async function onGoogleCredential(resp) {
-    $('authError').textContent = '';
-    try {
-      if (current === 'profile') { profile = (await Net.api('/api/auth/google/link', { credential: resp.credential })).profile; openProfile(); return; }
-      const data = await Net.api('/api/auth/google', { credential: resp.credential });
-      if (data.needUsername) { googleTicket = data.ticket; $('authForm').classList.add('hidden'); $('googleBtn').classList.add('hidden'); $('usernameForm').classList.remove('hidden'); $('pickUser').value = data.suggested || ''; $('pickUser').focus(); return; }
-      profile = data.profile; enterLobby();
-    } catch (err) { ($('authError')).textContent = err.message; }
-  }
-  $('usernameForm').addEventListener('submit', async (ev) => {
-    ev.preventDefault(); $('pickError').textContent = '';
-    try { profile = (await Net.api('/api/auth/google/complete', { ticket: googleTicket, username: $('pickUser').value.trim() })).profile; $('usernameForm').classList.add('hidden'); $('authForm').classList.remove('hidden'); $('googleBtn').classList.remove('hidden'); enterLobby(); }
-    catch (err) { $('pickError').textContent = err.message; }
-  });
+  let config = { avatarPresets: [] };
 
   // ----- Avatars -----
   function renderAvatar(el, p, level) {
@@ -276,7 +258,7 @@
   // ----- Événements réseau -----
   Net.on('auth_ok', (msg) => { profile = msg.profile; if (current === 'lobby') refreshLobby(); });
   Net.on('auth_error', () => { Net.disconnect(); Net.setToken(null); show('auth'); $('authError').textContent = 'Session expirée, reconnecte-toi'; });
-  Net.on('kicked', (msg) => { Net.disconnect(); toast(msg.reason || 'Déconnecté', 'warn'); show('auth'); $('authError').textContent = msg.reason || 'Déconnecté'; });
+  Net.on('kicked', (msg) => { Net.disconnect(); profile = null; show('auth'); $('authError').textContent = msg.reason || 'Déconnecté'; });
   Net.on('queued', (msg) => { if (current === 'queue' && queueMode === 'queue') $('queueSub').textContent = `${msg.wait || 0} s · fenêtre ±${msg.band || 100} 🏆${msg.botFillIn ? ` · bot dans ${msg.botFillIn} s` : ''}`; });
   Net.on('friendly_created', (msg) => { $('queueCode').textContent = msg.code; $('queueCode').classList.remove('hidden'); });
   Net.on('error', (msg) => { $('lobbyMsg').textContent = msg.error; toast(msg.error, 'bad'); });
@@ -346,9 +328,7 @@
     $('profileName').innerHTML = esc(profile.username) + (profile.admin ? ' <span class="badge-admin">ADMIN</span>' : '');
     $('adminCard').classList.toggle('hidden', !profile.admin); if (profile.admin) loadAdmin();
     $('profileLevel').textContent = profile.level; renderAvatar($('profileAvatar'), profile, profile.level);
-    $('pwdCurrentLabel').classList.toggle('hidden', !profile.hasPassword);
-    $('googleLinkState').textContent = profile.googleLinked ? '✔ Compte Google lié' : (config.googleClientId ? 'Lie ton compte Google pour te connecter en un clic :' : 'Connexion Google non configurée sur ce serveur (voir README).');
-    if (config.googleClientId && !profile.googleLinked && window.google) { $('googleLinkBtn').innerHTML = ''; window.google.accounts.id.renderButton($('googleLinkBtn'), { theme: 'outline', size: 'medium', shape: 'pill', text: 'continue_with', locale: 'fr' }); } else $('googleLinkBtn').innerHTML = '';
+
     $('profileSub').innerHTML = `<span style="color:${profile.rankColor}">${profile.rank}</span> · 🏆 ${profile.trophies} (record ${profile.bestTrophies})${profile.leaderboardRank ? ` · #${profile.leaderboardRank} mondial` : ''} · membre depuis ${new Date(profile.createdAt).toLocaleDateString('fr-FR')}`;
     $('profileXp').style.width = `${Math.round(profile.xpInto / profile.xpNeed * 100)}%`;
     $('profileXpText').textContent = `Niveau ${profile.level} · ${profile.xpInto}/${profile.xpNeed} XP`;
@@ -373,12 +353,6 @@
     try { const d = await Net.api('/api/admin/grant', { username: $('grantUser').value.trim(), coins: Number($('grantCoins').value || 0), trophies: Number($('grantTrophies').value || 0) }); $('adminMsg').textContent = `${d.profile.username} : ${d.profile.coins} pièces, ${d.profile.trophies} trophées`; }
     catch (e) { $('adminMsg').textContent = e.message; }
   });
-  $('pwdForm').addEventListener('submit', async (ev) => {
-    ev.preventDefault(); $('pwdMsg').textContent = '';
-    try { await Net.api('/api/password', { current: $('pwdCurrent').value, next: $('pwdNext').value }); $('pwdMsg').textContent = 'Mot de passe changé (les autres appareils sont déconnectés).'; $('pwdCurrent').value = ''; $('pwdNext').value = ''; }
-    catch (e) { $('pwdMsg').textContent = e.message; }
-  });
-
   // ----- Skins -----
   let skinTab = 1, previews = [];
   function drawPreviews(ts) {
@@ -445,7 +419,7 @@
     const lines = [
       [1, 'Se pose sur la ligne du fond et fonce tout droit vers la base ennemie (1 dégât). Meurt au contact des Défenseurs, Éponges, Tourelles et Chargeurs adverses. Rebondit sur un Mur ennemi en changeant de camp ! Passe au-dessus de tes propres Murs.'],
       [2, 'Patrouille horizontalement, rebondit sur les bords et les obstacles. Mange les Runners adverses. Destruction mutuelle avec une Éponge.'],
-      [3, 'Statique, 2 PV. Tire vers l’avant sur les ennemis à 1 case. Détruite au contact d’une Éponge.'],
+      [3, 'Statique, 2 PV. Tire sur les ennemis dans une zone de 2 cases de chaque côté et 3 cases devant elle (zone affichée à la pose). Détruite au contact d’un Riko.'],
       [4, 'Avance en diagonale en rebondissant sur les côtés, 3 PV. Détruit Tourelles et Chargeurs au contact (perd 1 PV à chaque fois), casse un Mur mais meurt. 2 dégâts à la base.'],
       [5, 'Mur statique, 3 PV. Renvoie les Runners ennemis (−1 PV par rebond). Tes propres Ogs le traversent.'],
       [6, 'Statique, 3 PV. +50 % de régénération de mana tant qu’il est en vie (cumulable). Cible préférée des Éponges et Ailées.'],
@@ -487,6 +461,6 @@
   }
   requestAnimationFrame(drawShowcase);
 
-  Net.api('/api/config').then(c => { config = c; loadGoogle(); }).catch(() => {});
+  Net.api('/api/config').then(c => { config = c; }).catch(() => {});
   tryResume();
 })();

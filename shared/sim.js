@@ -38,7 +38,8 @@
     hazardDamage: 0, // BALANCE.md : 0 dégât en sortie (README historique : 7)
     orangeCooldown: 1.5,
     wingedCooldown: 0.8,
-    orangeRangeCells: 1,
+    orangeRangeSide: 2, // Krak : 2 cases de chaque côté…
+    orangeRangeForward: 3, // …et 3 cases devant (zone rectangulaire)
     wingedRangeCells: 1,
     projectileSpeed: 700,
     projectileLifetime: 2.5,
@@ -548,28 +549,28 @@
     }
 
     function turrets(dt) {
-      const midY = FIELD.h / 2;
       for (const s of S.entities) {
         if ((s.ogId !== 3 && s.ogId !== 7) || dead.has(s.id)) continue;
         if (s.frozenUntil > S.time) continue;
-        const rangeCells = s.ogId === 3 ? RULES.orangeRangeCells : RULES.wingedRangeCells;
-        const range = rangeCells * Math.max(CELL_W, CELL_H);
+        const range = RULES.wingedRangeCells * Math.max(CELL_W, CELL_H);
         const range2 = range * range;
         s.cooldown = Math.max(0, s.cooldown - dt);
         if (s.cooldown > 0) continue;
-        let target = null;
+        let target = null, best = Infinity;
         for (const e of S.entities) {
           if (e.player === s.player || dead.has(e.id)) continue;
-          if (dist2(s, e) > range2) continue;
-          if (s.ogId === 7 && !WINGED_TARGETS.has(e.ogId)) continue;
-          if (s.player === 'top' && e.y < s.y) continue; // tir vers l'avant uniquement
-          if (s.player === 'bottom' && e.y > s.y) continue;
+          const forward = dirOf(s.player) * (e.y - s.y); // distance devant (positive) ou derrière (négative)
           if (s.ogId === 3) {
-            const inOwnHalf = s.player === 'top' ? e.y < midY : e.y >= midY;
-            const sideShot = e.ogId === 1 || e.ogId === 4 || e.ogId === 7;
-            if (!inOwnHalf && !sideShot) continue;
+            // Krak : zone rectangulaire, 2 cases de chaque côté, 3 cases devant (sa propre ligne comprise).
+            if (Math.abs(e.x - s.x) > (RULES.orangeRangeSide + 0.5) * CELL_W) continue;
+            if (forward < -CELL_H * 0.5 || forward > (RULES.orangeRangeForward + 0.5) * CELL_H) continue;
+          } else {
+            if (dist2(s, e) > range2) continue;
+            if (!WINGED_TARGETS.has(e.ogId)) continue;
+            if (forward < 0) continue; // tir vers l'avant uniquement
           }
-          target = e; break;
+          const d = dist2(s, e);
+          if (d < best) { best = d; target = e; }
         }
         if (target) {
           s.cooldown = (s.ogId === 3 ? RULES.orangeCooldown : RULES.wingedCooldown) * (1 - 0.2 * ((s.level || 1) - 1));

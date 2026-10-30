@@ -4,7 +4,6 @@
 CREATE TABLE IF NOT EXISTS users (
   id            SERIAL PRIMARY KEY,
   username      TEXT NOT NULL,
-  password_hash TEXT NOT NULL,
   trophies      INTEGER NOT NULL DEFAULT 0,
   best_trophies INTEGER NOT NULL DEFAULT 0,
   xp            INTEGER NOT NULL DEFAULT 0,
@@ -20,11 +19,19 @@ CREATE TABLE IF NOT EXISTS users (
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS survival_best INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS quests JSONB NOT NULL DEFAULT '{}'::jsonb;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0;
-CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users (google_sub) WHERE google_sub IS NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS transfer_code TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS transfer_expires TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
+-- Anciennes colonnes de comptes (mot de passe, Google) : rendues facultatives puis ignorées.
+ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+ALTER TABLE users ALTER COLUMN password_hash SET DEFAULT '';
+DROP INDEX IF EXISTS users_google_sub;
+ALTER TABLE users DROP COLUMN IF EXISTS google_sub;
+ALTER TABLE users DROP COLUMN IF EXISTS email;
+ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
+CREATE UNIQUE INDEX IF NOT EXISTS users_transfer_code ON users (transfer_code) WHERE transfer_code IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower ON users (lower(username));
 CREATE INDEX IF NOT EXISTS users_trophies ON users (trophies DESC, wins DESC);
 

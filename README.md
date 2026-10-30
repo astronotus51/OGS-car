@@ -53,37 +53,16 @@ Un seul service Node, qui sert le site **et** le WebSocket :
 - **Railway** : *Deploy from GitHub*, mêmes variables. `PORT` est fourni automatiquement.
 - **VPS** : `node server/index.js` derrière Nginx (penser à proxifier `/ws` avec `Upgrade`/`Connection` headers).
 
-## Sécurité
+## Joueurs (sans compte) et sécurité
 
-- **Sessions** : cookie `httpOnly` + `SameSite=Lax` (+ `Secure` en HTTPS) signé (JWT) ; rien n'est stocké dans le JavaScript de la page, donc un script injecté ne peut pas voler la session. Le WebSocket est authentifié par ce même cookie et n'accepte que notre origine.
-- **Déconnexion** : bouton dans le lobby et le profil ; « Se déconnecter de tous les appareils » invalide toutes les sessions (version de session en base) ; changer de mot de passe fait pareil.
-- **Mots de passe** : bcrypt coût 12, 8 caractères minimum, liste noire des mots de passe courants, comparaison à temps constant (le serveur ne révèle pas si un pseudo existe).
-- **Anti force brute** : 25 tentatives de connexion/inscription par IP et par quart d'heure, 240 requêtes API par minute.
-- **En-têtes** (helmet) : Content-Security-Policy stricte (scripts uniquement depuis le site et Google Identity), HSTS, pas de framing, `X-Content-Type-Options`, etc.
-- **Anti-CSRF** : toute requête qui modifie quelque chose doit venir de l'origine du site.
-- **Avatars importés** : recadrés et réduits à 128 px côté client (JPEG, sans métadonnées), vérification du format et de la taille (≤ 64 Ko) côté serveur.
-- **À faire de ton côté** : mettre le site en **HTTPS** (domaine + `certbot`, fait par `deploy/setup-vps.sh`) — sans HTTPS, le cookie n'est pas `Secure` et la connexion Google n'est pas disponible ; garder `JWT_SECRET` secret et long ; mettre à jour le VPS (`apt upgrade`) ; des sauvegardes de la base (Supabase le fait pour toi).
+Il n'y a **aucun compte** : pas d'inscription, pas de mot de passe, pas de connexion Google. À la première visite, le joueur choisit un pseudo (unique) et joue. Sa progression (trophées, niveau, pièces, skins, avatar) est liée à l'appareil par un cookie de session sécurisé (`httpOnly`, `SameSite=Lax`, `Secure` en HTTPS, signé, 30 jours).
 
-### Administrateurs
-
-`ADMIN_USERS=Aluego,AutrePseudo` dans `.env` (par défaut `Aluego`). Un admin possède **tous les skins**, a un badge, voit un panneau « Administration » dans son profil (comptes, joueurs en ligne, parties en cours) et peut donner des pièces ou des trophées à un joueur.
-
-### Mot de passe oublié
-
-Il n'y a pas (encore) d'envoi d'e-mail : la réinitialisation se fait sur le serveur. Sur le VPS :
-
-```bash
-cd /var/www/ogs && node scripts/reset-password.js Aluego
-```
-
-Le script demande le nouveau mot de passe (sans l'afficher) et déconnecte toutes les sessions du compte. En local, pareil depuis le dossier du projet.
-
-### Connexion Google
-
-1. [console.cloud.google.com](https://console.cloud.google.com) → *APIs et services → Identifiants → Créer → ID client OAuth → Application Web*.
-2. *Origines JavaScript autorisées* : `https://ton-domaine.fr` (et `http://localhost:3000` pour tester en local). Pas d'URI de redirection nécessaire.
-3. Copie l'ID client dans `.env` : `GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com`, puis `pm2 restart ogs`.
-4. Le bouton « Continuer avec Google » apparaît sur l'écran de connexion (premier passage : choix du pseudo) et dans le profil pour lier un compte existant.
+- **Changer de joueur** (lobby ou profil) oublie le joueur sur cet appareil.
+- **Transfert** : dans le profil, « Générer un code » donne un code à usage unique valable 24 h ; sur l'autre appareil, « J'ai un code de transfert » à l'accueil récupère la progression (l'ancien appareil est déconnecté).
+- **Admin** : une clé secrète, dans `data/admin-key.txt` (générée au premier démarrage) ou la variable `ADMIN_KEY`. Un joueur l'entre une fois dans son profil → badge ADMIN, tous les skins, panneau d'administration (comptes, joueurs en ligne, parties en cours, don de pièces/trophées).
+- **Tout effacer** : `node scripts/wipe-all.js --oui` supprime tous les joueurs et toutes les parties (puis `pm2 restart ogs`).
+- Protections serveur : en-têtes helmet (CSP stricte, pas de framing), limite de requêtes (anti-abus), vérification d'origine sur l'API et le WebSocket, validation des entrées, avatars vérifiés (format, taille ≤ 64 Ko).
+- **HTTPS** : il reste à mettre un domaine + `certbot` (voir le déploiement) pour chiffrer le trafic et marquer le cookie `Secure`.
 
 ## Avatars, musique et sons
 

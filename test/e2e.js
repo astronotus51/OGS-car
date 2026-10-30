@@ -7,12 +7,8 @@ const OUT = process.env.OUT || '/tmp';
 async function login(page, name) {
   await page.goto(BASE);
   await page.fill('#authUser', name);
-  await page.fill('#authPass', 'test1234');
-  await page.click('[data-action="register"]');
-  await page.waitForSelector('#screen-lobby:not(.hidden)', { timeout: 10000 }).catch(async () => {
-    await page.click('[data-action="login"]');
-    await page.waitForSelector('#screen-lobby:not(.hidden)', { timeout: 10000 });
-  });
+  await page.click('#authForm button[type=submit]');
+  await page.waitForSelector('#screen-lobby:not(.hidden)', { timeout: 10000 });
 }
 
 (async () => {

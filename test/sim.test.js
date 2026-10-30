@@ -99,3 +99,15 @@ for (let c = 0; c < 9; c++) { gp.state.mana.top = 70; gp.place('top', 2, c, 3); 
 let grompAlive = true; for (let i = 0; i < 30 * 20; i++) { gp.step(1 / 30); for (const e of gp.drainEvents()) if (e.type === 'kill' && e.ogId === 2) grompAlive = false; }
 assert.ok(grompAlive, 'Gromp survit au Riko');
 console.log('features OK');
+
+// Portée de Krak : 2 cases de côté, 3 devant.
+const gk2 = Sim.createGame({ seed: 11, duration: 0 });
+gk2.state.mana.bottom = 70; assert.ok(gk2.place('bottom', 3, 4, 4).ok); // Krak col 4, ligne avant (row 4)
+gk2.state.mana.top = 70; assert.ok(gk2.place('top', 5, 2, 1).ok); // mur ennemi 2 colonnes à gauche, 3 lignes devant -> dans la zone
+gk2.state.mana.top = 70; assert.ok(gk2.place('top', 5, 7, 1).ok); // 3 colonnes à droite -> hors zone
+gk2.state.mana.top = 70; assert.ok(gk2.place('top', 5, 4, 0).ok); // 4 lignes devant -> hors zone
+let shots = 0; for (let i = 0; i < 30 * 5; i++) { gk2.step(1 / 30); for (const e of gk2.drainEvents()) if (e.type === 'shot') shots += 1; }
+assert.ok(shots >= 2, 'Krak tire sur la cible à 2 colonnes / 3 lignes');
+const hpFar = gk2.state.entities.filter(e => e.ogId === 5 && (Math.round(e.x / Sim.CELL_W - 0.5) === 7 || Math.round(e.y / Sim.CELL_H - 0.5) === 0)).map(e => e.hp);
+assert.ok(hpFar.every(h => h === 3), 'les murs hors zone ne sont pas touchés');
+console.log('portée Krak OK');
