@@ -192,7 +192,7 @@
   for (const id of ['btnSfx', 'btnSfxGame']) $(id).addEventListener('click', () => { Audio.init(); Audio.setSfx(!Audio.settings.sfx); syncAudioUi(); Audio.sfx('ui'); });
   $('musicVol').addEventListener('input', () => Audio.setMusicVol(Number($('musicVol').value)));
   $('sfxVol').addEventListener('input', () => { Audio.setSfxVol(Number($('sfxVol').value)); Audio.sfx('ui'); });
-  const unlockAudio = () => { Audio.init(); };
+  const unlockAudio = () => { Audio.init(); const h = $('soundHint'); if (h) h.textContent = Audio.ready ? (Audio.settings.music ? '♪ Musique activée (réglages dans le lobby)' : '♪ Musique coupée (réglages dans le lobby)') : ''; };
   window.addEventListener('pointerdown', unlockAudio, { once: true });
   window.addEventListener('keydown', unlockAudio, { once: true });
   document.addEventListener('click', (ev) => { if (ev.target.closest('.btn, .og-tab, .emote, .icon-btn')) Audio.sfx('ui'); });
@@ -202,7 +202,7 @@
   async function refreshLobby() {
     if (!profile) return;
     try { const data = await Net.api('/api/me'); profile = data.profile; } catch (e) { /* hors-ligne : on garde le profil connu */ }
-    $('lobbyName').textContent = profile.username;
+    $('lobbyName').textContent = profile.username; $('lobbyName').innerHTML = esc(profile.username) + (profile.admin ? ' <span class="badge-admin">ADMIN</span>' : '');
     $('lobbyLevel').textContent = profile.level; renderAvatar($('lobbyAvatar'), profile, profile.level);
     $('lobbyTrophies').textContent = profile.trophies;
     $('lobbyRank').textContent = profile.rank;
@@ -343,7 +343,8 @@
   async function openProfile() {
     show('profile');
     try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
-    $('profileName').textContent = profile.username;
+    $('profileName').innerHTML = esc(profile.username) + (profile.admin ? ' <span class="badge-admin">ADMIN</span>' : '');
+    $('adminCard').classList.toggle('hidden', !profile.admin); if (profile.admin) loadAdmin();
     $('profileLevel').textContent = profile.level; renderAvatar($('profileAvatar'), profile, profile.level);
     $('pwdCurrentLabel').classList.toggle('hidden', !profile.hasPassword);
     $('googleLinkState').textContent = profile.googleLinked ? '✔ Compte Google lié' : (config.googleClientId ? 'Lie ton compte Google pour te connecter en un clic :' : 'Connexion Google non configurée sur ce serveur (voir README).');
@@ -361,6 +362,17 @@
     } catch (e) { $('profileHistory').innerHTML = '<li>Historique indisponible.</li>'; }
   }
 
+  async function loadAdmin() {
+    try {
+      const o = await Net.api('/api/admin/overview');
+      $('adminInfo').innerHTML = `${o.users} comptes · ${o.online} en ligne · ${o.inQueue} en file · ${o.rooms.length} partie(s) en cours · base ${o.db} · serveur démarré depuis ${Math.round(o.uptime / 60)} min<br>${o.rooms.map(r => `#${r.id} ${r.mode} : ${r.players.map(esc).join(' vs ')} (${r.time}s)`).join('<br>')}`;
+    } catch (e) { $('adminInfo').textContent = e.message; }
+  }
+  $('adminGrant').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    try { const d = await Net.api('/api/admin/grant', { username: $('grantUser').value.trim(), coins: Number($('grantCoins').value || 0), trophies: Number($('grantTrophies').value || 0) }); $('adminMsg').textContent = `${d.profile.username} : ${d.profile.coins} pièces, ${d.profile.trophies} trophées`; }
+    catch (e) { $('adminMsg').textContent = e.message; }
+  });
   $('pwdForm').addEventListener('submit', async (ev) => {
     ev.preventDefault(); $('pwdMsg').textContent = '';
     try { await Net.api('/api/password', { current: $('pwdCurrent').value, next: $('pwdNext').value }); $('pwdMsg').textContent = 'Mot de passe changé (les autres appareils sont déconnectés).'; $('pwdCurrent').value = ''; $('pwdNext').value = ''; }

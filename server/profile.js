@@ -1,7 +1,12 @@
 'use strict';
 const Catalog = require('../shared/catalog.js');
 
+// Administrateurs : pseudos listés dans ADMIN_USERS (séparés par des virgules). Ils ont tous les skins et un badge.
+const ADMINS = new Set(String(process.env.ADMIN_USERS || 'Aluego').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
+function isAdmin(user) { return !!user && ADMINS.has(String(user.username || '').toLowerCase()); }
+
 function ownedSkins(user) {
+  if (isAdmin(user)) return Catalog.SKINS.filter(s => !s.hidden).map(s => s.id);
   const owned = new Set(Array.isArray(user.skins) ? user.skins : []);
   for (const og of [1, 2, 3, 4, 5, 6, 7]) owned.add(`og${og}_default`);
   return [...owned];
@@ -43,6 +48,7 @@ function publicProfile(user, extra) {
     avatar: user.avatar || null,
     hasPassword: !!user.password_hash,
     googleLinked: !!user.google_sub,
+    admin: isAdmin(user),
     createdAt: user.created_at,
   }, extra || {});
 }
@@ -97,4 +103,4 @@ function applyResult(user, opponentProfile, result, mode, extra) {
   return { patch, rewards, levelUp: after > before ? after : null, unlocked };
 }
 
-module.exports = { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView };
+module.exports = { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView, isAdmin };

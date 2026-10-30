@@ -224,3 +224,7 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 5px; border-radius: 5
 .logo.glou .bubbles i:nth-child(2) { width: 7px; height: 7px; left: 16px; animation-delay: 1s; }
 .logo.glou .bubbles i:nth-child(3) { width: 13px; height: 13px; left: 8px; animation-delay: 2s; }
 @keyframes bub { 0% { bottom: 0; opacity: 0; } 20% { opacity: 0.9; } 100% { bottom: 50px; opacity: 0; } }
+
+.badge-admin { display: inline-block; font-size: 10px; letter-spacing: 1px; background: linear-gradient(90deg, #f59e0b, #ef4444); color: #fff; padding: 2px 7px; border-radius: 999px; vertical-align: middle; font-weight: 800; }
+
+.sound-hint { margin-top: 12px; color: #7dd3fc; font-size: 13px; animation: pulse 1.6s infinite; }

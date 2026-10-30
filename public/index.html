@@ -10,7 +10,7 @@
   <link rel="manifest" href="site.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=7">
+  <link rel="stylesheet" href="css/style.css?v=8">
 </head>
 <body>
   <canvas id="bg"></canvas>
@@ -39,6 +39,7 @@
         <div class="row"><button type="submit" class="btn primary">C’est parti</button></div>
         <div id="pickError" class="error"></div>
       </form>
+      <div id="soundHint" class="sound-hint">♪ Clique n’importe où pour lancer la musique</div>
       <div class="auth-foot">Clavier : <b>A Z E R T Y U</b> (ou 1-7) pour choisir un Og · flèches + Entrée ou clic pour poser · <b>O</b> ramasse une orbe</div>
     </div>
   </section>
@@ -212,6 +213,9 @@
         <div class="card"><div class="card-title">Mot de passe</div>
           <form id="pwdForm"><label id="pwdCurrentLabel">Actuel<input id="pwdCurrent" type="password" autocomplete="current-password"></label><label>Nouveau (8 caractères min.)<input id="pwdNext" type="password" minlength="8" required autocomplete="new-password"></label><div class="row"><button class="btn small primary" type="submit">Changer</button></div><div id="pwdMsg" class="info"></div></form>
         </div>
+        <div class="card hidden" id="adminCard" style="grid-column: 1 / -1"><div class="card-title">Administration</div><div id="adminInfo" class="info" style="text-align:left"></div>
+          <form id="adminGrant" class="row" style="justify-content:flex-start"><input id="grantUser" class="input" style="width:160px" placeholder="Pseudo"><input id="grantCoins" class="input" style="width:110px" type="number" placeholder="+ pièces"><input id="grantTrophies" class="input" style="width:110px" type="number" placeholder="+ trophées"><button class="btn small gold" type="submit">Donner</button></form><div id="adminMsg" class="info"></div>
+          <p class="info" style="text-align:left">Admins : variable <code>ADMIN_USERS</code> du serveur (par défaut : Aluego). Un admin possède tous les skins.</p></div>
         <div class="card"><div class="card-title">Sessions</div><p class="info">Ta session est un cookie sécurisé (httpOnly, 30 jours).</p><button class="btn small danger" id="btnLogoutAll">Se déconnecter de tous les appareils</button></div>
       </div>
     </main>
@@ -253,14 +257,14 @@
     <main class="page rules" id="rulesPage"></main>
   </section>
 
-  <script src="shared/sim.js?v=7"></script>
-  <script src="shared/catalog.js?v=7"></script>
-  <script src="shared/features.js?v=7"></script>
-  <script src="js/net.js?v=7"></script>
-  <script src="js/audio.js?v=7"></script>
-  <script src="js/creatures.js?v=7"></script>
-  <script src="js/render.js?v=7"></script>
-  <script src="js/game.js?v=7"></script>
-  <script src="js/app.js?v=7"></script>
+  <script src="shared/sim.js?v=8"></script>
+  <script src="shared/catalog.js?v=8"></script>
+  <script src="shared/features.js?v=8"></script>
+  <script src="js/net.js?v=8"></script>
+  <script src="js/audio.js?v=8"></script>
+  <script src="js/creatures.js?v=8"></script>
+  <script src="js/render.js?v=8"></script>
+  <script src="js/game.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 </body>
 </html>

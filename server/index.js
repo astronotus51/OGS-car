@@ -17,7 +17,7 @@ const Catalog = require('../shared/catalog.js');
 const Sim = require('../shared/sim.js');
 const Features = require('../shared/features.js');
 const { createStore } = require('./db.js');
-const { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView } = require('./profile.js');
+const { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView, isAdmin } = require('./profile.js');
 const { Room } = require('./room.js');
 const { Matchmaker } = require('./matchmaking.js');
 
@@ -303,6 +303,23 @@ app.post('/api/skins/equip', authMiddleware, wrap(async (req, res) => {
   const equipped = equippedOf(req.user); equipped[skin.ogId] = skin.id;
   const user = await db.updateUser(req.user.id, { equipped });
   res.json({ profile: publicProfile(user) });
+}));
+
+// ---------- Admin ----------
+function adminOnly(req, res, next) { if (!isAdmin(req.user)) return res.status(403).json({ error: 'Réservé aux administrateurs' }); next(); }
+app.get('/api/admin/overview', authMiddleware, adminOnly, wrap(async (req, res) => {
+  res.json({ users: await db.countUsers(), online: clients.size, inQueue: matchmaker.queue.length, rooms: [...rooms].map(r => ({ id: r.id, mode: r.mode, players: r.players.map(p => p.profile.username), time: r.game ? Math.round(r.game.state.time) : 0 })), db: db.kind, uptime: Math.round(process.uptime()), features: Features.FEATURES });
+}));
+// Donner des pièces / trophées à un joueur (ex. récompense d'un tournoi).
+app.post('/api/admin/grant', authMiddleware, adminOnly, wrap(async (req, res) => {
+  const { username, coins = 0, trophies = 0 } = req.body || {};
+  const user = typeof username === 'string' ? await db.getUserByUsername(username) : null;
+  if (!user) return res.status(404).json({ error: 'Joueur introuvable' });
+  const patch = { coins: Math.max(0, (user.coins || 0) + (Number(coins) | 0)), trophies: Math.max(0, (user.trophies || 0) + (Number(trophies) | 0)) };
+  patch.best_trophies = Math.max(user.best_trophies || 0, patch.trophies);
+  const updated = await db.updateUser(user.id, patch);
+  const live = byUser.get(user.id); if (live) live.profile = publicProfile(updated);
+  res.json({ profile: publicProfile(updated) });
 }));
 
 app.get('/api/stats', (req, res) => {

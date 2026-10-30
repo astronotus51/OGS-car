@@ -64,6 +64,10 @@ Un seul service Node, qui sert le site **et** le WebSocket :
 - **Avatars importés** : recadrés et réduits à 128 px côté client (JPEG, sans métadonnées), vérification du format et de la taille (≤ 64 Ko) côté serveur.
 - **À faire de ton côté** : mettre le site en **HTTPS** (domaine + `certbot`, fait par `deploy/setup-vps.sh`) — sans HTTPS, le cookie n'est pas `Secure` et la connexion Google n'est pas disponible ; garder `JWT_SECRET` secret et long ; mettre à jour le VPS (`apt upgrade`) ; des sauvegardes de la base (Supabase le fait pour toi).
 
+### Administrateurs
+
+`ADMIN_USERS=Aluego,AutrePseudo` dans `.env` (par défaut `Aluego`). Un admin possède **tous les skins**, a un badge, voit un panneau « Administration » dans son profil (comptes, joueurs en ligne, parties en cours) et peut donner des pièces ou des trophées à un joueur.
+
 ### Connexion Google
 
 1. [console.cloud.google.com](https://console.cloud.google.com) → *APIs et services → Identifiants → Créer → ID client OAuth → Application Web*.
