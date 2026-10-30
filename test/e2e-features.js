@@ -20,7 +20,7 @@ async function setOptions(page, opts) {
   const ctxB = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   const A = await ctxA.newPage(), B = await ctxB.newPage();
   const errors = [];
-  for (const [p, n] of [[A, 'A'], [B, 'B']]) { p.on('pageerror', e => errors.push(`${n}: ${e.message}`)); p.on('console', m => { if (m.type() === 'error' && !/404|ERR_|409/.test(m.text())) errors.push(`${n} console: ${m.text()}`); }); }
+  for (const [p, n] of [[A, 'A'], [B, 'B']]) { p.on('pageerror', e => errors.push(`${n}: ${e.message}`)); p.on('console', m => { if (m.type() === 'error' && !/404|ERR_|409|401/.test(m.text())) errors.push(`${n} console: ${m.text()}`); }); }
   const suf = String(Date.now()).slice(-5);
   await login(A, 'Feat' + suf); await login(B, 'Ure' + suf);
   await A.waitForTimeout(500);

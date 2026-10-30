@@ -40,6 +40,9 @@ function publicProfile(user, extra) {
     equipped: equippedOf(user),
     skins: ownedSkins(user),
     survivalBest: user.survival_best || 0,
+    avatar: user.avatar || null,
+    hasPassword: !!user.password_hash,
+    googleLinked: !!user.google_sub,
     createdAt: user.created_at,
   }, extra || {});
 }

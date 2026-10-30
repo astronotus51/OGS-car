@@ -8,6 +8,10 @@ const express = require('express');
 const { WebSocketServer } = require('ws');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
+const { OAuth2Client } = require('google-auth-library');
 
 const Catalog = require('../shared/catalog.js');
 const Sim = require('../shared/sim.js');
@@ -19,6 +23,11 @@ const { Matchmaker } = require('./matchmaking.js');
 
 const PORT = Number(process.env.PORT || 3000);
 const DAILY_COINS = 25;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+const COOKIE = 'ogs_session';
+const DUMMY_HASH = bcrypt.hashSync(`dummy-${crypto.randomBytes(8).toString('hex')}`, 12);
+const SESSION_DAYS = 30;
 
 // ---------- Secret JWT (env ou fichier persistant) ----------
 function loadSecret() {
@@ -34,42 +43,191 @@ const JWT_SECRET = loadSecret();
 
 const db = createStore();
 const app = express();
-app.use(express.json({ limit: '32kb' }));
+app.set('trust proxy', 1); // derrière nginx : vraie IP pour le rate limiting, détection https
+app.disable('x-powered-by');
+// En-têtes de sécurité (CSP : scripts/polices/connexions autorisés uniquement depuis le site, Google Fonts et Google Identity).
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", 'https://accounts.google.com'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://accounts.google.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.googleusercontent.com'],
+      connectSrc: ["'self'", 'ws:', 'wss:', 'https://accounts.google.com'],
+      frameSrc: ['https://accounts.google.com'],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  hsts: { maxAge: 15552000, includeSubDomains: true },
+}));
+app.use(cookieParser());
+app.use(express.json({ limit: '120kb' }));
+// Anti-CSRF : les requêtes qui modifient quelque chose doivent venir de notre propre origine.
+app.use('/api', (req, res, next) => {
+  if (req.method === 'GET') return next();
+  const origin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : null);
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  if (origin && new URL(origin).host !== host) return res.status(403).json({ error: 'Origine non autorisée' });
+  next();
+});
+// Limites de requêtes : connexion/inscription (anti force brute) et API générale.
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 25, standardHeaders: true, legacyHeaders: false, message: { error: 'Trop de tentatives, réessaie dans 15 minutes' } });
+const apiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 240, standardHeaders: true, legacyHeaders: false, message: { error: 'Trop de requêtes' } });
+app.use('/api', apiLimiter);
 app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
 app.use((req, res, next) => { if (/\.(js|css|html)$/.test(req.path) || req.path === '/') res.setHeader('Cache-Control', 'no-cache'); next(); });
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ---------- Auth REST ----------
 const USERNAME_RE = /^[A-Za-z0-9_\-éèêàçùîïôûÉÈÀ]{3,16}$/;
-function signToken(user) { return jwt.sign({ uid: user.id }, JWT_SECRET, { expiresIn: '30d' }); }
-function userFromToken(token) {
-  try { return jwt.verify(token, JWT_SECRET).uid; } catch (e) { return null; }
+function signToken(user) { return jwt.sign({ uid: user.id, sv: user.session_version || 0 }, JWT_SECRET, { expiresIn: `${SESSION_DAYS}d` }); }
+function decodeToken(token) {
+  try { return jwt.verify(token, JWT_SECRET); } catch (e) { return null; }
+}
+function isSecure(req) { return req.secure || req.headers['x-forwarded-proto'] === 'https'; }
+// Session dans un cookie httpOnly (inaccessible au JavaScript de la page => protégé contre le vol par XSS), SameSite=Lax (anti-CSRF).
+function setSession(req, res, user) {
+  res.cookie(COOKIE, signToken(user), { httpOnly: true, sameSite: 'lax', secure: isSecure(req), maxAge: SESSION_DAYS * 86400 * 1000, path: '/' });
+}
+function clearSession(req, res) { res.clearCookie(COOKIE, { httpOnly: true, sameSite: 'lax', secure: isSecure(req), path: '/' }); }
+async function userFromRequest(reqLike) {
+  const cookies = reqLike.cookies || parseCookies(reqLike.headers && reqLike.headers.cookie);
+  const payload = decodeToken(cookies[COOKIE] || '');
+  if (!payload) return null;
+  const user = await db.getUserById(payload.uid);
+  if (!user) return null;
+  if ((user.session_version || 0) !== (payload.sv || 0)) return null; // déconnecté partout
+  return user;
+}
+function parseCookies(header) {
+  const out = {};
+  for (const part of String(header || '').split(';')) { const i = part.indexOf('='); if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim()); }
+  return out;
 }
 async function authMiddleware(req, res, next) {
-  const h = req.headers.authorization || '';
-  const uid = userFromToken(h.replace(/^Bearer /, ''));
-  if (!uid) return res.status(401).json({ error: 'Non connecté' });
-  const user = await db.getUserById(uid);
-  if (!user) return res.status(401).json({ error: 'Compte introuvable' });
+  const user = await userFromRequest(req);
+  if (!user) return res.status(401).json({ error: 'Non connecté' });
   req.user = user;
   next();
 }
 const wrap = fn => (req, res) => fn(req, res).catch(err => { console.error(err); res.status(500).json({ error: 'Erreur serveur' }); });
 
-app.post('/api/register', wrap(async (req, res) => {
+const COMMON_PASSWORDS = new Set(['12345678', 'password', 'motdepasse', 'azertyuiop', 'qwertyuiop', '123456789', 'abcdefgh', '00000000']);
+function passwordProblem(password, username) {
+  if (typeof password !== 'string' || password.length < 8) return 'Mot de passe : 8 caractères minimum';
+  if (password.length > 128) return 'Mot de passe trop long';
+  if (COMMON_PASSWORDS.has(password.toLowerCase())) return 'Mot de passe trop courant';
+  if (username && password.toLowerCase().includes(String(username).toLowerCase())) return 'Le mot de passe ne doit pas contenir le pseudo';
+  return null;
+}
+app.get('/api/config', (req, res) => { res.json({ googleClientId: GOOGLE_CLIENT_ID || null, avatarPresets: Catalog.AVATAR_PRESETS, secure: isSecure(req) }); });
+
+app.post('/api/register', authLimiter, wrap(async (req, res) => {
   const { username, password } = req.body || {};
   if (typeof username !== 'string' || !USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
-  if (typeof password !== 'string' || password.length < 4) return res.status(400).json({ error: 'Mot de passe : 4 caractères minimum' });
+  const pb = passwordProblem(password, username);
+  if (pb) return res.status(400).json({ error: pb });
   if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris' });
-  const user = await db.createUser(username, await bcrypt.hash(password, 10));
-  res.json({ token: signToken(user), profile: publicProfile(user) });
+  const user = await db.createUser(username, await bcrypt.hash(password, 12));
+  setSession(req, res, user);
+  res.json({ profile: publicProfile(user) });
 }));
 
-app.post('/api/login', wrap(async (req, res) => {
+app.post('/api/login', authLimiter, wrap(async (req, res) => {
   const { username, password } = req.body || {};
   const user = typeof username === 'string' ? await db.getUserByUsername(username) : null;
-  if (!user || typeof password !== 'string' || !(await bcrypt.compare(password, user.password_hash))) return res.status(401).json({ error: 'Pseudo ou mot de passe incorrect' });
-  res.json({ token: signToken(user), profile: publicProfile(user) });
+  // Temps de réponse constant (on compare toujours un hash) pour ne pas révéler si le pseudo existe.
+  const hash = user && user.password_hash ? user.password_hash : DUMMY_HASH;
+  const ok = typeof password === 'string' && (await bcrypt.compare(password, hash));
+  if (!user || !user.password_hash || !ok) return res.status(401).json({ error: 'Pseudo ou mot de passe incorrect' });
+  setSession(req, res, user);
+  res.json({ profile: publicProfile(user) });
+}));
+
+app.post('/api/logout', wrap(async (req, res) => {
+  clearSession(req, res);
+  res.json({ ok: true });
+}));
+// Déconnexion de TOUS les appareils : invalide toutes les sessions existantes.
+app.post('/api/logout-all', authMiddleware, wrap(async (req, res) => {
+  await db.updateUser(req.user.id, { session_version: (req.user.session_version || 0) + 1 });
+  const live = byUser.get(req.user.id); if (live) { live.send({ t: 'kicked', reason: 'Déconnecté de tous les appareils' }); live.ws.close(); }
+  clearSession(req, res);
+  res.json({ ok: true });
+}));
+
+app.post('/api/password', authMiddleware, authLimiter, wrap(async (req, res) => {
+  const { current, next } = req.body || {};
+  if (req.user.password_hash && !(typeof current === 'string' && (await bcrypt.compare(current, req.user.password_hash)))) return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
+  const pb = passwordProblem(next, req.user.username);
+  if (pb) return res.status(400).json({ error: pb });
+  const user = await db.updateUser(req.user.id, { password_hash: await bcrypt.hash(next, 12), session_version: (req.user.session_version || 0) + 1 });
+  setSession(req, res, user);
+  res.json({ ok: true });
+}));
+
+// ---------- Connexion Google (Google Identity Services) ----------
+async function verifyGoogle(credential) {
+  if (!googleClient) throw new Error('Google non configuré');
+  const ticket = await googleClient.verifyIdToken({ idToken: String(credential || ''), audience: GOOGLE_CLIENT_ID });
+  const p = ticket.getPayload();
+  if (!p || !p.sub || !p.email_verified) throw new Error('Compte Google non vérifié');
+  return { sub: p.sub, email: p.email, name: p.name || p.given_name || 'Joueur', picture: p.picture || null };
+}
+app.post('/api/auth/google', authLimiter, wrap(async (req, res) => {
+  if (!googleClient) return res.status(400).json({ error: 'Connexion Google non configurée sur ce serveur' });
+  let g;
+  try { g = await verifyGoogle(req.body && req.body.credential); } catch (e) { return res.status(401).json({ error: 'Jeton Google invalide' }); }
+  const existing = await db.getUserByGoogleSub(g.sub);
+  if (existing) { setSession(req, res, existing); return res.json({ profile: publicProfile(existing) }); }
+  // Premier passage : il faut choisir un pseudo. On rend un ticket court (10 min) signé.
+  const ticket = jwt.sign({ g: g.sub, e: g.email, n: g.name }, JWT_SECRET, { expiresIn: '10m' });
+  const suggested = g.name.replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 16);
+  res.json({ needUsername: true, ticket, suggested: suggested.length >= 3 ? suggested : '' });
+}));
+app.post('/api/auth/google/complete', authLimiter, wrap(async (req, res) => {
+  const { ticket, username } = req.body || {};
+  const payload = decodeToken(String(ticket || ''));
+  if (!payload || !payload.g) return res.status(401).json({ error: 'Ticket expiré, recommence la connexion Google' });
+  if (typeof username !== 'string' || !USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
+  if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris' });
+  if (await db.getUserByGoogleSub(payload.g)) return res.status(409).json({ error: 'Ce compte Google est déjà lié' });
+  const user = await db.createUser(username, '', { google_sub: payload.g, email: payload.e });
+  setSession(req, res, user);
+  res.json({ profile: publicProfile(user) });
+}));
+// Lier un compte Google à un compte pseudo/mot de passe existant.
+app.post('/api/auth/google/link', authMiddleware, wrap(async (req, res) => {
+  if (!googleClient) return res.status(400).json({ error: 'Connexion Google non configurée' });
+  let g;
+  try { g = await verifyGoogle(req.body && req.body.credential); } catch (e) { return res.status(401).json({ error: 'Jeton Google invalide' }); }
+  if (await db.getUserByGoogleSub(g.sub)) return res.status(409).json({ error: 'Ce compte Google est déjà lié à un autre joueur' });
+  const user = await db.updateUser(req.user.id, { google_sub: g.sub, email: g.email });
+  res.json({ profile: publicProfile(user) });
+}));
+
+// ---------- Avatar : 15 propositions ou photo importée (data URL, redimensionnée côté client) ----------
+app.post('/api/avatar', authMiddleware, wrap(async (req, res) => {
+  const { avatar } = req.body || {};
+  if (avatar === null || avatar === '') { const user = await db.updateUser(req.user.id, { avatar: null }); return res.json({ profile: publicProfile(user) }); }
+  if (typeof avatar !== 'string') return res.status(400).json({ error: 'Avatar invalide' });
+  if (avatar.startsWith('preset:')) {
+    if (!Catalog.AVATAR_PRESETS.includes(avatar.slice(7))) return res.status(400).json({ error: 'Avatar inconnu' });
+  } else {
+    const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(avatar);
+    if (!m || avatar.length > 90000) return res.status(400).json({ error: 'Image invalide ou trop lourde (max ~64 Ko)' });
+    const bytes = Buffer.from(m[2], 'base64');
+    const png = bytes[0] === 0x89 && bytes[1] === 0x50, jpg = bytes[0] === 0xff && bytes[1] === 0xd8, webp = bytes.slice(8, 12).toString() === 'WEBP';
+    if (!(png || jpg || webp)) return res.status(400).json({ error: 'Format d’image non reconnu' });
+  }
+  const user = await db.updateUser(req.user.id, { avatar });
+  res.json({ profile: publicProfile(user) });
 }));
 
 app.get('/api/me', authMiddleware, wrap(async (req, res) => {
@@ -112,7 +270,7 @@ app.get('/api/leaderboard/survival', wrap(async (req, res) => {
 
 app.get('/api/leaderboard', wrap(async (req, res) => {
   const rows = await db.leaderboard(50);
-  res.json({ leaderboard: rows.map((r, i) => ({ rank: i + 1, id: r.id, username: r.username, trophies: r.trophies, wins: r.wins, losses: r.losses, level: Catalog.levelFromXp(r.xp || 0).level, league: Catalog.rankFor(r.trophies).name })) });
+  res.json({ leaderboard: rows.map((r, i) => ({ rank: i + 1, id: r.id, username: r.username, trophies: r.trophies, wins: r.wins, losses: r.losses, level: Catalog.levelFromXp(r.xp || 0).level, league: Catalog.rankFor(r.trophies).name, avatar: r.avatar || null })) });
 }));
 
 app.get('/api/history', authMiddleware, wrap(async (req, res) => {
@@ -153,7 +311,13 @@ app.get('/api/stats', (req, res) => {
 
 // ---------- WebSocket ----------
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({
+  server, path: '/ws', maxPayload: 16 * 1024,
+  verifyClient: ({ req }) => { // même origine uniquement
+    const origin = req.headers.origin; if (!origin) return true;
+    try { return new URL(origin).host === (req.headers['x-forwarded-host'] || req.headers.host); } catch (e) { return false; }
+  },
+});
 const clients = new Set();
 const rooms = new Set();
 const friendly = new Map(); // code -> { host: client, hazard }
@@ -231,7 +395,7 @@ function makeCode() {
   return friendly.has(code) ? makeCode() : code;
 }
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   const client = {
     ws, alive: true, user: null, profile: null, room: null, friendlyCode: null,
     send(msg) { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); },
@@ -246,8 +410,8 @@ wss.on('connection', (ws) => {
 
     if (!authed) {
       if (msg.t !== 'auth') return client.send({ t: 'auth_error', error: 'Authentification requise' });
-      const uid = userFromToken(String(msg.token || ''));
-      const user = uid ? await db.getUserById(uid) : null;
+      // La session vient du cookie httpOnly envoyé avec la connexion WebSocket (même origine).
+      const user = await userFromRequest(req);
       if (!user) return client.send({ t: 'auth_error', error: 'Session expirée, reconnecte-toi' });
       authed = true;
       client.user = user; client.profile = publicProfile(user);

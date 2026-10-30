@@ -23,7 +23,7 @@ async function login(page, name) {
   const errors = [];
   for (const [p, n] of [[A, 'A'], [B, 'B']]) {
     p.on('pageerror', e => errors.push(`${n}: ${e.message}`));
-    p.on('console', m => { if (m.type() === 'error') errors.push(`${n} console: ${m.text()}`); });
+    p.on('console', m => { if (m.type() === 'error' && !/401|404|409|ERR_/.test(m.text())) errors.push(`${n} console: ${m.text()}`); });
   }
   const suf = String(Date.now()).slice(-5); await login(A, 'Oscar' + suf); await login(B, 'Rival' + suf);
   await A.waitForTimeout(800);

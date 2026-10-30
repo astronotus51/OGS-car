@@ -277,7 +277,7 @@
 
       const state = {
         moving, vx: svx, vy: svy, phase: e.id * 0.37, hit: flash, shoot,
-        rot: e.ogId === 3 ? vrot(e.rot) : e.ogId === 4 ? vrot(e.rot) : 0,
+        rot: (e.ogId === 3 || e.ogId === 7 || e.ogId === 4) ? vrot(e.rot) : 0,
         hpRatio: e.hpMax ? e.hp / e.hpMax : 1, team: enemy ? 'enemy' : 'me',
       };
       const lvl = e.level || 1;

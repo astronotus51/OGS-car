@@ -53,6 +53,31 @@ Un seul service Node, qui sert le site **et** le WebSocket :
 - **Railway** : *Deploy from GitHub*, mêmes variables. `PORT` est fourni automatiquement.
 - **VPS** : `node server/index.js` derrière Nginx (penser à proxifier `/ws` avec `Upgrade`/`Connection` headers).
 
+## Sécurité
+
+- **Sessions** : cookie `httpOnly` + `SameSite=Lax` (+ `Secure` en HTTPS) signé (JWT) ; rien n'est stocké dans le JavaScript de la page, donc un script injecté ne peut pas voler la session. Le WebSocket est authentifié par ce même cookie et n'accepte que notre origine.
+- **Déconnexion** : bouton dans le lobby et le profil ; « Se déconnecter de tous les appareils » invalide toutes les sessions (version de session en base) ; changer de mot de passe fait pareil.
+- **Mots de passe** : bcrypt coût 12, 8 caractères minimum, liste noire des mots de passe courants, comparaison à temps constant (le serveur ne révèle pas si un pseudo existe).
+- **Anti force brute** : 25 tentatives de connexion/inscription par IP et par quart d'heure, 240 requêtes API par minute.
+- **En-têtes** (helmet) : Content-Security-Policy stricte (scripts uniquement depuis le site et Google Identity), HSTS, pas de framing, `X-Content-Type-Options`, etc.
+- **Anti-CSRF** : toute requête qui modifie quelque chose doit venir de l'origine du site.
+- **Avatars importés** : recadrés et réduits à 128 px côté client (JPEG, sans métadonnées), vérification du format et de la taille (≤ 64 Ko) côté serveur.
+- **À faire de ton côté** : mettre le site en **HTTPS** (domaine + `certbot`, fait par `deploy/setup-vps.sh`) — sans HTTPS, le cookie n'est pas `Secure` et la connexion Google n'est pas disponible ; garder `JWT_SECRET` secret et long ; mettre à jour le VPS (`apt upgrade`) ; des sauvegardes de la base (Supabase le fait pour toi).
+
+### Connexion Google
+
+1. [console.cloud.google.com](https://console.cloud.google.com) → *APIs et services → Identifiants → Créer → ID client OAuth → Application Web*.
+2. *Origines JavaScript autorisées* : `https://ton-domaine.fr` (et `http://localhost:3000` pour tester en local). Pas d'URI de redirection nécessaire.
+3. Copie l'ID client dans `.env` : `GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com`, puis `pm2 restart ogs`.
+4. Le bouton « Continuer avec Google » apparaît sur l'écran de connexion (premier passage : choix du pseudo) et dans le profil pour lier un compte existant.
+
+## Avatars, musique et sons
+
+- **Avatar** : profil → avatar : 15 propositions dessinées (créatures et skins) ou une photo importée. Affiché dans le lobby, le profil, le classement et en match.
+- **Musique** : techno acid générative façon TB-303 (basse saw + filtre résonant modulé, slides et accents), kick, hats, clap, nappe profonde et sub, délai et réverb, 126 BPM ; les patterns se régénèrent toutes les 4–8 mesures et le filtre balaie lentement (hypnotique). Intensité selon l'écran (menu / match / mort subite). 100 % synthétisée en Web Audio, aucun fichier.
+- **Sons** : pose, sélection, orbe, tir, impact, élimination, rebond, dégât à la base, capacité, gel, évolution, soin, compte à rebours, GO, victoire/défaite, vague, mort subite, emotes, pièces.
+- Réglages (musique / sons / volumes) dans la barre du lobby et en match ; mémorisés dans le navigateur.
+
 ## Jouer
 
 | Action | Clavier | Souris |

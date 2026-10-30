@@ -36,6 +36,16 @@
     robot: { base: '#a1a1aa', light: '#e4e4e7', dark: '#52525b' },
     ice: { base: '#bae6fd', light: '#f0f9ff', dark: '#0284c7' },
     gold: { base: '#fbbf24', light: '#fef3c7', dark: '#b45309' },
+    pirate: { base: '#b91c1c', light: '#fca5a5', dark: '#7f1d1d' },
+    astro: { base: '#e2e8f0', light: '#ffffff', dark: '#94a3b8' },
+    candy: { base: '#f9a8d4', light: '#fdf2f8', dark: '#db2777' },
+    lava: { base: '#1c1917', light: '#44403c', dark: '#0c0a09', glow: '#f97316' },
+    ninja: { base: '#1e3a8a', light: '#3b82f6', dark: '#172554' },
+    royal: { base: '#7e22ce', light: '#d8b4fe', dark: '#4c1d95' },
+    summer: { base: '#fde047', light: '#fef9c3', dark: '#f59e0b' },
+    xmas: { base: '#dc2626', light: '#fecaca', dark: '#991b1b' },
+    toxic: { base: '#84cc16', light: '#d9f99d', dark: '#365314' },
+    cyber: { base: '#0f172a', light: '#1e293b', dark: '#020617', glow: '#22d3ee' },
   };
 
   function themeOf(skinId, ogId) {
@@ -46,6 +56,7 @@
   function colorsFor(ogId, theme) {
     if (theme === 'halloween') return HALLOWEEN[ogId];
     if (theme === 'neon') return { base: '#111827', light: '#1f2937', dark: '#030712', glow: BASE[ogId].base };
+    if (theme === 'lava' || theme === 'cyber') return THEME_PALETTE[theme];
     if (THEME_PALETTE[theme]) return THEME_PALETTE[theme];
     return BASE[ogId];
   }
@@ -62,13 +73,13 @@
   // Remplit + contour le chemin courant selon le thème.
   function paint(ctx, C, s, theme, cx, cy) {
     ctx.save();
-    if (theme === 'neon') { ctx.shadowColor = C.glow; ctx.shadowBlur = s * 0.18; }
+    if ((theme === 'neon' || theme === 'lava' || theme === 'cyber') && C.glow) { ctx.shadowColor = C.glow; ctx.shadowBlur = s * 0.18; }
     if (theme === 'ghost') ctx.globalAlpha *= 0.88;
     ctx.fillStyle = bodyStyle(ctx, C, s, theme, cx || 0, cy || 0);
     ctx.fill();
     ctx.restore();
     ctx.lineWidth = s * 0.055; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    ctx.strokeStyle = theme === 'neon' ? C.glow : OUTLINE;
+    ctx.strokeStyle = (theme === 'neon' || theme === 'cyber') ? C.glow : theme === 'lava' ? '#f97316' : OUTLINE;
     ctx.stroke();
   }
   function shine(ctx, x, y, w, h, a) {
@@ -142,12 +153,35 @@
   function cape(ctx, s, t) { ctx.fillStyle = '#7f1d1d'; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.04; ctx.beginPath(); ctx.moveTo(-s * 0.3, -s * 0.2); ctx.quadraticCurveTo(-s * 0.6, s * 0.1 + Math.sin(t * 3) * s * 0.04, -s * 0.5, s * 0.42); ctx.lineTo(s * 0.5, s * 0.42); ctx.quadraticCurveTo(s * 0.6, s * 0.1 - Math.sin(t * 3) * s * 0.04, s * 0.3, -s * 0.2); ctx.closePath(); ctx.fill(); ctx.stroke(); }
   function batEars(ctx, s, C) { for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sx * s * 0.12, -s * 0.3); ctx.lineTo(sx * s * 0.3, -s * 0.62); ctx.lineTo(sx * s * 0.34, -s * 0.28); ctx.closePath(); paint(ctx, C, s, 'default'); } }
 
+  function hatPirate(ctx, x, y, s) { ctx.fillStyle = '#dc2626'; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.035; ctx.beginPath(); ctx.moveTo(x - s * 0.34, y + s * 0.02); ctx.quadraticCurveTo(x - s * 0.2, y - s * 0.22, x, y - s * 0.2); ctx.quadraticCurveTo(x + s * 0.2, y - s * 0.22, x + s * 0.34, y + s * 0.02); ctx.lineTo(x + s * 0.42, y - s * 0.06); ctx.lineTo(x + s * 0.3, y + s * 0.06); ctx.lineTo(x - s * 0.3, y + s * 0.06); ctx.lineTo(x - s * 0.42, y - s * 0.06); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; for (let i = 0; i < 3; i += 1) { ctx.beginPath(); ctx.arc(x - s * 0.1 + i * s * 0.1, y - s * 0.06, s * 0.02, 0, TAU); ctx.fill(); } }
+  function eyePatch(ctx, x, y, s) { ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03; ctx.beginPath(); ctx.moveTo(x - s * 0.3, y - s * 0.12); ctx.lineTo(x + s * 0.3, y - s * 0.02); ctx.stroke(); ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.ellipse(x, y, s * 0.085, s * 0.075, 0, 0, TAU); ctx.fill(); }
+  function helmet(ctx, x, y, s, t) { ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#bae6fd'; ctx.beginPath(); ctx.arc(x, y, s * 0.46, 0, TAU); ctx.fill(); ctx.globalAlpha = 0.9; ctx.strokeStyle = '#e0f2fe'; ctx.lineWidth = s * 0.04; ctx.beginPath(); ctx.arc(x, y, s * 0.46, 0, TAU); ctx.stroke(); ctx.globalAlpha = 0.6; ctx.strokeStyle = '#fff'; ctx.lineWidth = s * 0.03; ctx.beginPath(); ctx.arc(x, y, s * 0.38, -2.4, -1.6); ctx.stroke(); ctx.restore(); }
+  function sprinkles(ctx, s, t) { const cols = ['#f472b6', '#60a5fa', '#fde047', '#4ade80', '#fff']; for (let i = 0; i < 9; i += 1) { ctx.save(); ctx.translate(Math.cos(i * 2.4) * s * 0.22, Math.sin(i * 1.7) * s * 0.26); ctx.rotate(i); ctx.fillStyle = cols[i % 5]; ctx.beginPath(); rr(ctx, -s * 0.04, -s * 0.012, s * 0.08, s * 0.024, s * 0.012); ctx.fill(); ctx.restore(); } }
+  function cracks(ctx, s, t) { ctx.save(); ctx.strokeStyle = `rgba(249,115,22,${0.6 + 0.4 * Math.sin(t * 4)})`; ctx.lineWidth = s * 0.03; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-s * 0.2, -s * 0.1); ctx.lineTo(-s * 0.08, 0); ctx.lineTo(-s * 0.16, s * 0.14); ctx.moveTo(s * 0.1, -s * 0.2); ctx.lineTo(s * 0.18, -s * 0.04); ctx.lineTo(s * 0.08, s * 0.1); ctx.lineTo(s * 0.2, s * 0.22); ctx.stroke(); ctx.restore(); }
+  function headband(ctx, x, y, s, t) { ctx.fillStyle = '#dc2626'; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03; ctx.beginPath(); rr(ctx, x - s * 0.32, y - s * 0.04, s * 0.64, s * 0.08, s * 0.03); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x + s * 0.3, y); ctx.quadraticCurveTo(x + s * 0.45, y + s * 0.05 + Math.sin(t * 6) * s * 0.03, x + s * 0.5, y + s * 0.18); ctx.lineTo(x + s * 0.44, y + s * 0.2); ctx.quadraticCurveTo(x + s * 0.4, y + s * 0.08, x + s * 0.3, y + s * 0.06); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  function crown(ctx, x, y, s) { ctx.fillStyle = '#fbbf24'; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03; ctx.beginPath(); ctx.moveTo(x - s * 0.22, y); ctx.lineTo(x - s * 0.24, y - s * 0.2); ctx.lineTo(x - s * 0.11, y - s * 0.1); ctx.lineTo(x, y - s * 0.26); ctx.lineTo(x + s * 0.11, y - s * 0.1); ctx.lineTo(x + s * 0.24, y - s * 0.2); ctx.lineTo(x + s * 0.22, y); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(x, y - s * 0.07, s * 0.03, 0, TAU); ctx.fill(); ctx.fillStyle = '#3b82f6'; ctx.beginPath(); ctx.arc(x - s * 0.13, y - s * 0.06, s * 0.025, 0, TAU); ctx.arc(x + s * 0.13, y - s * 0.06, s * 0.025, 0, TAU); ctx.fill(); }
+  function sunglasses(ctx, x, y, s) { ctx.fillStyle = '#111827'; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.025; for (const sx of [-1, 1]) { ctx.beginPath(); rr(ctx, x + sx * s * 0.12 - s * 0.1, y - s * 0.06, s * 0.2, s * 0.12, s * 0.04); ctx.fill(); ctx.stroke(); } ctx.beginPath(); ctx.moveTo(x - s * 0.02, y); ctx.lineTo(x + s * 0.02, y); ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.ellipse(x - s * 0.15, y - s * 0.03, s * 0.04, s * 0.015, -0.5, 0, TAU); ctx.fill(); }
+  function santaHat(ctx, x, y, s, t) { ctx.fillStyle = '#dc2626'; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.035; ctx.beginPath(); ctx.moveTo(x - s * 0.3, y); ctx.quadraticCurveTo(x - s * 0.1, y - s * 0.4, x + s * 0.28, y - s * 0.46 + Math.sin(t * 3) * s * 0.02); ctx.quadraticCurveTo(x + s * 0.1, y - s * 0.2, x + s * 0.3, y); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); rr(ctx, x - s * 0.34, y - s * 0.06, s * 0.68, s * 0.1, s * 0.05); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(x + s * 0.3, y - s * 0.46 + Math.sin(t * 3) * s * 0.02, s * 0.06, 0, TAU); ctx.fill(); ctx.stroke(); }
+  function snow(ctx, s, t) { ctx.fillStyle = 'rgba(255,255,255,0.9)'; for (let i = 0; i < 6; i += 1) { const k = ((t * 0.4 + i * 0.17) % 1); ctx.beginPath(); ctx.arc(Math.sin(i * 2.1 + t) * s * 0.4, -s * 0.5 + k * s, s * 0.02, 0, TAU); ctx.fill(); } }
+  function bubbles(ctx, s, t) { ctx.strokeStyle = 'rgba(190,242,100,0.9)'; ctx.lineWidth = s * 0.02; for (let i = 0; i < 4; i += 1) { const k = ((t * 0.6 + i * 0.25) % 1); ctx.beginPath(); ctx.arc(Math.sin(i * 1.9) * s * 0.25, s * 0.3 - k * s * 0.7, s * 0.03 + k * s * 0.03, 0, TAU); ctx.stroke(); } }
+  function circuits(ctx, s, t) { ctx.save(); ctx.strokeStyle = `rgba(34,211,238,${0.5 + 0.5 * Math.sin(t * 5)})`; ctx.lineWidth = s * 0.02; ctx.beginPath(); ctx.moveTo(-s * 0.2, -s * 0.15); ctx.lineTo(-s * 0.05, -s * 0.15); ctx.lineTo(-s * 0.05, s * 0.05); ctx.lineTo(s * 0.12, s * 0.05); ctx.moveTo(s * 0.05, -s * 0.22); ctx.lineTo(s * 0.18, -s * 0.22); ctx.lineTo(s * 0.18, -s * 0.02); ctx.stroke(); ctx.fillStyle = '#22d3ee'; for (const [x, y] of [[-s * 0.2, -s * 0.15], [s * 0.12, s * 0.05], [s * 0.05, -s * 0.22]]) { ctx.beginPath(); ctx.arc(x, y, s * 0.025, 0, TAU); ctx.fill(); } ctx.restore(); }
+
   function accessories(ctx, ogId, theme, s, t, C, top) {
-    // top : y du sommet du corps (pour poser un chapeau)
+    // top : y du sommet du corps (pour poser un chapeau). Accessoires génériques, valables pour toutes les créatures.
     switch (theme) {
       case 'robot': antenna(ctx, 0, top + s * 0.02, s, t); break;
       case 'ice': frost(ctx, 0, top + s * 0.44, s, t); break;
       case 'gold': sparkles(ctx, s, t, '#fffbeb'); break;
+      case 'pirate': hatPirate(ctx, 0, top + s * 0.02, s); eyePatch(ctx, s * 0.1, top + s * 0.3, s); break;
+      case 'astro': helmet(ctx, 0, top + s * 0.4, s, t); antenna(ctx, s * 0.3, top + s * 0.1, s, t); break;
+      case 'candy': sprinkles(ctx, s, t); break;
+      case 'lava': cracks(ctx, s, t); break;
+      case 'ninja': headband(ctx, 0, top + s * 0.14, s, t); break;
+      case 'royal': crown(ctx, 0, top + s * 0.03, s); break;
+      case 'summer': sunglasses(ctx, 0, top + s * 0.3, s); break;
+      case 'xmas': santaHat(ctx, 0, top + s * 0.04, s, t); snow(ctx, s, t); break;
+      case 'toxic': bubbles(ctx, s, t); break;
+      case 'cyber': circuits(ctx, s, t); break;
       default: break;
     }
   }
@@ -156,45 +190,48 @@
   // Chaque drawer reçoit (ctx, s, t, st, C, theme) et dessine centré en 0,0, face vers -y.
 
   function drawZip(ctx, s, t, st, C, theme) {
+    // Zip est une limace-mille-pattes : corps mou qui ondule, antennes à yeux, une frange de petites pattes qui font la vague.
     const run = st.moving ? 1 : 0;
-    const ph = t * 11 + st.phase;
-    const bob = run ? -Math.abs(Math.sin(ph)) * s * 0.07 : Math.sin(t * 2 + st.phase) * s * 0.01;
-    const sq = run ? 0.08 * Math.sin(ph * 2) : 0.02 * Math.sin(t * 2.5);
-    // Pattes
-    ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.07; ctx.lineCap = 'round';
-    for (const sx of [-1, 1]) {
-      const swing = run ? Math.sin(ph + (sx > 0 ? 0 : Math.PI)) * s * 0.12 : 0;
-      ctx.beginPath(); ctx.moveTo(sx * s * 0.14, s * 0.3 + bob * 0.3); ctx.lineTo(sx * s * 0.14 + swing * 0.3, s * 0.46 - Math.max(0, swing) * 0.5); ctx.stroke();
-      ctx.fillStyle = C.dark; ctx.beginPath(); ctx.ellipse(sx * s * 0.14 + swing * 0.3, s * 0.47 - Math.max(0, swing) * 0.5, s * 0.09, s * 0.05, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.035; ctx.stroke(); ctx.lineWidth = s * 0.07;
+    const ph = t * (run ? 10 : 2) + st.phase;
+    const sq = run ? 0.06 * Math.sin(ph) : 0.02 * Math.sin(ph);
+    const wob = run ? Math.sin(ph * 0.5) * 0.05 : 0;
+    // Traînée de bave quand il avance.
+    if (run) { ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = theme === 'halloween' ? '#86efac' : '#bae6fd'; for (let i = 0; i < 3; i += 1) { const k = ((t * 1.5 + i * 0.33) % 1); ctx.beginPath(); ctx.ellipse((Math.sin(i * 2.3) * s * 0.1), s * 0.48 + k * s * 0.35, s * 0.1 * (1 - k * 0.5), s * 0.045, 0, 0, TAU); ctx.fill(); } ctx.restore(); }
+    ctx.save(); ctx.rotate(wob); ctx.scale(1 - sq, 1 + sq);
+    // Petites pattes : 6 de chaque côté, qui ondulent en vague (mille-pattes).
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.045; ctx.lineCap = 'round';
+    for (const sx of [-1, 1]) for (let i = 0; i < 6; i += 1) {
+      const y = -s * 0.22 + i * s * 0.11;
+      const wave = run ? Math.sin(ph * 1.6 - i * 0.9) : Math.sin(t * 1.5 - i * 0.9) * 0.3;
+      const x0 = sx * s * 0.26, x1 = sx * (s * 0.36 + Math.max(0, wave) * s * 0.04);
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y + wave * s * 0.05); ctx.stroke();
+      ctx.fillStyle = C.dark; ctx.beginPath(); ctx.arc(x1, y + wave * s * 0.05, s * 0.03, 0, TAU); ctx.fill();
     }
-    ctx.save(); ctx.translate(0, bob); ctx.scale(1 - sq, 1 + sq);
-    // Oreilles (se couchent en courant)
-    const earTilt = run ? 0.5 + 0.1 * Math.sin(ph) : 0.1;
-    for (const sx of [-1, 1]) {
-      ctx.save(); ctx.translate(sx * s * 0.17, -s * 0.36); ctx.rotate(sx * earTilt * 0.8);
-      ctx.beginPath(); ctx.moveTo(-s * 0.07, 0); ctx.lineTo(0, -s * 0.2); ctx.lineTo(s * 0.07, 0); ctx.closePath(); paint(ctx, C, s, theme);
-      ctx.restore();
-    }
-    // Corps capsule
-    const bodyPath = () => rr(ctx, -s * 0.27, -s * 0.42, s * 0.54, s * 0.8, s * 0.26);
+    // Corps de limace : goutte allongée, large en bas.
+    const bodyPath = () => { ctx.moveTo(0, -s * 0.44); ctx.quadraticCurveTo(s * 0.3, -s * 0.44, s * 0.28, -s * 0.05); ctx.quadraticCurveTo(s * 0.27, s * 0.46, 0, s * 0.46); ctx.quadraticCurveTo(-s * 0.27, s * 0.46, -s * 0.28, -s * 0.05); ctx.quadraticCurveTo(-s * 0.3, -s * 0.44, 0, -s * 0.44); ctx.closePath(); };
     ctx.beginPath(); bodyPath(); paint(ctx, C, s, theme, 0, 0);
-    if (theme === 'halloween') { // côtes de citrouille
-      ctx.save(); ctx.beginPath(); bodyPath(); ctx.clip(); ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = s * 0.03; for (const sx of [-0.14, 0, 0.14]) { ctx.beginPath(); ctx.moveTo(sx * s, -s * 0.42); ctx.quadraticCurveTo(sx * s * 1.4, 0, sx * s, s * 0.38); ctx.stroke(); } ctx.restore();
-    }
-    shine(ctx, s * 0.14, s * 0.2, s * 0.05, s * 0.1);
-    // Visage
-    if (theme === 'halloween') { pumpkinFace(ctx, 0, -s * 0.05, s, t); stemPumpkin(ctx, 0, -s * 0.42, s); }
-    else {
-      const look = run ? -0.3 : 0;
-      eye(ctx, -s * 0.1, -s * 0.12, s * 0.05, s * 0.09, t, st.phase, { theme, lookY: look });
-      eye(ctx, s * 0.1, -s * 0.12, s * 0.05, s * 0.09, t, st.phase, { theme, lookY: look });
-      mouth(ctx, 0, s * 0.08, s * 0.2, run ? 'o' : 'smile', t);
-    }
-    if (theme === 'ghost') ghostTail(ctx, 0, s * 0.38, s * 0.54, s, t, C);
-    accessories(ctx, 1, theme, s, t, C, -s * 0.42);
+    // Taches / côtes.
+    ctx.save(); ctx.beginPath(); bodyPath(); ctx.clip();
+    if (theme === 'halloween') { ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = s * 0.03; for (const sx of [-0.14, 0, 0.14]) { ctx.beginPath(); ctx.moveTo(sx * s, -s * 0.44); ctx.quadraticCurveTo(sx * s * 1.4, 0, sx * s, s * 0.46); ctx.stroke(); } }
+    else { ctx.fillStyle = 'rgba(0,0,0,0.12)'; for (let i = 0; i < 4; i += 1) { ctx.beginPath(); ctx.ellipse(Math.sin(i * 2.7) * s * 0.12, s * 0.05 + i * s * 0.1, s * 0.05, s * 0.03, 0, 0, TAU); ctx.fill(); } }
     ctx.restore();
-    // Traits de vitesse
-    if (run) { ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = s * 0.03; for (let i = 0; i < 2; i += 1) { const y = s * 0.1 + i * s * 0.14, off = ((t * 3 + i * 0.5) % 1) * s * 0.25; ctx.beginPath(); ctx.moveTo(-s * 0.4 - off, y); ctx.lineTo(-s * 0.3 - off, y); ctx.moveTo(s * 0.4 + off, y); ctx.lineTo(s * 0.3 + off, y); ctx.stroke(); } }
+    shine(ctx, s * 0.12, s * 0.15, s * 0.05, s * 0.12);
+    // Antennes à yeux (tentacules oculaires) qui se balancent.
+    const sway = run ? Math.sin(ph * 0.8) * 0.25 : Math.sin(t * 1.2 + st.phase) * 0.1;
+    for (const sx of [-1, 1]) {
+      const bx = sx * s * 0.12, by = -s * 0.38, tx = sx * s * 0.2 + sway * s * 0.1, ty = -s * 0.62 + Math.abs(sway) * s * 0.05;
+      ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.1; ctx.beginPath(); ctx.moveTo(bx, by); ctx.quadraticCurveTo(bx + (tx - bx) * 0.3, by - s * 0.15, tx, ty); ctx.stroke();
+      ctx.strokeStyle = C.base; ctx.lineWidth = s * 0.05; ctx.stroke();
+      if (theme === 'halloween') { ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(tx, ty, s * 0.07, 0, TAU); ctx.fill(); ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03; ctx.stroke(); }
+      else eye(ctx, tx, ty, s * 0.065, s * 0.075, t, st.phase, { theme, white: theme !== 'ghost' && theme !== 'robot', pupil: OUTLINE, lookY: run ? -0.5 : 0 });
+    }
+    // Bouche
+    if (theme === 'halloween') pumpkinFace(ctx, 0, -s * 0.02, s, t);
+    else mouth(ctx, 0, -s * 0.12, s * 0.18, run ? 'o' : 'smile', t);
+    if (theme === 'ghost') ghostTail(ctx, 0, s * 0.4, s * 0.52, s, t, C);
+    accessories(ctx, 1, theme, s, t, C, -s * 0.44);
+    ctx.restore();
+    if (run) { ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = s * 0.03; for (let i = 0; i < 2; i += 1) { const y = s * 0.1 + i * s * 0.14, off = ((t * 3 + i * 0.5) % 1) * s * 0.25; ctx.beginPath(); ctx.moveTo(-s * 0.45 - off, y); ctx.lineTo(-s * 0.35 - off, y); ctx.moveTo(s * 0.45 + off, y); ctx.lineTo(s * 0.35 + off, y); ctx.stroke(); } }
   }
 
   function drawGromp(ctx, s, t, st, C, theme) {
@@ -237,13 +274,16 @@
   function drawKrak(ctx, s, t, st, C, theme) {
     const breathe = 1 + 0.025 * Math.sin(t * 2.5 + st.phase);
     const recoil = st.shoot || 0;
+    // Socle de pierre (une tourelle ne bouge pas : pas de pieds).
+    ctx.fillStyle = '#475569'; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.04;
+    ctx.beginPath(); ctx.ellipse(0, s * 0.42, s * 0.4, s * 0.1, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#64748b'; ctx.beginPath(); ctx.ellipse(0, s * 0.39, s * 0.36, s * 0.07, 0, 0, TAU); ctx.fill();
     ctx.save(); ctx.scale(breathe * (1 - 0.1 * recoil), breathe * (1 + 0.16 * recoil));
-    // Pieds
-    ctx.fillStyle = C.dark; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.04;
-    for (const sx of [-1, 1]) { ctx.beginPath(); ctx.ellipse(sx * s * 0.22, s * 0.42, s * 0.14, s * 0.06, 0, 0, TAU); ctx.fill(); ctx.stroke(); }
     // Corps marmite
     const bodyPath = () => { ctx.moveTo(-s * 0.36, -s * 0.05); ctx.quadraticCurveTo(-s * 0.46, s * 0.42, 0, s * 0.42); ctx.quadraticCurveTo(s * 0.46, s * 0.42, s * 0.36, -s * 0.05); ctx.quadraticCurveTo(s * 0.2, -s * 0.2, 0, -s * 0.2); ctx.quadraticCurveTo(-s * 0.2, -s * 0.2, -s * 0.36, -s * 0.05); ctx.closePath(); };
     ctx.beginPath(); bodyPath(); paint(ctx, C, s, theme, 0, 0);
+    // Rivets autour de la marmite.
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; for (let i = 0; i < 5; i += 1) { const a2 = Math.PI * 0.15 + i * Math.PI * 0.175; ctx.beginPath(); ctx.arc(Math.cos(a2) * s * 0.38, s * 0.02 + Math.sin(a2) * s * 0.34, s * 0.025, 0, TAU); ctx.fill(); }
     shine(ctx, -s * 0.18, s * 0.05, s * 0.06, s * 0.12);
     // Canon orienté (st.rot = angle écran, 0 = droite ; -PI/2 = haut)
     const aim = (st.rot !== undefined ? st.rot : -Math.PI / 2);
@@ -332,45 +372,51 @@
   }
 
   function drawZephir(ctx, s, t, st, C, theme) {
+    // Zéphir est une tourelle volante : une petite marmite blindée portée par deux ailes, avec un canon qui vise.
     const ph = t * 14 + st.phase;
-    const flap = Math.sin(ph); // -1..1
+    const flap = Math.sin(ph);
     const hover = Math.sin(t * 4 + st.phase) * s * 0.05;
-    const charge = st.shoot || 0;
+    const recoil = st.shoot || 0;
     ctx.save(); ctx.translate(0, hover);
-    // Queue qui ondule (derrière)
-    const tx = Math.sin(t * 5 + 1) * s * 0.14, ty = s * 0.46;
-    const tailPath = () => { ctx.beginPath(); ctx.moveTo(0, s * 0.2); ctx.quadraticCurveTo(Math.sin(t * 5) * s * 0.16, s * 0.36, tx, ty); };
-    tailPath(); ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.11; ctx.lineCap = 'round'; ctx.stroke();
-    tailPath(); ctx.strokeStyle = C.base; ctx.lineWidth = s * 0.05; ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(tx - s * 0.09, ty - s * 0.03); ctx.lineTo(tx + s * 0.09, ty - s * 0.03); ctx.lineTo(tx, ty + s * 0.1); ctx.closePath(); paint(ctx, C, s, theme);
-    // Ailes membranées (battement)
+    // Réacteur / fumée sous la tourelle.
+    ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#e2e8f0'; for (let i = 0; i < 3; i += 1) { const k = ((t * 1.8 + i * 0.33) % 1); ctx.beginPath(); ctx.arc(Math.sin(i * 2) * s * 0.06, s * 0.38 + k * s * 0.25, s * 0.07 * (1 - k * 0.6), 0, TAU); ctx.fill(); } ctx.restore();
+    // Ailes (battement), attachées au corps.
     for (const sx of [-1, 1]) {
-      ctx.save(); ctx.translate(sx * s * 0.18, -s * 0.05); ctx.scale(sx, 1); ctx.rotate(-0.2 + flap * 0.35);
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s * 0.3, -s * 0.5, s * 0.62, -s * 0.38); ctx.quadraticCurveTo(s * 0.5, -s * 0.12, s * 0.58, s * 0.02); ctx.quadraticCurveTo(s * 0.4, -s * 0.02, s * 0.42, s * 0.16); ctx.quadraticCurveTo(s * 0.2, s * 0.06, 0, s * 0.12); ctx.closePath();
+      ctx.save(); ctx.translate(sx * s * 0.26, s * 0.02); ctx.scale(sx, 1); ctx.rotate(-0.15 + flap * 0.4);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s * 0.3, -s * 0.5, s * 0.6, -s * 0.36); ctx.quadraticCurveTo(s * 0.48, -s * 0.12, s * 0.56, s * 0.02); ctx.quadraticCurveTo(s * 0.38, -s * 0.02, s * 0.4, s * 0.16); ctx.quadraticCurveTo(s * 0.2, s * 0.06, 0, s * 0.12); ctx.closePath();
       const wingC = theme === 'default' ? { base: '#f59e0b', light: '#fde68a', dark: '#b45309' } : C;
       paint(ctx, wingC, s, theme, s * 0.3, -s * 0.2);
-      ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = s * 0.025; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(s * 0.5, -s * 0.3); ctx.moveTo(0, 0); ctx.lineTo(s * 0.48, -s * 0.05); ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = s * 0.025; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(s * 0.48, -s * 0.28); ctx.moveTo(0, 0); ctx.lineTo(s * 0.46, -s * 0.04); ctx.stroke();
       ctx.restore();
     }
-    // Cornes
-    for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sx * s * 0.1, -s * 0.3); ctx.quadraticCurveTo(sx * s * 0.22, -s * 0.42, sx * s * 0.16, -s * 0.52); ctx.lineTo(sx * s * 0.22, -s * 0.3); ctx.closePath(); paint(ctx, C, s, theme); }
     if (theme === 'halloween') batEars(ctx, s, C);
-    // Corps rond
-    ctx.beginPath(); ctx.ellipse(0, 0, s * 0.3, s * 0.34, 0, 0, TAU); paint(ctx, C, s, theme, 0, 0);
-    // Ventre lumineux (charge du tir)
-    const belly = theme === 'halloween' ? '#7f1d1d' : '#fde68a';
-    ctx.save(); ctx.globalAlpha *= 0.9; ctx.fillStyle = belly; ctx.beginPath(); ctx.ellipse(0, s * 0.13, s * 0.17, s * 0.15, 0, 0, TAU); ctx.fill(); ctx.restore();
-    if (charge > 0) { ctx.save(); ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = s * 0.3 * charge; ctx.fillStyle = `rgba(254,243,199,${charge})`; ctx.beginPath(); ctx.arc(0, s * 0.13, s * 0.1 * charge, 0, TAU); ctx.fill(); ctx.restore(); }
-    shine(ctx, -s * 0.12, -s * 0.18, s * 0.06, s * 0.04);
-    // Visage
+    // Corps : marmite blindée (plus petite que Krak), avec un hublot.
+    ctx.save(); ctx.scale(1 - 0.08 * recoil, 1 + 0.12 * recoil);
+    const bodyPath = () => { ctx.moveTo(-s * 0.3, -s * 0.02); ctx.quadraticCurveTo(-s * 0.38, s * 0.36, 0, s * 0.36); ctx.quadraticCurveTo(s * 0.38, s * 0.36, s * 0.3, -s * 0.02); ctx.quadraticCurveTo(s * 0.16, -s * 0.14, 0, -s * 0.14); ctx.quadraticCurveTo(-s * 0.16, -s * 0.14, -s * 0.3, -s * 0.02); ctx.closePath(); };
+    ctx.beginPath(); bodyPath(); paint(ctx, C, s, theme, 0, 0);
+    // Bandes de blindage.
+    ctx.save(); ctx.beginPath(); bodyPath(); ctx.clip(); ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = s * 0.035; ctx.beginPath(); ctx.moveTo(-s * 0.4, s * 0.2); ctx.lineTo(s * 0.4, s * 0.2); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.arc(sx * s * 0.2, s * 0.24, s * 0.025, 0, TAU); ctx.fill(); }
+    shine(ctx, -s * 0.14, s * 0.06, s * 0.05, s * 0.09);
+    ctx.restore();
+    // Canon orienté (vise la cible ; neutre = vers l'avant).
+    const aim = (st.rot !== undefined ? st.rot : -Math.PI / 2);
+    ctx.save(); ctx.translate(0, -s * 0.06); ctx.rotate(aim + Math.PI / 2);
+    const len = s * 0.34 * (1 - 0.25 * recoil);
+    ctx.beginPath(); rr(ctx, -s * 0.11, -len, s * 0.22, len + s * 0.04, s * 0.05); paint(ctx, C, s, theme, 0, -len / 2);
+    ctx.fillStyle = OUTLINE; ctx.beginPath(); ctx.ellipse(0, -len, s * 0.08, s * 0.04, 0, 0, TAU); ctx.fill();
+    // Lueur de charge dans le canon.
+    const glow = recoil > 0 ? recoil : 0.3 + 0.2 * Math.sin(t * 6);
+    ctx.fillStyle = theme === 'halloween' ? `rgba(248,113,113,${glow})` : `rgba(254,240,138,${glow})`; ctx.beginPath(); ctx.arc(0, -len, s * 0.045, 0, TAU); ctx.fill();
+    if (recoil > 0.2) { ctx.fillStyle = `rgba(254,240,138,${recoil})`; ctx.beginPath(); ctx.arc(0, -len - s * 0.06, s * 0.13 * recoil, 0, TAU); ctx.fill(); }
+    ctx.restore();
+    // Visage sur le flanc de la marmite.
     const evil = theme === 'halloween';
-    eye(ctx, -s * 0.11, -s * 0.08, s * 0.06, s * 0.08, t, st.phase, evil ? { white: true, pupil: '#dc2626', lookY: 0.2 } : { theme, white: theme !== 'ghost' && theme !== 'robot', pupil: OUTLINE, lookY: -0.3 });
-    eye(ctx, s * 0.11, -s * 0.08, s * 0.06, s * 0.08, t, st.phase, evil ? { white: true, pupil: '#dc2626', lookY: 0.2 } : { theme, white: theme !== 'ghost' && theme !== 'robot', pupil: OUTLINE, lookY: -0.3 });
-    mouth(ctx, 0, s * 0.03, s * 0.16, charge > 0.3 ? 'o' : 'grin', t);
-    // Joues
-    ctx.fillStyle = 'rgba(248,113,113,0.45)'; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.ellipse(sx * s * 0.2, s * 0.0, s * 0.05, s * 0.03, 0, 0, TAU); ctx.fill(); }
+    eye(ctx, -s * 0.1, s * 0.1, s * 0.045, s * 0.06, t, st.phase, evil ? { white: true, pupil: '#dc2626', lookY: 0.2 } : { theme });
+    eye(ctx, s * 0.1, s * 0.1, s * 0.045, s * 0.06, t, st.phase, evil ? { white: true, pupil: '#dc2626', lookY: 0.2 } : { theme });
+    mouth(ctx, 0, s * 0.22, s * 0.14, recoil > 0.3 ? 'o' : evil ? 'grin' : 'smile', t);
     if (theme === 'ghost') ghostTail(ctx, 0, s * 0.34, s * 0.5, s, t, C);
-    accessories(ctx, 7, theme, s, t, C, -s * 0.5);
+    accessories(ctx, 7, theme, s, t, C, -s * 0.4);
     ctx.restore();
   }
 

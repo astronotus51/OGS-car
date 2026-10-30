@@ -222,7 +222,7 @@
         hp: og.hp, hpMax: og.hp, cooldown: 0, air: og.air, speed: og.speed * mult, movement: og.movement,
         rot: 0, rotTarget: 0, born: S.time, level: 1, boostUntil: 0, frozenUntil: 0, healTimer: 0,
       };
-      if (ogId === 3) { e.rot = e.rotTarget = player === 'top' ? Math.PI / 2 : -Math.PI / 2; }
+      if (ogId === 3 || ogId === 7) { e.rot = e.rotTarget = player === 'top' ? Math.PI / 2 : -Math.PI / 2; }
       if (ogId === 2) { e.rot = vx >= 0 ? Math.PI : 0; }
       S.entities.push(e);
       return e;
@@ -417,7 +417,7 @@
         }
         // Rotations décoratives mais synchronisées (tourelles, éponge).
         if (e.ogId === 4) e.rot += 0.6 * dt;
-        if (e.ogId === 3) {
+        if (e.ogId === 3 || e.ogId === 7) {
           const d = shortestAngle(e.rot, e.rotTarget);
           const step = 6 * dt;
           e.rot = Math.abs(d) <= step ? e.rotTarget : e.rot + Math.sign(d) * step;
@@ -573,9 +573,9 @@
         }
         if (target) {
           s.cooldown = (s.ogId === 3 ? RULES.orangeCooldown : RULES.wingedCooldown) * (1 - 0.2 * ((s.level || 1) - 1));
-          if (s.ogId === 3) s.rotTarget = Math.atan2(target.y - s.y, target.x - s.x);
+          s.rotTarget = Math.atan2(target.y - s.y, target.x - s.x);
           fire(s, target);
-        } else if (s.ogId === 3) {
+        } else {
           s.rotTarget = s.player === 'top' ? Math.PI / 2 : -Math.PI / 2;
         }
       }

@@ -6,14 +6,15 @@
 const fs = require('fs');
 const path = require('path');
 
-const USER_COLUMNS = `id, username, password_hash, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily, survival_best, quests`;
+const USER_COLUMNS = `id, username, password_hash, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily, survival_best, quests, google_sub, email, avatar, session_version`;
 
-function defaultUser(username, passwordHash) {
-  return {
-    username, password_hash: passwordHash,
+function defaultUser(username, passwordHash, extra) {
+  return Object.assign({
+    username, password_hash: passwordHash || '',
     trophies: 0, best_trophies: 0, xp: 0, coins: 50, wins: 0, losses: 0, draws: 0, streak: 0,
     equipped: {}, skins: [], created_at: new Date().toISOString(), last_daily: null, survival_best: 0, quests: {},
-  };
+    google_sub: null, email: null, avatar: null, session_version: 0,
+  }, extra || {});
 }
 
 // ---------- Postgres ----------
@@ -33,11 +34,12 @@ function createPgStore(url) {
     init,
     async getUserByUsername(username) { return (await q(`SELECT ${USER_COLUMNS} FROM users WHERE lower(username) = lower($1)`, [username]))[0] || null; },
     async getUserById(id) { return (await q(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1`, [id]))[0] || null; },
-    async createUser(username, passwordHash) {
-      const u = defaultUser(username, passwordHash);
-      return (await q(`INSERT INTO users (username, password_hash, coins, equipped, skins) VALUES ($1, $2, $3, $4, $5) RETURNING ${USER_COLUMNS}`,
-        [u.username, u.password_hash, u.coins, JSON.stringify(u.equipped), JSON.stringify(u.skins)]))[0];
+    async createUser(username, passwordHash, extra) {
+      const u = defaultUser(username, passwordHash, extra);
+      return (await q(`INSERT INTO users (username, password_hash, coins, equipped, skins, google_sub, email) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${USER_COLUMNS}`,
+        [u.username, u.password_hash, u.coins, JSON.stringify(u.equipped), JSON.stringify(u.skins), u.google_sub, u.email]))[0];
     },
+    async getUserByGoogleSub(sub) { return (await q(`SELECT ${USER_COLUMNS} FROM users WHERE google_sub = $1`, [sub]))[0] || null; },
     async updateUser(id, patch) {
       const keys = Object.keys(patch);
       if (!keys.length) return this.getUserById(id);
@@ -46,7 +48,7 @@ function createPgStore(url) {
       return (await q(`UPDATE users SET ${sets.join(', ')} WHERE id = $1 RETURNING ${USER_COLUMNS}`, [id, ...vals]))[0];
     },
     async leaderboard(limit = 50) {
-      return q(`SELECT id, username, trophies, best_trophies, xp, wins, losses, survival_best FROM users ORDER BY trophies DESC, wins DESC LIMIT $1`, [limit]);
+      return q(`SELECT id, username, trophies, best_trophies, xp, wins, losses, survival_best, avatar FROM users ORDER BY trophies DESC, wins DESC LIMIT $1`, [limit]);
     },
     async survivalBoard(limit = 50) {
       return q(`SELECT id, username, trophies, xp, survival_best FROM users WHERE survival_best > 0 ORDER BY survival_best DESC LIMIT $1`, [limit]);
@@ -87,10 +89,11 @@ function createJsonStore(file) {
     async init() { load(); console.log(`[db] store JSON : ${file} (${data.users.length} comptes)`); },
     async getUserByUsername(username) { return clone(data.users.find(u => u.username.toLowerCase() === username.toLowerCase()) || null); },
     async getUserById(id) { return clone(data.users.find(u => u.id === id) || null); },
-    async createUser(username, passwordHash) {
-      const u = Object.assign({ id: data.nextUser++ }, defaultUser(username, passwordHash));
+    async createUser(username, passwordHash, extra) {
+      const u = Object.assign({ id: data.nextUser++ }, defaultUser(username, passwordHash, extra));
       data.users.push(u); save(); return clone(u);
     },
+    async getUserByGoogleSub(sub) { return clone(data.users.find(u => u.google_sub === sub) || null); },
     async updateUser(id, patch) {
       const u = data.users.find(x => x.id === id);
       if (!u) return null;
@@ -98,7 +101,7 @@ function createJsonStore(file) {
     },
     async leaderboard(limit = 50) {
       return clone([...data.users].sort((a, b) => b.trophies - a.trophies || b.wins - a.wins).slice(0, limit)
-        .map(u => ({ id: u.id, username: u.username, trophies: u.trophies, best_trophies: u.best_trophies, xp: u.xp, wins: u.wins, losses: u.losses, survival_best: u.survival_best || 0 })));
+        .map(u => ({ id: u.id, username: u.username, trophies: u.trophies, best_trophies: u.best_trophies, xp: u.xp, wins: u.wins, losses: u.losses, survival_best: u.survival_best || 0, avatar: u.avatar || null })));
     },
     async survivalBoard(limit = 50) {
       return clone(data.users.filter(u => (u.survival_best || 0) > 0).sort((a, b) => b.survival_best - a.survival_best).slice(0, limit)

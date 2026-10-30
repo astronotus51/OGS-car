@@ -4,11 +4,11 @@ const fs = require('fs');
 const path = require('path');
 (async () => {
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1200, height: 1150 } });
+  const page = await browser.newPage({ viewport: { width: 1200, height: 2650 } });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   const cat = fs.readFileSync('shared/catalog.js', 'utf8'), cre = fs.readFileSync('public/js/creatures.js', 'utf8');
-  await page.setContent(`<body style="margin:0;background:#1d4ed8"><canvas id="c" width="1200" height="1150"></canvas><script>${cat}</script><script>${cre}</script></body>`);
+  await page.setContent(`<body style="margin:0;background:#1d4ed8"><canvas id="c" width="1200" height="2650"></canvas><script>${cat}</script><script>${cre}</script></body>`);
   await page.evaluate((t) => {
     const ctx = document.getElementById('c').getContext('2d');
     const themes = OGSCatalog.THEMES.map(x => x.theme);

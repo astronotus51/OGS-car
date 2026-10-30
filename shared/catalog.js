@@ -31,7 +31,19 @@
     { theme: 'robot', suffix: 'robot', name: (n) => `Robo-${n}`, rarity: 'epique', unlock: (og) => ({ type: 'trophies', value: 150 + og * 50 }) },
     { theme: 'ice', suffix: 'ice', name: (n) => `${n} Givré`, rarity: 'epique', unlock: (og) => ({ type: 'wins', value: 5 + og * 5 }) },
     { theme: 'gold', suffix: 'gold', name: (n) => `${n} Doré`, rarity: 'legendaire', unlock: (og) => ({ type: 'level', value: 8 + og * 2 }) },
+    { theme: 'pirate', suffix: 'pirate', name: (n) => `Capitaine ${n}`, rarity: 'rare', unlock: { type: 'coins', value: 180 } },
+    { theme: 'astro', suffix: 'astro', name: (n) => `${n} Astronaute`, rarity: 'epique', unlock: { type: 'coins', value: 260 } },
+    { theme: 'candy', suffix: 'candy', name: (n) => `${n} Bonbon`, rarity: 'rare', unlock: { type: 'coins', value: 160 } },
+    { theme: 'lava', suffix: 'lava', name: (n) => `${n} Magma`, rarity: 'epique', unlock: (og) => ({ type: 'trophies', value: 400 + og * 60 }) },
+    { theme: 'ninja', suffix: 'ninja', name: (n) => `${n} Ninja`, rarity: 'rare', unlock: { type: 'coins', value: 170 } },
+    { theme: 'royal', suffix: 'royal', name: (n) => `Roi ${n}`, rarity: 'legendaire', unlock: (og) => ({ type: 'wins', value: 30 + og * 10 }) },
+    { theme: 'summer', suffix: 'summer', name: (n) => `${n} Plage`, rarity: 'commun', unlock: { type: 'coins', value: 90 } },
+    { theme: 'xmas', suffix: 'xmas', name: (n) => `${n} Noël`, rarity: 'epique', unlock: { type: 'coins', value: 220 } },
+    { theme: 'toxic', suffix: 'toxic', name: (n) => `${n} Toxique`, rarity: 'rare', unlock: (og) => ({ type: 'level', value: 5 + og }) },
+    { theme: 'cyber', suffix: 'cyber', name: (n) => `Cyber-${n}`, rarity: 'legendaire', unlock: (og) => ({ type: 'trophies', value: 700 + og * 80 }) },
   ];
+  // 15 avatars de profil proposés (dessinés par creatures.js) ; sinon photo importée (data URL).
+  const AVATAR_PRESETS = ['og1_default', 'og2_default', 'og3_default', 'og4_default', 'og5_default', 'og6_default', 'og7_default', 'og1_pirate', 'og2_royal', 'og4_candy', 'og7_cyber', 'og6_astro', 'og3_ninja', 'og5_lava', 'og1_halloween'];
   const SKINS = [];
   for (let og = 1; og <= 7; og += 1) {
     for (const th of THEMES) {
@@ -160,5 +172,5 @@
     return { skinId: skin.id, price: Math.ceil(skin.unlock.value / 2), week: weekKey(d) };
   }
 
-  return { OG_NAMES, OG_ROLES, OG_LORE, THEMES, SKINS, SKIN_BY_ID, DEFAULT_EQUIP, RANKS, rankFor, nextRank, xpForLevel, levelFromXp, matchRewards, canUnlock, QUEST_TEMPLATES, dailyQuests, questTemplate, advanceQuests, dayKey, weeklyDeal };
+  return { OG_NAMES, OG_ROLES, OG_LORE, THEMES, AVATAR_PRESETS, SKINS, SKIN_BY_ID, DEFAULT_EQUIP, RANKS, rankFor, nextRank, xpForLevel, levelFromXp, matchRewards, canUnlock, QUEST_TEMPLATES, dailyQuests, questTemplate, advanceQuests, dayKey, weeklyDeal };
 });

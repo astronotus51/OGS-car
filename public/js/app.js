@@ -31,9 +31,10 @@
   requestAnimationFrame(drawBg);
 
   // ----- Écrans -----
-  const SCREENS = ['auth', 'lobby', 'queue', 'game', 'result', 'profile', 'skins', 'leaderboard', 'rules'];
+  const SCREENS = ['auth', 'lobby', 'queue', 'game', 'result', 'profile', 'skins', 'leaderboard', 'rules', 'avatar'];
   function show(name) {
     current = name;
+    if (window.OGSAudio && name !== 'game' && name !== 'result') OGSAudio.setScene('menu');
     for (const s of SCREENS) $(`screen-${s}`).classList.toggle('hidden', s !== name);
     if (name === 'lobby') { refreshLobby(); }
   }
@@ -75,28 +76,134 @@
     $('authError').textContent = '';
     try {
       const data = await Net.api(`/api/${kind}`, { username: $('authUser').value.trim(), password: $('authPass').value });
-      Net.setToken(data.token); profile = data.profile;
+      profile = data.profile; $('authPass').value = '';
       enterLobby();
     } catch (err) { $('authError').textContent = err.message; }
   }
-  $('btnLogout').addEventListener('click', () => { Net.disconnect(); Net.setToken(null); profile = null; show('auth'); });
+  async function logout() {
+    try { await Net.api('/api/logout', {}); } catch (e) { /* ignore */ }
+    Net.disconnect(); Net.setToken(null); profile = null; show('auth');
+  }
+  $('btnLogout').addEventListener('click', logout);
+  $('btnLogout2').addEventListener('click', logout);
+  $('btnLogoutAll').addEventListener('click', async () => { if (!confirm('Déconnecter ce compte de tous les appareils ?')) return; try { await Net.api('/api/logout-all', {}); } catch (e) { /* ignore */ } Net.disconnect(); profile = null; show('auth'); });
 
   async function tryResume() {
-    if (!Net.getToken()) return show('auth');
     try { const data = await Net.api('/api/me'); profile = data.profile; enterLobby(); }
-    catch (e) { Net.setToken(null); show('auth'); }
+    catch (e) { show('auth'); }
   }
   function enterLobby() {
     show('lobby');
     Net.connect();
   }
 
+  // ----- Google Identity Services -----
+  let config = { googleClientId: null, avatarPresets: [] };
+  let googleTicket = null;
+  function loadGoogle() {
+    if (!config.googleClientId) { $('googleNote').classList.remove('hidden'); return; }
+    if (location.protocol !== 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) { $('googleNote').classList.remove('hidden'); return; }
+    const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true;
+    sc.onload = () => {
+      window.google.accounts.id.initialize({ client_id: config.googleClientId, callback: onGoogleCredential, ux_mode: 'popup', auto_select: false });
+      window.google.accounts.id.renderButton($('googleBtn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', locale: 'fr' });
+    };
+    document.head.appendChild(sc);
+  }
+  async function onGoogleCredential(resp) {
+    $('authError').textContent = '';
+    try {
+      if (current === 'profile') { profile = (await Net.api('/api/auth/google/link', { credential: resp.credential })).profile; openProfile(); return; }
+      const data = await Net.api('/api/auth/google', { credential: resp.credential });
+      if (data.needUsername) { googleTicket = data.ticket; $('authForm').classList.add('hidden'); $('googleBtn').classList.add('hidden'); $('usernameForm').classList.remove('hidden'); $('pickUser').value = data.suggested || ''; $('pickUser').focus(); return; }
+      profile = data.profile; enterLobby();
+    } catch (err) { ($('authError')).textContent = err.message; }
+  }
+  $('usernameForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault(); $('pickError').textContent = '';
+    try { profile = (await Net.api('/api/auth/google/complete', { ticket: googleTicket, username: $('pickUser').value.trim() })).profile; $('usernameForm').classList.add('hidden'); $('authForm').classList.remove('hidden'); $('googleBtn').classList.remove('hidden'); enterLobby(); }
+    catch (err) { $('pickError').textContent = err.message; }
+  });
+
+  // ----- Avatars -----
+  function renderAvatar(el, p, level) {
+    el.querySelectorAll('img, canvas').forEach(n => n.remove());
+    const span = el.querySelector('span:not(.avatar-edit)');
+    const av = p && p.avatar;
+    if (av && av.startsWith('preset:') && window.Creatures) {
+      const skinId = av.slice(7), og = Number(skinId.replace(/^og(\d).*/, '$1')) || 1;
+      const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#1d4ed8'; ctx.fillRect(0, 0, 128, 128);
+      Creatures.draw(ctx, og, skinId, 64, 70, 92, 0, { moving: false, phase: og });
+      el.appendChild(c); if (span) span.style.visibility = 'hidden';
+    } else if (av && av.startsWith('data:image/')) {
+      const img = document.createElement('img'); img.src = av; img.alt = ''; el.appendChild(img); if (span) span.style.visibility = 'hidden';
+    } else if (span) { span.style.visibility = 'visible'; if (level !== undefined) span.textContent = level; }
+  }
+  function avatarHtml(av, fallback) {
+    if (av && av.startsWith('data:image/')) return `<span class="avatar"><img src="${av}" alt=""></span>`;
+    return `<span class="avatar"><span>${fallback || ''}</span></span>`;
+  }
+  async function openAvatar() {
+    show('avatar');
+    const grid = $('avatarGrid'); grid.innerHTML = '';
+    for (const id of config.avatarPresets) {
+      const d = document.createElement('div'); d.className = `avatar ${profile.avatar === `preset:${id}` ? 'selected' : ''}`; d.innerHTML = '<span></span>';
+      renderAvatar(d, { avatar: `preset:${id}` });
+      d.addEventListener('click', () => setAvatar(`preset:${id}`));
+      grid.appendChild(d);
+    }
+  }
+  async function setAvatar(value) {
+    try { profile = (await Net.api('/api/avatar', { avatar: value })).profile; $('avatarMsg').textContent = 'Avatar mis à jour !'; OGSAudio.sfx('coin'); openAvatar(); renderAllAvatars(); }
+    catch (e) { $('avatarMsg').textContent = e.message; }
+  }
+  $('avatarFile').addEventListener('change', (ev) => {
+    const file = ev.target.files && ev.target.files[0]; if (!file) return;
+    if (!/^image\//.test(file.type)) return ($('avatarMsg').textContent = 'Choisis une image');
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      // Recadrage carré + réduction à 128 px, JPEG : légère et sans métadonnées (la photo originale ne quitte jamais ton ordinateur telle quelle).
+      const c = document.createElement('canvas'); c.width = 128; c.height = 128; const ctx = c.getContext('2d');
+      const m = Math.min(img.width, img.height); ctx.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, 128, 128);
+      URL.revokeObjectURL(url);
+      let q = 0.86, data = c.toDataURL('image/jpeg', q);
+      while (data.length > 60000 && q > 0.3) { q -= 0.1; data = c.toDataURL('image/jpeg', q); }
+      setAvatar(data);
+    };
+    img.onerror = () => { $('avatarMsg').textContent = 'Image illisible'; };
+    img.src = url;
+    ev.target.value = '';
+  });
+  $('btnAvatarNone').addEventListener('click', () => setAvatar(null));
+  $('btnAvatarClose').addEventListener('click', () => { openProfile(); });
+  $('btnAvatar').addEventListener('click', openAvatar);
+  $('profileAvatar').addEventListener('click', openAvatar);
+  function renderAllAvatars() { if (!profile) return; renderAvatar($('lobbyAvatar'), profile, profile.level); renderAvatar($('profileAvatar'), profile, profile.level); }
+
+  // ----- Audio -----
+  const Audio = window.OGSAudio;
+  function syncAudioUi() {
+    for (const id of ['btnMusic', 'btnMusicGame']) $(id).classList.toggle('off', !Audio.settings.music);
+    for (const id of ['btnSfx', 'btnSfxGame']) $(id).classList.toggle('off', !Audio.settings.sfx);
+    $('musicVol').value = Audio.settings.musicVol; $('sfxVol').value = Audio.settings.sfxVol;
+  }
+  for (const id of ['btnMusic', 'btnMusicGame']) $(id).addEventListener('click', () => { Audio.init(); Audio.setMusic(!Audio.settings.music); syncAudioUi(); });
+  for (const id of ['btnSfx', 'btnSfxGame']) $(id).addEventListener('click', () => { Audio.init(); Audio.setSfx(!Audio.settings.sfx); syncAudioUi(); Audio.sfx('ui'); });
+  $('musicVol').addEventListener('input', () => Audio.setMusicVol(Number($('musicVol').value)));
+  $('sfxVol').addEventListener('input', () => { Audio.setSfxVol(Number($('sfxVol').value)); Audio.sfx('ui'); });
+  const unlockAudio = () => { Audio.init(); };
+  window.addEventListener('pointerdown', unlockAudio, { once: true });
+  window.addEventListener('keydown', unlockAudio, { once: true });
+  document.addEventListener('click', (ev) => { if (ev.target.closest('.btn, .og-tab, .emote, .icon-btn')) Audio.sfx('ui'); });
+  syncAudioUi();
+
   // ----- Lobby -----
   async function refreshLobby() {
     if (!profile) return;
     try { const data = await Net.api('/api/me'); profile = data.profile; } catch (e) { /* hors-ligne : on garde le profil connu */ }
     $('lobbyName').textContent = profile.username;
-    $('lobbyLevel').textContent = profile.level;
+    $('lobbyLevel').textContent = profile.level; renderAvatar($('lobbyAvatar'), profile, profile.level);
     $('lobbyTrophies').textContent = profile.trophies;
     $('lobbyRank').textContent = profile.rank;
     $('lobbyCoins').textContent = profile.coins;
@@ -169,7 +276,7 @@
   // ----- Événements réseau -----
   Net.on('auth_ok', (msg) => { profile = msg.profile; if (current === 'lobby') refreshLobby(); });
   Net.on('auth_error', () => { Net.disconnect(); Net.setToken(null); show('auth'); $('authError').textContent = 'Session expirée, reconnecte-toi'; });
-  Net.on('kicked', (msg) => { Net.disconnect(); alert(msg.reason || 'Déconnecté'); show('auth'); });
+  Net.on('kicked', (msg) => { Net.disconnect(); toast(msg.reason || 'Déconnecté', 'warn'); show('auth'); $('authError').textContent = msg.reason || 'Déconnecté'; });
   Net.on('queued', (msg) => { if (current === 'queue' && queueMode === 'queue') $('queueSub').textContent = `${msg.wait || 0} s · fenêtre ±${msg.band || 100} 🏆${msg.botFillIn ? ` · bot dans ${msg.botFillIn} s` : ''}`; });
   Net.on('friendly_created', (msg) => { $('queueCode').textContent = msg.code; $('queueCode').classList.remove('hidden'); });
   Net.on('error', (msg) => { $('lobbyMsg').textContent = msg.error; toast(msg.error, 'bad'); });
@@ -179,9 +286,11 @@
     $('hudOppName').textContent = msg.opponent.username;
     $('hudOppSub').textContent = `🏆 ${msg.opponent.trophies} · ${msg.opponent.rank || ''}${msg.opponentIsBot ? ' · IA' : ''}`;
     $('hudMeName').textContent = msg.me.username; $('hudMeSub').textContent = `🏆 ${msg.me.trophies} · ${msg.me.rank}`;
+    $('hudMeAvatar').innerHTML = '<span></span>'; renderAvatar($('hudMeAvatar'), msg.me, msg.me.level); $('hudOppAvatar').innerHTML = '<span></span>'; renderAvatar($('hudOppAvatar'), msg.opponent, msg.opponent.level || '?');
+    Audio.setScene('match'); Audio.sfx('match');
     show('game'); game.start(msg);
   });
-  Net.on('go', () => game.onGo());
+  Net.on('go', () => { game.onGo(); Audio.sfx('go'); });
   Net.on('draft_pick', (msg) => game.onDraftPick(msg));
   Net.on('draft_end', (msg) => { game.onDraftEnd(msg); const mine = (msg.bans && msg.bans[game.side] || []); if (mine.length) toast(`Banni pour toi : ${mine.map(o => Catalog.OG_NAMES[o]).join(', ')}`, 'warn'); });
   Net.on('ability_rejected', (msg) => game.onAbilityRejected(msg));
@@ -190,7 +299,7 @@
   Net.on('place_rejected', (msg) => game.onRejected(msg));
   Net.on('presence', (msg) => { game.onPresence(msg); if (!msg.connected) toast('Adversaire déconnecté…', 'warn'); });
   Net.on('emote', (msg) => game.onEmote(msg));
-  Net.on('match_end', (msg) => { pendingResult = msg; setTimeout(() => showResult(msg), 1800); });
+  Net.on('match_end', (msg) => { pendingResult = msg; Audio.sfx(msg.result === 'win' ? 'win' : msg.result === 'loss' ? 'loss' : 'draw'); Audio.setScene('result'); setTimeout(() => showResult(msg), 1800); });
   Net.on('disconnected', () => { if (current === 'game') toast('Connexion perdue… reconnexion', 'warn'); if (current === 'queue') closeQueue(); });
 
   // ----- Résultat -----
@@ -235,7 +344,10 @@
     show('profile');
     try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
     $('profileName').textContent = profile.username;
-    $('profileLevel').textContent = profile.level;
+    $('profileLevel').textContent = profile.level; renderAvatar($('profileAvatar'), profile, profile.level);
+    $('pwdCurrentLabel').classList.toggle('hidden', !profile.hasPassword);
+    $('googleLinkState').textContent = profile.googleLinked ? '✔ Compte Google lié' : (config.googleClientId ? 'Lie ton compte Google pour te connecter en un clic :' : 'Connexion Google non configurée sur ce serveur (voir README).');
+    if (config.googleClientId && !profile.googleLinked && window.google) { $('googleLinkBtn').innerHTML = ''; window.google.accounts.id.renderButton($('googleLinkBtn'), { theme: 'outline', size: 'medium', shape: 'pill', text: 'continue_with', locale: 'fr' }); } else $('googleLinkBtn').innerHTML = '';
     $('profileSub').innerHTML = `<span style="color:${profile.rankColor}">${profile.rank}</span> · 🏆 ${profile.trophies} (record ${profile.bestTrophies})${profile.leaderboardRank ? ` · #${profile.leaderboardRank} mondial` : ''} · membre depuis ${new Date(profile.createdAt).toLocaleDateString('fr-FR')}`;
     $('profileXp').style.width = `${Math.round(profile.xpInto / profile.xpNeed * 100)}%`;
     $('profileXpText').textContent = `Niveau ${profile.level} · ${profile.xpInto}/${profile.xpNeed} XP`;
@@ -248,6 +360,12 @@
       $('profileHistory').innerHTML = history.map(h => `<li><span class="${h.result}">${labels[h.result]}</span><span>vs ${esc(h.opponent)}</span><span>${h.mode.replace('-botfill', ' (bot)')}</span><span>${h.delta >= 0 ? '+' : ''}${h.delta} 🏆</span><span>${new Date(h.at).toLocaleString('fr-FR')}</span></li>`).join('') || '<li>Aucune partie jouée pour l’instant.</li>';
     } catch (e) { $('profileHistory').innerHTML = '<li>Historique indisponible.</li>'; }
   }
+
+  $('pwdForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault(); $('pwdMsg').textContent = '';
+    try { await Net.api('/api/password', { current: $('pwdCurrent').value, next: $('pwdNext').value }); $('pwdMsg').textContent = 'Mot de passe changé (les autres appareils sont déconnectés).'; $('pwdCurrent').value = ''; $('pwdNext').value = ''; }
+    catch (e) { $('pwdMsg').textContent = e.message; }
+  });
 
   // ----- Skins -----
   let skinTab = 1, previews = [];
@@ -304,7 +422,7 @@
       } else {
         thead.innerHTML = '<tr><th>#</th><th>Joueur</th><th>Ligue</th><th>Niv.</th><th>Trophées</th><th>V / D</th></tr>';
         const { leaderboard } = await Net.api('/api/leaderboard');
-        $('boardTable').querySelector('tbody').innerHTML = leaderboard.map(r => `<tr class="${profile && r.id === profile.id ? 'me' : ''}"><td>${r.rank}</td><td>${esc(r.username)}</td><td>${r.league}</td><td>${r.level}</td><td>🏆 ${r.trophies}</td><td>${r.wins} / ${r.losses}</td></tr>`).join('') || '<tr><td colspan="6">Aucun joueur classé.</td></tr>';
+        $('boardTable').querySelector('tbody').innerHTML = leaderboard.map(r => `<tr class="${profile && r.id === profile.id ? 'me' : ''}"><td>${r.rank}</td><td>${avatarHtml(r.avatar, r.level)}${esc(r.username)}</td><td>${r.league}</td><td>${r.level}</td><td>🏆 ${r.trophies}</td><td>${r.wins} / ${r.losses}</td></tr>`).join('') || '<tr><td colspan="6">Aucun joueur classé.</td></tr>';
       }
     } catch (e) { /* ignore */ }
   }
@@ -357,5 +475,6 @@
   }
   requestAnimationFrame(drawShowcase);
 
+  Net.api('/api/config').then(c => { config = c; loadGoogle(); }).catch(() => {});
   tryResume();
 })();

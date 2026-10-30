@@ -59,6 +59,20 @@
       if (msg.sv) survival = msg.sv;
       for (const ev of msg.ev || []) {
         renderer.onEvent(ev, now);
+        const A = window.OGSAudio;
+        if (A) {
+          if (ev.type === 'place') A.sfx('place');
+          else if (ev.type === 'kill') A.sfx('kill');
+          else if (ev.type === 'hit') A.sfx('hit');
+          else if (ev.type === 'shot') A.sfx('shot');
+          else if (ev.type === 'bounce') A.sfx('bounce');
+          else if (ev.type === 'base') A.sfx('base');
+          else if (ev.type === 'orb' && ev.player === me) A.sfx('orb');
+          else if (ev.type === 'ability' && !ev.passive) A.sfx(ev.ogId === 5 ? 'freeze' : 'ability');
+          else if (ev.type === 'evolve') A.sfx('evolve');
+          else if (ev.type === 'heal') A.sfx('heal');
+          else if (ev.type === 'overtime') { A.sfx('overtime'); A.setScene('overtime'); }
+        }
         if (ev.type === 'overtime') ui.toast('MORT SUBITE : mana ×3, premier dégât = défaite', 'warn');
         if (ev.type === 'ability' && ev.player === me && !ev.passive) ui.toast(`${Sim.ABILITIES[ev.ogId].name} !`, 'ok');
         if (ev.type === 'evolve' && ev.player === me) ui.toast(`${OGSCatalog.OG_NAMES[ev.ogId]} niveau ${ev.level} !`, 'ok');
@@ -73,7 +87,7 @@
     function onDraftPick(msg) { if (msg.side === me) myBan = msg.og; else oppBan = msg.og; }
     function onDraftEnd(msg) { bans = msg.bans || bans; phase = 'countdown'; countdown = msg.countdown || RULES.countdown; }
     function onAbilityRejected(msg) { ui.toast(ABILITY_TEXT[msg.reason] || 'Capacité refusée', 'bad'); }
-    function onWave(msg) { renderer.onEvent({ type: 'wave', wave: msg.wave, count: msg.count }, performance.now() / 1000); ui.toast(`Vague ${msg.wave} : ${msg.count} ennemis !`, 'warn'); }
+    function onWave(msg) { renderer.onEvent({ type: 'wave', wave: msg.wave, count: msg.count }, performance.now() / 1000); ui.toast(`Vague ${msg.wave} : ${msg.count} ennemis !`, 'warn'); if (window.OGSAudio) OGSAudio.sfx('wave'); }
     function useAbility(ogId) {
       if (!features.abilities) return ui.toast('Capacités désactivées dans cette partie', 'warn');
       if (phase !== 'playing' && phase !== 'go') return;
@@ -83,9 +97,9 @@
     }
     function pickBan(ogId) { if (phase !== 'draft' || myBan) return; myBan = ogId; net.send({ t: 'ban', og: ogId }); ui.toast(`Tu bannis ${OGSCatalog.OG_NAMES[ogId]}`, 'ok'); }
     function finish(winner) { phase = 'over'; result = mode === 'survival' ? 'survival' : winner === 'draw' ? 'draw' : winner === me ? 'win' : 'loss'; selection = null; }
-    function onRejected(msg) { pending = pending.filter(p => !(p.col === msg.col && p.row === msg.row)); ui.toast(REJECT_TEXT[msg.reason] || 'Placement refusé', 'bad'); }
+    function onRejected(msg) { pending = pending.filter(p => !(p.col === msg.col && p.row === msg.row)); ui.toast(REJECT_TEXT[msg.reason] || 'Placement refusé', 'bad'); if (window.OGSAudio) OGSAudio.sfx('reject'); }
     function onPresence(msg) { presence[msg.side] = msg.connected; }
-    function onEmote(msg) { renderer.addEmote(msg.side, msg.id); }
+    function onEmote(msg) { renderer.addEmote(msg.side, msg.id); if (window.OGSAudio) OGSAudio.sfx('emote'); }
 
     // ----- Interpolation -----
     function interpolated(now) {
@@ -146,7 +160,7 @@
       if (phase === 'over') return;
       if (phase === 'draft') return pickBan(ogId);
       if (isBanned(ogId)) return ui.toast(`${OGSCatalog.OG_NAMES[ogId]} est banni dans cette partie`, 'bad');
-      selection = selection === ogId ? null : ogId;
+      selection = selection === ogId ? null : ogId; if (window.OGSAudio) OGSAudio.sfx('select');
       if (selection && OGS[selection].backOnly) cursor.row = backRow();
       ui.onSelection && ui.onSelection(selection);
     }
@@ -248,7 +262,7 @@
       const now = performance.now() / 1000;
       const dt = lastFrame ? Math.min(0.1, now - lastFrame) : 0; lastFrame = now;
       if (phase === 'draft') { draftTimer = Math.max(0, draftTimer - dt); }
-      if (phase === 'countdown') { countdown = Math.max(0, countdown - dt); }
+      if (phase === 'countdown') { const before = Math.ceil(countdown); countdown = Math.max(0, countdown - dt); if (Math.ceil(countdown) !== before && countdown > 0 && window.OGSAudio) OGSAudio.sfx('countdown'); }
       if (phase === 'go') { goTimer -= dt; if (goTimer <= 0) phase = 'playing'; }
       pending = pending.filter(p => now - p.t < 0.6);
       const state = interpolated(now) || { t: 0, hp: { top: RULES.healthMax, bottom: RULES.healthMax }, mana: { top: 0, bottom: 0 }, entities: [], projectiles: [], orbs: [], hazard: null };
