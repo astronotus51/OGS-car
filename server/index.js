@@ -151,10 +151,19 @@ app.get('/api/config', (req, res) => { res.json({ avatarPresets: Catalog.AVATAR_
 app.post('/api/guest', authLimiter, wrap(async (req, res) => {
   const { username, key } = req.body || {};
   if (typeof username !== 'string' || !USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
-  if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris, choisis-en un autre' });
   const reserved = ADMIN_NAMES.has(username.toLowerCase());
   if (reserved && !isAdminKey(String(key || ''))) return res.status(403).json({ error: key ? 'Clé admin incorrecte' : 'Ce pseudo est réservé à l’admin : entre la clé admin', reserved: true });
-  const user = await db.createUser(username, reserved ? { is_admin: true } : {});
+  const existing = await db.getUserByUsername(username);
+  if (existing && !reserved) return res.status(409).json({ error: 'Ce pseudo est déjà pris, choisis-en un autre' });
+  let user;
+  if (existing) {
+    // Pseudo admin déjà existant : la clé admin suffit pour le reprendre (depuis n'importe quel appareil).
+    // On le passe admin si besoin et on déconnecte l'éventuel autre appareil.
+    user = await db.updateUser(existing.id, { is_admin: true, session_version: (existing.session_version || 0) + 1 });
+    const prev = byUser.get(existing.id); if (prev) { prev.send({ t: 'kicked', reason: 'Connecté depuis un autre appareil' }); prev.ws.close(); }
+  } else {
+    user = await db.createUser(username, reserved ? { is_admin: true } : {});
+  }
   setSession(req, res, user);
   res.json({ profile: publicProfile(user) });
 }));
