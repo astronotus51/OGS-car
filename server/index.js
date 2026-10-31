@@ -15,7 +15,7 @@ const Catalog = require('../shared/catalog.js');
 const Sim = require('../shared/sim.js');
 const Features = require('../shared/features.js');
 const { createStore } = require('./db.js');
-const { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView, isAdmin } = require('./profile.js');
+const { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView, isAdmin, allSkinIds } = require('./profile.js');
 const { Room } = require('./room.js');
 const { Matchmaker } = require('./matchmaking.js');
 
@@ -289,15 +289,45 @@ function adminOnly(req, res, next) { if (!isAdmin(req.user)) return res.status(4
 app.get('/api/admin/overview', authMiddleware, adminOnly, wrap(async (req, res) => {
   res.json({ users: await db.countUsers(), online: clients.size, inQueue: matchmaker.queue.length, rooms: [...rooms].map(r => ({ id: r.id, mode: r.mode, players: r.players.map(p => p.profile.username), time: r.game ? Math.round(r.game.state.time) : 0 })), db: db.kind, uptime: Math.round(process.uptime()), features: Features.FEATURES });
 }));
+// Liste / recherche des joueurs (pour le panneau d'administration).
+app.get('/api/admin/players', authMiddleware, adminOnly, wrap(async (req, res) => {
+  const list = await db.searchUsers(String(req.query.q || '').slice(0, 16), 30);
+  const total = Catalog.SKINS.filter(s => !s.hidden).length;
+  res.json({ players: list.map(u => ({ id: u.id, username: u.username, trophies: u.trophies || 0, coins: u.coins || 0, wins: u.wins || 0, losses: u.losses || 0, admin: !!u.is_admin, modo: !!u.is_modo, online: byUser.has(u.id), skins: (u.is_admin || u.is_modo) ? total : new Set([...(u.skins || []), 'og1_default', 'og2_default', 'og3_default', 'og4_default', 'og5_default', 'og6_default', 'og7_default']).size, skinsTotal: total })) });
+}));
+// Applique une modification à un joueur et met à jour son profil s'il est en ligne.
+async function adminPatch(username, patch) {
+  const user = typeof username === 'string' ? await db.getUserByUsername(username) : null;
+  if (!user) return null;
+  const updated = await db.updateUser(user.id, typeof patch === 'function' ? patch(user) : patch);
+  const live = byUser.get(user.id); if (live) { live.profile = publicProfile(updated); live.send({ t: 'profile', profile: live.profile }); }
+  return updated;
+}
 // Donner des pièces / trophées à un joueur (ex. récompense d'un tournoi).
 app.post('/api/admin/grant', authMiddleware, adminOnly, wrap(async (req, res) => {
   const { username, coins = 0, trophies = 0 } = req.body || {};
-  const user = typeof username === 'string' ? await db.getUserByUsername(username) : null;
-  if (!user) return res.status(404).json({ error: 'Joueur introuvable' });
-  const patch = { coins: Math.max(0, (user.coins || 0) + (Number(coins) | 0)), trophies: Math.max(0, (user.trophies || 0) + (Number(trophies) | 0)) };
-  patch.best_trophies = Math.max(user.best_trophies || 0, patch.trophies);
-  const updated = await db.updateUser(user.id, patch);
-  const live = byUser.get(user.id); if (live) live.profile = publicProfile(updated);
+  const updated = await adminPatch(username, user => {
+    const patch = { coins: Math.max(0, (user.coins || 0) + (Number(coins) | 0)), trophies: Math.max(0, (user.trophies || 0) + (Number(trophies) | 0)) };
+    patch.best_trophies = Math.max(user.best_trophies || 0, patch.trophies);
+    return patch;
+  });
+  if (!updated) return res.status(404).json({ error: 'Joueur introuvable' });
+  res.json({ profile: publicProfile(updated) });
+}));
+// Nommer / retirer un modérateur (badge MODO + tous les skins). Un admin ne peut pas être rétrogradé ici.
+app.post('/api/admin/role', authMiddleware, adminOnly, wrap(async (req, res) => {
+  const { username, modo } = req.body || {};
+  const target = typeof username === 'string' ? await db.getUserByUsername(username) : null;
+  if (!target) return res.status(404).json({ error: 'Joueur introuvable' });
+  if (target.is_admin) return res.status(400).json({ error: 'Ce joueur est déjà administrateur' });
+  const updated = await adminPatch(username, { is_modo: !!modo });
+  res.json({ profile: publicProfile(updated) });
+}));
+// Débloquer tous les skins d'un joueur (sans le nommer modo).
+app.post('/api/admin/skins', authMiddleware, adminOnly, wrap(async (req, res) => {
+  const { username } = req.body || {};
+  const updated = await adminPatch(username, { skins: allSkinIds() });
+  if (!updated) return res.status(404).json({ error: 'Joueur introuvable' });
   res.json({ profile: publicProfile(updated) });
 }));
 

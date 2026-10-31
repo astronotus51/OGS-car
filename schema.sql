@@ -24,6 +24,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFA
 ALTER TABLE users ADD COLUMN IF NOT EXISTS transfer_code TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS transfer_expires TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_modo BOOLEAN NOT NULL DEFAULT false;
 -- Anciennes colonnes de comptes (mot de passe, Google) : rendues facultatives puis ignorées.
 ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
 ALTER TABLE users ALTER COLUMN password_hash SET DEFAULT '';

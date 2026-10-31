@@ -192,7 +192,7 @@
   async function refreshLobby() {
     if (!profile) return;
     try { const data = await Net.api('/api/me'); profile = data.profile; } catch (e) { /* hors-ligne : on garde le profil connu */ }
-    $('lobbyName').textContent = profile.username; $('lobbyName').innerHTML = esc(profile.username) + (profile.admin ? ' <span class="badge-admin">ADMIN</span>' : '');
+    $('lobbyName').innerHTML = esc(profile.username) + badgeOf(profile);
     $('lobbyLevel').textContent = profile.level; renderAvatar($('lobbyAvatar'), profile, profile.level);
     $('lobbyTrophies').textContent = profile.trophies;
     $('lobbyRank').textContent = profile.rank;
@@ -266,6 +266,8 @@
 
   // ----- Événements réseau -----
   Net.on('auth_ok', (msg) => { profile = msg.profile; if (current === 'lobby') refreshLobby(); });
+  // Un admin a modifié mon profil (modo, skins, pièces…) : mise à jour en direct.
+  Net.on('profile', (msg) => { const was = profile; profile = msg.profile; if (current === 'lobby') refreshLobby(); if (current === 'profile') openProfile(); if (current === 'skins') openSkins(); if (was && !was.modo && profile.modo) toast('Tu es maintenant MODO : tous les skins débloqués !', 'good'); });
   Net.on('auth_error', () => { Net.disconnect(); Net.setToken(null); show('auth'); $('authError').textContent = 'Session expirée, reconnecte-toi'; });
   Net.on('kicked', (msg) => { Net.disconnect(); profile = null; show('auth'); $('authError').textContent = msg.reason || 'Déconnecté'; });
   Net.on('queued', (msg) => { if (current === 'queue' && queueMode === 'queue') $('queueSub').textContent = `${msg.wait || 0} s · fenêtre ±${msg.band || 100} 🏆${msg.botFillIn ? ` · bot dans ${msg.botFillIn} s` : ''}`; });
@@ -334,8 +336,8 @@
   async function openProfile() {
     show('profile');
     try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
-    $('profileName').innerHTML = esc(profile.username) + (profile.admin ? ' <span class="badge-admin">ADMIN</span>' : '');
-    $('adminCard').classList.toggle('hidden', !profile.admin); if (profile.admin) loadAdmin();
+    $('profileName').innerHTML = esc(profile.username) + badgeOf(profile);
+    $('adminCard').classList.toggle('hidden', !profile.admin); $('adminKeyCard').classList.toggle('hidden', !!profile.admin); if (profile.admin) loadAdmin();
     $('profileLevel').textContent = profile.level; renderAvatar($('profileAvatar'), profile, profile.level);
 
     $('profileSub').innerHTML = `<span style="color:${profile.rankColor}">${profile.rank}</span> · 🏆 ${profile.trophies} (record ${profile.bestTrophies})${profile.leaderboardRank ? ` · #${profile.leaderboardRank} mondial` : ''} · membre depuis ${new Date(profile.createdAt).toLocaleDateString('fr-FR')}`;
@@ -354,9 +356,34 @@
   async function loadAdmin() {
     try {
       const o = await Net.api('/api/admin/overview');
+      loadAdminPlayers();
       $('adminInfo').innerHTML = `${o.users} comptes · ${o.online} en ligne · ${o.inQueue} en file · ${o.rooms.length} partie(s) en cours · base ${o.db} · serveur démarré depuis ${Math.round(o.uptime / 60)} min<br>${o.rooms.map(r => `#${r.id} ${r.mode} : ${r.players.map(esc).join(' vs ')} (${r.time}s)`).join('<br>')}`;
     } catch (e) { $('adminInfo').textContent = e.message; }
   }
+  function badgeOf(p) { return p.admin ? ' <span class="badge-admin">ADMIN</span>' : p.modo ? ' <span class="badge-modo">MODO</span>' : ''; }
+  // Liste des joueurs du panneau admin : nommer modo, débloquer tous les skins, donner des pièces.
+  async function loadAdminPlayers() {
+    try {
+      const { players } = await Net.api(`/api/admin/players?q=${encodeURIComponent($('adminSearch').value.trim())}`);
+      $('adminPlayers').innerHTML = players.length ? players.map(p => `<div class="admin-row" data-user="${esc(p.username)}">
+        <span class="admin-name">${p.online ? '<span class="dot on"></span>' : '<span class="dot"></span>'}${esc(p.username)}${badgeOf(p)}</span>
+        <span class="admin-stats">🏆 ${p.trophies} · 🪙 ${p.coins} · ${p.wins}V/${p.losses}D · skins ${p.skins}/${p.skinsTotal}</span>
+        <span class="admin-actions">${p.admin ? '' : `<button class="btn small" data-act="modo" data-on="${p.modo ? 0 : 1}">${p.modo ? 'Retirer modo' : 'Nommer modo'}</button>
+        <button class="btn small gold" data-act="skins" ${p.skins >= p.skinsTotal ? 'disabled' : ''}>Tous les skins</button>
+        <button class="btn small" data-act="coins">+500 🪙</button>`}</span></div>`).join('') : '<div class="info">Aucun joueur</div>';
+    } catch (e) { $('adminPlayers').innerHTML = `<div class="info">${esc(e.message)}</div>`; }
+  }
+  $('adminSearch').addEventListener('input', () => { clearTimeout(window.__adminT); window.__adminT = setTimeout(loadAdminPlayers, 250); });
+  $('adminPlayers').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button[data-act]'); if (!b) return;
+    const username = b.closest('.admin-row').dataset.user; b.disabled = true;
+    try {
+      if (b.dataset.act === 'modo') { const d = await Net.api('/api/admin/role', { username, modo: b.dataset.on === '1' }); toast(`${d.profile.username} : ${d.profile.modo ? 'MODO' : 'joueur normal'}`, 'good'); }
+      else if (b.dataset.act === 'skins') { const d = await Net.api('/api/admin/skins', { username }); toast(`${d.profile.username} : tous les skins débloqués`, 'good'); }
+      else if (b.dataset.act === 'coins') { const d = await Net.api('/api/admin/grant', { username, coins: 500 }); toast(`${d.profile.username} : ${d.profile.coins} pièces`, 'good'); }
+      loadAdminPlayers();
+    } catch (e) { toast(e.message, 'bad'); b.disabled = false; }
+  });
   $('adminGrant').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     try { const d = await Net.api('/api/admin/grant', { username: $('grantUser').value.trim(), coins: Number($('grantCoins').value || 0), trophies: Number($('grantTrophies').value || 0) }); $('adminMsg').textContent = `${d.profile.username} : ${d.profile.coins} pièces, ${d.profile.trophies} trophées`; }

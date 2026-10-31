@@ -6,14 +6,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const USER_COLUMNS = `id, username, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily, survival_best, quests, avatar, session_version, transfer_code, transfer_expires, is_admin`;
+const USER_COLUMNS = `id, username, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily, survival_best, quests, avatar, session_version, transfer_code, transfer_expires, is_admin, is_modo`;
 
 function defaultUser(username, extra) {
   return Object.assign({
     username,
     trophies: 0, best_trophies: 0, xp: 0, coins: 50, wins: 0, losses: 0, draws: 0, streak: 0,
     equipped: {}, skins: [], created_at: new Date().toISOString(), last_daily: null, survival_best: 0, quests: {},
-    avatar: null, session_version: 0, transfer_code: null, transfer_expires: null, is_admin: false,
+    avatar: null, session_version: 0, transfer_code: null, transfer_expires: null, is_admin: false, is_modo: false,
   }, extra || {});
 }
 
@@ -56,6 +56,9 @@ function createPgStore(url) {
       return q(`SELECT id, username, trophies, xp, survival_best FROM users WHERE survival_best > 0 ORDER BY survival_best DESC LIMIT $1`, [limit]);
     },
     async countUsers() { return Number((await q(`SELECT count(*)::int AS c FROM users`))[0].c); },
+    async searchUsers(text, limit = 30) {
+      return q(`SELECT id, username, trophies, coins, wins, losses, is_admin, is_modo, skins, created_at FROM users WHERE username ILIKE $1 ORDER BY is_admin DESC, is_modo DESC, trophies DESC LIMIT $2`, [`%${text}%`, limit]);
+    },
     async rankOf(id) {
       const r = await q(`SELECT 1 + count(*)::int AS rank FROM users u, users me WHERE me.id = $1 AND (u.trophies > me.trophies OR (u.trophies = me.trophies AND u.wins > me.wins))`, [id]);
       return r[0] ? r[0].rank : null;
@@ -115,6 +118,12 @@ function createJsonStore(file) {
         .map(u => ({ id: u.id, username: u.username, trophies: u.trophies, xp: u.xp, survival_best: u.survival_best })));
     },
     async countUsers() { return data.users.length; },
+    async searchUsers(text, limit = 30) {
+      const t = String(text || '').toLowerCase();
+      return clone(data.users.filter(u => u.username.toLowerCase().includes(t))
+        .sort((a, b) => (b.is_admin ? 1 : 0) - (a.is_admin ? 1 : 0) || (b.is_modo ? 1 : 0) - (a.is_modo ? 1 : 0) || b.trophies - a.trophies).slice(0, limit)
+        .map(u => ({ id: u.id, username: u.username, trophies: u.trophies, coins: u.coins, wins: u.wins, losses: u.losses, is_admin: !!u.is_admin, is_modo: !!u.is_modo, skins: u.skins || [], created_at: u.created_at })));
+    },
     async rankOf(id) {
       const me = data.users.find(u => u.id === id); if (!me) return null;
       return 1 + data.users.filter(u => u.trophies > me.trophies || (u.trophies === me.trophies && u.wins > me.wins)).length;

@@ -225,6 +225,14 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 5px; border-radius: 5
 .logo.glou .bubbles i:nth-child(3) { width: 13px; height: 13px; left: 8px; animation-delay: 2s; }
 @keyframes bub { 0% { bottom: 0; opacity: 0; } 20% { opacity: 0.9; } 100% { bottom: 50px; opacity: 0; } }
 
+.badge-modo { display: inline-block; font-size: 10px; letter-spacing: 1px; background: linear-gradient(90deg, #06b6d4, #6366f1); color: #fff; padding: 2px 7px; border-radius: 999px; vertical-align: middle; font-weight: 800; }
+.admin-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow: auto; }
+.admin-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 6px 10px; background: rgba(255,255,255,0.05); border-radius: 10px; }
+.admin-row .admin-name { font-weight: 700; min-width: 140px; }
+.admin-row .admin-stats { font-size: 12px; opacity: 0.8; flex: 1; }
+.admin-row .admin-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.admin-row .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #64748b; margin-right: 6px; }
+.admin-row .dot.on { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
 .badge-admin { display: inline-block; font-size: 10px; letter-spacing: 1px; background: linear-gradient(90deg, #f59e0b, #ef4444); color: #fff; padding: 2px 7px; border-radius: 999px; vertical-align: middle; font-weight: 800; }
 
 .sound-hint { margin-top: 12px; color: #7dd3fc; font-size: 13px; animation: pulse 1.6s infinite; }

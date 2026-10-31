@@ -207,10 +207,14 @@
       <div class="account">
         <div class="card"><div class="card-title">Avatar</div><button class="btn small" id="btnAvatar">Choisir un avatar ou une photo</button></div>
         <div class="card"><div class="card-title">Transférer ma progression</div><p class="info" style="text-align:left">Pas de compte : ta progression est liée à cet appareil. Pour la retrouver ailleurs, génère un code (valable 24 h, usage unique) et entre-le sur l’autre appareil à l’écran d’accueil.</p><button class="btn small" id="btnTransfer">Générer un code</button><div id="transferOut" class="queue-code hidden" style="font-size:22px"></div></div>
-        <div class="card"><div class="card-title">Administration</div><form id="adminKeyForm" class="row" style="justify-content:flex-start"><input id="adminKey" class="input" type="password" style="width:200px" placeholder="Clé admin"><button class="btn small" type="submit">Activer</button></form><div id="adminKeyMsg" class="info"></div></div>
+        <div class="card" id="adminKeyCard"><div class="card-title">Administration</div><form id="adminKeyForm" class="row" style="justify-content:flex-start"><input id="adminKey" class="input" type="password" style="width:200px" placeholder="Clé admin"><button class="btn small" type="submit">Activer</button></form><div id="adminKeyMsg" class="info"></div></div>
         <div class="card hidden" id="adminCard" style="grid-column: 1 / -1"><div class="card-title">Administration</div><div id="adminInfo" class="info" style="text-align:left"></div>
+          <div class="card-title" style="margin-top:10px">Joueurs</div>
+          <input id="adminSearch" class="input" style="width:220px;margin-bottom:8px" placeholder="Rechercher un pseudo…" autocomplete="off">
+          <div id="adminPlayers" class="admin-list"></div>
+          <div class="card-title" style="margin-top:10px">Donner un montant précis</div>
           <form id="adminGrant" class="row" style="justify-content:flex-start"><input id="grantUser" class="input" style="width:160px" placeholder="Pseudo"><input id="grantCoins" class="input" style="width:110px" type="number" placeholder="+ pièces"><input id="grantTrophies" class="input" style="width:110px" type="number" placeholder="+ trophées"><button class="btn small gold" type="submit">Donner</button></form><div id="adminMsg" class="info"></div>
-          <p class="info" style="text-align:left">Clé admin : fichier <code>data/admin-key.txt</code> du serveur (ou variable <code>ADMIN_KEY</code>). Un admin possède tous les skins.</p></div>
+          <p class="info" style="text-align:left">Clé admin : fichier <code>data/admin-key.txt</code> du serveur (ou variable <code>ADMIN_KEY</code>). Un admin possède tous les skins. Un <b>modo</b> (nommé par un admin) a le badge MODO et tous les skins.</p></div>
         <div class="card"><div class="card-title">Cet appareil</div><p class="info" style="text-align:left">Ton pseudo est mémorisé ici par un cookie sécurisé. « Changer de joueur » l’oublie sur cet appareil (génère un code de transfert avant si tu veux garder ta progression).</p><button class="btn small danger" id="btnLogout2">Changer de joueur</button></div>
       </div>
     </main>

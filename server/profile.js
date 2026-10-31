@@ -1,11 +1,13 @@
 'use strict';
 const Catalog = require('../shared/catalog.js');
 
-// Administrateurs : joueurs ayant activé la clé admin dans leur profil. Ils ont tous les skins et un badge.
+// Administrateurs : clé admin (ou pseudo réservé). Modos : nommés par un admin. Les deux ont tous les skins et un badge.
 function isAdmin(user) { return !!(user && user.is_admin); }
+function isModo(user) { return !!(user && user.is_modo); }
+function allSkinIds() { return Catalog.SKINS.filter(s => !s.hidden).map(s => s.id); }
 
 function ownedSkins(user) {
-  if (isAdmin(user)) return Catalog.SKINS.filter(s => !s.hidden).map(s => s.id);
+  if (isAdmin(user) || isModo(user)) return Catalog.SKINS.filter(s => !s.hidden).map(s => s.id);
   const owned = new Set(Array.isArray(user.skins) ? user.skins : []);
   for (const og of [1, 2, 3, 4, 5, 6, 7]) owned.add(`og${og}_default`);
   return [...owned];
@@ -46,6 +48,7 @@ function publicProfile(user, extra) {
     survivalBest: user.survival_best || 0,
     avatar: user.avatar || null,
     admin: isAdmin(user),
+    modo: isModo(user),
     createdAt: user.created_at,
   }, extra || {});
 }
@@ -100,4 +103,4 @@ function applyResult(user, opponentProfile, result, mode, extra) {
   return { patch, rewards, levelUp: after > before ? after : null, unlocked };
 }
 
-module.exports = { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView, isAdmin };
+module.exports = { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView, isAdmin, isModo, allSkinIds };
