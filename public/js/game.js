@@ -5,7 +5,8 @@
   'use strict';
   const Sim = window.OGSSim;
   const { FIELD, COLS, ROWS, ROWS_PER_SIDE, CELL_W, CELL_H, RADIUS, OGS, RULES } = Sim;
-  const INTERP_DELAY = 0.085; // s de retard de rendu pour lisser les snapshots (30 Hz)
+  const INTERP_DELAY = 0.12; // s de retard de rendu : les snapshots arrivent à 15 Hz, on en garde ~2 d'avance
+  const MAX_EXTRAP = 0.1; // s d'extrapolation max quand un snapshot est en retard (réseau qui hoquette)
   const KEY_TO_OG = { a: 1, q: 1, z: 2, w: 2, e: 3, r: 4, t: 5, y: 6, u: 7 };
   const REJECT_TEXT = { mana: 'Pas assez de mana', occupied: 'Case occupée', back: 'Cet Og se pose uniquement sur la ligne du fond', hazard: 'Scorpion noir : placement bloqué', side: 'Pas de ton côté', countdown: 'Attends le départ', over: 'Partie terminée', cell: 'Case invalide', banned: 'Créature bannie par ton adversaire' };
   const ABILITY_TEXT = { cooldown: 'Capacité en recharge', mana: 'Pas assez de mana (10)', none: 'Aucune créature de ce type en jeu', disabled: 'Capacités désactivées dans cette partie' };
@@ -14,6 +15,7 @@
     let active = false, raf = 0;
     let me = 'bottom', opp = 'top';
     let snaps = []; // { recv, s }
+    let clockOffset = null; // temps serveur - performance.now() (s)
     let latest = null;
     let phase = 'countdown', countdown = 3, goTimer = 0, result = null;
     let selection = null, cursor = null, pending = [];
@@ -25,7 +27,7 @@
     function start(msg) {
       active = true;
       me = msg.side; opp = Sim.other(me);
-      snaps = []; latest = null; pending = []; selection = null; result = null;
+      snaps = []; clockOffset = null; latest = null; pending = []; selection = null; result = null;
       phase = msg.phase === 'draft' ? 'draft' : (msg.countdown > 0 ? 'countdown' : 'playing'); countdown = msg.countdown || 0; goTimer = 0;
       mapId = msg.map || 'lagoon'; features = msg.features || {}; bans = msg.bans || { top: [], bottom: [] }; draftTimer = msg.draftSeconds || 0; myBan = null; oppBan = null; survival = msg.survival || null;
       duration = msg.duration === 0 ? 0 : (msg.duration || RULES.matchDuration); mode = msg.mode || 'ranked';
@@ -53,6 +55,11 @@
     function onSnap(msg) {
       const now = performance.now() / 1000;
       const s = Sim.decodeSnapshot(msg.s);
+      // Horloge : on estime « temps serveur - temps local » en gardant le plus grand écart récent (les paquets en retard
+      // ne le font pas bouger), puis on glisse doucement vers lui : fini les saccades dues à la gigue du réseau.
+      const off = s.t - now;
+      if (clockOffset === null || off > clockOffset) clockOffset = off; else clockOffset += (off - clockOffset) * 0.02;
+      if (snaps.length && s.t <= snaps[snaps.length - 1].s.t) return; // doublon / désordre
       snaps.push({ recv: now, s });
       if (snaps.length > 12) snaps.shift();
       latest = s;
@@ -104,11 +111,17 @@
     // ----- Interpolation -----
     function interpolated(now) {
       if (!snaps.length) return null;
-      const rt = now - INTERP_DELAY;
+      // Temps de rendu sur l'horloge du serveur (temps de simulation), un peu dans le passé pour avoir 2 snapshots autour.
+      const rt = now + (clockOffset || 0) - INTERP_DELAY;
       let a = snaps[0], b = snaps[0];
-      for (let i = 0; i < snaps.length; i += 1) { if (snaps[i].recv <= rt) a = snaps[i]; if (snaps[i].recv >= rt) { b = snaps[i]; break; } b = snaps[i]; }
-      if (a === b || b.recv <= a.recv) return finalize(b.s, b.s, 1, 0);
-      const k = Math.max(0, Math.min(1, (rt - a.recv) / (b.recv - a.recv)));
+      for (let i = 0; i < snaps.length; i += 1) { if (snaps[i].s.t <= rt) a = snaps[i]; if (snaps[i].s.t >= rt) { b = snaps[i]; break; } b = snaps[i]; }
+      if (a === b || b.s.t <= a.s.t) {
+        // Pas de snapshot après rt : on extrapole légèrement à partir des deux derniers (au plus MAX_EXTRAP s).
+        const n = snaps.length;
+        if (n >= 2 && rt > snaps[n - 1].s.t) { const p = snaps[n - 2], q = snaps[n - 1]; const dt = q.s.t - p.s.t; const k = 1 + Math.min(MAX_EXTRAP, rt - q.s.t) / dt; return finalize(p.s, q.s, k, dt); }
+        return finalize(b.s, b.s, 1, 0);
+      }
+      const k = Math.max(0, Math.min(1, (rt - a.s.t) / (b.s.t - a.s.t)));
       return finalize(a.s, b.s, k, b.s.t - a.s.t);
     }
     function lerpAngle(a, b, k) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * k; }

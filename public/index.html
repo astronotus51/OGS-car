@@ -24,6 +24,7 @@
       <form id="authForm" autocomplete="off">
         <div class="info">Pas de compte, pas de mot de passe : choisis un pseudo et joue. Ta progression reste sur cet appareil.</div>
         <label>Pseudo<input id="authUser" name="username" maxlength="16" required autocomplete="off" placeholder="3 à 16 caractères"></label>
+        <div id="authAdminWrap" hidden><label>Clé admin<input id="authAdminKey" type="password" maxlength="64" autocomplete="off" placeholder="fichier data/admin-key.txt du serveur"></label></div>
         <div class="row">
           <button type="submit" class="btn primary">Jouer</button>
         </div>

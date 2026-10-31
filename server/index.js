@@ -46,6 +46,10 @@ function loadAdminKey() {
   return key;
 }
 const ADMIN_KEY = loadAdminKey();
+// Pseudos réservés à l'admin (ADMIN_NAMES, séparés par des virgules) : ils ne peuvent être pris qu'avec la clé admin,
+// et le joueur qui les prend est admin d'office (tous les skins, panneau d'administration).
+const ADMIN_NAMES = new Set((process.env.ADMIN_NAMES || 'Aluego,Alugo').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
+function isAdminKey(key) { return typeof key === 'string' && key.length === ADMIN_KEY.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(ADMIN_KEY)); }
 
 const db = createStore();
 const app = express();
@@ -145,10 +149,12 @@ app.get('/api/config', (req, res) => { res.json({ avatarPresets: Catalog.AVATAR_
 
 // ---------- Identité joueur : pas de compte. Un pseudo + un cookie sécurisé sur cet appareil. ----------
 app.post('/api/guest', authLimiter, wrap(async (req, res) => {
-  const { username } = req.body || {};
+  const { username, key } = req.body || {};
   if (typeof username !== 'string' || !USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
   if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris, choisis-en un autre' });
-  const user = await db.createUser(username);
+  const reserved = ADMIN_NAMES.has(username.toLowerCase());
+  if (reserved && !isAdminKey(String(key || ''))) return res.status(403).json({ error: key ? 'Clé admin incorrecte' : 'Ce pseudo est réservé à l’admin : entre la clé admin', reserved: true });
+  const user = await db.createUser(username, reserved ? { is_admin: true } : {});
   setSession(req, res, user);
   res.json({ profile: publicProfile(user) });
 }));
@@ -180,7 +186,7 @@ app.post('/api/transfer/claim', authLimiter, wrap(async (req, res) => {
 // ---------- Clé admin ----------
 app.post('/api/admin/activate', authMiddleware, authLimiter, wrap(async (req, res) => {
   const key = String((req.body && req.body.key) || '');
-  if (!key || key.length !== ADMIN_KEY.length || !crypto.timingSafeEqual(Buffer.from(key), Buffer.from(ADMIN_KEY))) return res.status(403).json({ error: 'Clé incorrecte' });
+  if (!isAdminKey(key)) return res.status(403).json({ error: 'Clé incorrecte' });
   const user = await db.updateUser(req.user.id, { is_admin: true });
   res.json({ profile: refreshLiveProfile(user) });
 }));
@@ -302,7 +308,7 @@ app.get('/api/stats', (req, res) => {
 // ---------- WebSocket ----------
 const server = http.createServer(app);
 const wss = new WebSocketServer({
-  server, path: '/ws', maxPayload: 16 * 1024,
+  server, path: '/ws', maxPayload: 16 * 1024, perMessageDeflate: false, // pas de compression : moins de CPU et de latence
   verifyClient: ({ req }) => { // même origine uniquement
     const origin = req.headers.origin; if (!origin) return true;
     try { return new URL(origin).host === (req.headers['x-forwarded-host'] || req.headers.host); } catch (e) { return false; }
@@ -411,6 +417,7 @@ wss.on('connection', (ws, req) => {
   const client = {
     ws, alive: true, user: null, profile: null, room: null, friendlyCode: null,
     send(msg) { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); },
+    sendRaw(str) { if (ws.readyState === 1 && ws.bufferedAmount < 64 * 1024) ws.send(str); }, // saute l'envoi si le tuyau est déjà plein (connexion lente)
   };
   clients.add(client);
   let authed = false;

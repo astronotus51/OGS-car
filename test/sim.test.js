@@ -100,14 +100,16 @@ let grompAlive = true; for (let i = 0; i < 30 * 20; i++) { gp.step(1 / 30); for 
 assert.ok(grompAlive, 'Gromp survit au Riko');
 console.log('features OK');
 
-// Portée de Krak : 2 cases de côté, 3 devant.
+// Portée de Krak : carré de 2 cases tout autour, uniquement dans son propre camp.
 const gk2 = Sim.createGame({ seed: 11, duration: 0 });
-gk2.state.mana.bottom = 70; assert.ok(gk2.place('bottom', 3, 4, 4).ok); // Krak col 4, ligne avant (row 4)
-gk2.state.mana.top = 70; assert.ok(gk2.place('top', 5, 2, 1).ok); // mur ennemi 2 colonnes à gauche, 3 lignes devant -> dans la zone
-gk2.state.mana.top = 70; assert.ok(gk2.place('top', 5, 7, 1).ok); // 3 colonnes à droite -> hors zone
-gk2.state.mana.top = 70; assert.ok(gk2.place('top', 5, 4, 0).ok); // 4 lignes devant -> hors zone
+gk2.state.mana.bottom = 70; assert.ok(gk2.place('bottom', 3, 4, 5).ok); // Krak col 4, row 5 (camp bas = rows 4..7)
+const wallAt = (col, row) => { gk2.state.mana.top = 70; assert.ok(gk2.place('top', 5, 2, 0).ok); const w = gk2.state.entities[gk2.state.entities.length - 1]; const c = Sim.cellCenter(col, row); w.x = c.x; w.y = c.y; return w; };
+const wIn = wallAt(2, 7);   // 2 colonnes à gauche, 2 lignes derrière -> dans la zone (camp bas)
+const wEnemy = wallAt(4, 3); // 2 lignes devant mais camp adverse -> hors zone
+const wSide = wallAt(7, 5);  // 3 colonnes à droite -> hors zone
 let shots = 0; for (let i = 0; i < 30 * 5; i++) { gk2.step(1 / 30); for (const e of gk2.drainEvents()) if (e.type === 'shot') shots += 1; }
-assert.ok(shots >= 2, 'Krak tire sur la cible à 2 colonnes / 3 lignes');
-const hpFar = gk2.state.entities.filter(e => e.ogId === 5 && (Math.round(e.x / Sim.CELL_W - 0.5) === 7 || Math.round(e.y / Sim.CELL_H - 0.5) === 0)).map(e => e.hp);
-assert.ok(hpFar.every(h => h === 3), 'les murs hors zone ne sont pas touchés');
+assert.ok(shots >= 2, 'Krak tire sur la cible derrière lui dans son camp');
+assert.ok(wIn.hp < 3 || !gk2.state.entities.includes(wIn), 'la cible dans la zone est touchée');
+assert.strictEqual(wEnemy.hp, 3, 'le camp adverse n\'est jamais visé');
+assert.strictEqual(wSide.hp, 3, 'hors zone latérale : intact');
 console.log('portée Krak OK');

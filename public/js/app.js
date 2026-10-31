@@ -72,9 +72,17 @@
   // ----- Identité joueur (pas de compte) -----
   $('authForm').addEventListener('submit', async (ev) => {
     ev.preventDefault(); $('authError').textContent = '';
-    try { profile = (await Net.api('/api/guest', { username: $('authUser').value.trim() })).profile; enterLobby(); }
-    catch (err) { $('authError').textContent = err.message; }
+    const body = { username: $('authUser').value.trim() };
+    const key = $('authAdminKey').value.trim();
+    if (key) body.key = key;
+    try { profile = (await Net.api('/api/guest', body)).profile; $('authAdminKey').value = ''; enterLobby(); }
+    catch (err) {
+      $('authError').textContent = err.message;
+      // Pseudo réservé à l'admin : on fait apparaître le champ « clé admin ».
+      if (err.data && err.data.reserved) { $('authAdminWrap').hidden = false; $('authAdminKey').focus(); }
+    }
   });
+  $('authUser').addEventListener('input', () => { if (!$('authAdminWrap').hidden && !$('authAdminKey').value) $('authAdminWrap').hidden = true; });
   $('transferForm').addEventListener('submit', async (ev) => {
     ev.preventDefault(); $('transferError').textContent = '';
     try { profile = (await Net.api('/api/transfer/claim', { code: $('transferCode').value.trim() })).profile; $('transferCode').value = ''; enterLobby(); }
@@ -420,7 +428,7 @@
     const lines = [
       [1, 'Se pose sur la ligne du fond et fonce tout droit vers la base ennemie (1 dégât). Meurt au contact des Défenseurs, Éponges, Tourelles et Chargeurs adverses. Rebondit sur un Mur ennemi en changeant de camp ! Passe au-dessus de tes propres Murs.'],
       [2, 'Patrouille horizontalement, rebondit sur les bords et les obstacles. Mange les Runners adverses. Destruction mutuelle avec une Éponge.'],
-      [3, 'Statique, 2 PV. Tire sur les ennemis dans une zone de 2 cases de chaque côté et 3 cases devant elle (zone affichée à la pose). Détruite au contact d’un Riko.'],
+      [3, 'Statique, 2 PV. Tire sur tout ennemi qui entre dans un carré de 2 cases autour d’elle (devant, derrière, côtés), uniquement dans ton camp (zone affichée à la pose). Détruite au contact d’un Riko.'],
       [4, 'Avance en diagonale en rebondissant sur les côtés, 3 PV. Détruit Tourelles et Chargeurs au contact (perd 1 PV à chaque fois), casse un Mur mais meurt. 2 dégâts à la base.'],
       [5, 'Mur statique, 3 PV. Renvoie les Runners ennemis (−1 PV par rebond). Tes propres Ogs le traversent.'],
       [6, 'Statique, 3 PV. +50 % de régénération de mana tant qu’il est en vie (cumulable). Cible préférée des Éponges et Ailées.'],

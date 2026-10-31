@@ -9,7 +9,7 @@
   const W = 1536, H = 2048, BAND = 280, BEACH = 26;
   const FIELD_Y = BAND;
   const KEY_LABELS = ['A', 'Z', 'E', 'R', 'T', 'Y', 'U'];
-  const MAX_DPR = 2;
+  let MAX_DPR = 2; // baissé automatiquement si la machine n'arrive pas à suivre (qualité adaptative)
   const EMOTE_TEXT = { gg: 'GG !', wow: '😮', lol: '😂', rage: '😡', love: '💛' };
 
   function createRenderer(canvas) {
@@ -20,6 +20,7 @@
     let shake = 0, flashHp = { top: 0, bottom: 0 }, hazardWarn = 0, overtimeFlash = 0, waveBanner = null;
     let me = 'bottom';
     let waterCache = null;
+    let slowFrames = 0, perfFrames = 0; // qualité adaptative
 
     function resize() {
       const ratio = W / H;
@@ -175,11 +176,12 @@
         }
         ctx.restore();
       }
-      // Zone de tir de Krak (2 cases de côté, 3 devant) : à la pose, et au survol d'un Krak existant.
+      // Zone de tir de Krak (2 cases tout autour, limitée à son camp) : à la pose, et au survol d'un Krak existant.
       const krakZone = (col, row, alpha) => {
-        const c0 = Math.max(0, col - RULES.orangeRangeSide), c1 = Math.min(COLS - 1, col + RULES.orangeRangeSide);
-        const fwd = me === 'top' ? 1 : -1;
-        const r0 = Math.max(0, Math.min(row, row + fwd * RULES.orangeRangeForward)), r1 = Math.min(ROWS - 1, Math.max(row, row + fwd * RULES.orangeRangeForward));
+        const R = RULES.orangeRange, half = ROWS / 2;
+        const c0 = Math.max(0, col - R), c1 = Math.min(COLS - 1, col + R);
+        const rowMin = me === 'top' ? 0 : half, rowMax = me === 'top' ? half - 1 : ROWS - 1; // jamais côté adverse
+        const r0 = Math.max(rowMin, row - R), r1 = Math.min(rowMax, row + R);
         const a1 = cellRect(c0, r0), a2 = cellRect(c1, r1);
         const x = Math.min(a1.x, a2.x), y = Math.min(a1.y, a2.y), w = Math.abs(a2.x - a1.x) + CELL_W, h = Math.abs(a2.y - a1.y) + CELL_H;
         ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = 'rgba(251,146,60,0.18)'; ctx.fillRect(x, y, w, h);
@@ -552,6 +554,9 @@
     function render(view) {
       const now = performance.now() / 1000;
       const dt = Math.min(0.1, now - lastNow); lastNow = now;
+      // Qualité adaptative : si plus d'un tiers des 90 dernières images dépasse 28 ms (< 36 fps), on réduit la résolution du canvas.
+      perfFrames += 1; if (dt > 0.028) slowFrames += 1;
+      if (perfFrames >= 90) { if (slowFrames > 30 && MAX_DPR > 1) { MAX_DPR = MAX_DPR > 1.5 ? 1.5 : 1; resize(); } perfFrames = 0; slowFrames = 0; }
       me = view.me;
       stepFx(dt);
       ctx.setTransform(scale, 0, 0, scale, 0, 0);

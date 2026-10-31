@@ -38,8 +38,7 @@
     hazardDamage: 0, // BALANCE.md : 0 dégât en sortie (README historique : 7)
     orangeCooldown: 1.5,
     wingedCooldown: 0.8,
-    orangeRangeSide: 2, // Krak : 2 cases de chaque côté…
-    orangeRangeForward: 3, // …et 3 cases devant (zone rectangulaire)
+    orangeRange: 2, // Krak : 2 cases tout autour (carré 5×5), uniquement dans son propre camp
     wingedRangeCells: 1,
     projectileSpeed: 700,
     projectileLifetime: 2.5,
@@ -97,6 +96,8 @@
   // ---------- Helpers géométrie ----------
   function other(player) { return player === 'top' ? 'bottom' : 'top'; }
   function dirOf(player) { return player === 'top' ? 1 : -1; }
+  // Vrai si l'ordonnée y est dans la moitié de terrain de ce joueur (la ligne médiane n'appartient à personne).
+  function inOwnHalf(player, y) { return player === 'top' ? y < FIELD.h / 2 : y > FIELD.h / 2; }
   function cellCenter(col, row) { return { x: (col + 0.5) * CELL_W, y: (row + 0.5) * CELL_H }; }
   function cellOf(x, y) {
     if (x < 0 || x >= FIELD.w || y < 0 || y >= FIELD.h) return null;
@@ -561,9 +562,10 @@
           if (e.player === s.player || dead.has(e.id)) continue;
           const forward = dirOf(s.player) * (e.y - s.y); // distance devant (positive) ou derrière (négative)
           if (s.ogId === 3) {
-            // Krak : zone rectangulaire, 2 cases de chaque côté, 3 cases devant (sa propre ligne comprise).
-            if (Math.abs(e.x - s.x) > (RULES.orangeRangeSide + 0.5) * CELL_W) continue;
-            if (forward < -CELL_H * 0.5 || forward > (RULES.orangeRangeForward + 0.5) * CELL_H) continue;
+            // Krak : carré de 2 cases tout autour de lui (devant, derrière, côtés), jamais dans le camp adverse.
+            if (Math.abs(e.x - s.x) > (RULES.orangeRange + 0.5) * CELL_W) continue;
+            if (Math.abs(e.y - s.y) > (RULES.orangeRange + 0.5) * CELL_H) continue;
+            if (!inOwnHalf(s.player, e.y)) continue;
           } else {
             if (dist2(s, e) > range2) continue;
             if (!WINGED_TARGETS.has(e.ogId)) continue;

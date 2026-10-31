@@ -6,7 +6,7 @@ Valeurs dans `shared/sim.js` (`RULES`, `OGS`). Base 30 PV, mana max 70, +2/s (+5
 | --- | --- | --- | --- | --- | --- |
 | 1 Zip (jaune) | 10 | 1 | tout droit, ligne du fond uniquement | 1 | meurt sur Défenseur / Éponge / Tourelle / Chargeur ennemis (−1 PV à Tourelle, Chargeur, Éponge) ; rebondit sur Mur ennemi (−1 PV au mur) **et change de camp** ; traverse ses propres murs ; deux Runners adverses s'annulent |
 | 2 Défenseur (violet) | 20 | 1 | horizontal, rebonds | 0 | mange les Runners ennemis ; rebondit sur Tourelles / Murs / Chargeurs (toutes équipes) ; destruction mutuelle avec Éponge |
-| 3 Krak (orange) | 30 | 2 | statique | 0 | tir toutes les 1,5 s sur la cible la plus proche dans une zone de **2 cases de chaque côté et 3 cases devant** (sa ligne comprise) ; détruite au contact d'un Riko |
+| 3 Krak (orange) | 30 | 2 | statique | 0 | tir toutes les 1,5 s sur la cible la plus proche dans un **carré de 2 cases tout autour d'elle** (devant, derrière, côtés), **jamais dans le camp adverse** ; détruite au contact d'un Riko |
 | 4 Riko (rouge) | 40 | 3 | diagonale, rebonds latéraux, ligne du fond uniquement | 2 | tue Tourelle et Chargeur au contact (−1 PV à elle-même) ; casse un Mur mais meurt ; destruction mutuelle avec Défenseur / Éponge ; projectiles : −1 PV |
 | 5 Mur (bleu) | 50 | 3 | statique | 0 | bloque la case ; renvoie les Runners ennemis ; laisse passer sa propre équipe |
 | 6 Chargeur (vert) | 60 | 3 | statique | 0 | +50 % regen mana (cumulable) ; one-shot par Éponge ; −1 PV par Runner ; cible des Ailées |

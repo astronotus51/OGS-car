@@ -4,6 +4,7 @@ const AI = require('../shared/ai.js');
 const Catalog = require('../shared/catalog.js');
 
 const TICK_RATE = 30;
+const SNAP_EVERY = 2; // un snapshot réseau tous les 2 ticks (15 Hz) : moitié moins de données, le client interpole
 const DISCONNECT_GRACE = 20; // s avant forfait
 const DRAFT_SECONDS = 12;
 const SIDES = ['top', 'bottom'];
@@ -46,6 +47,8 @@ class Room {
     this.timer = null;
     this.last = Date.now();
     this.acc = 0;
+    this.frame = 0;
+    this.pendingEvents = [];
     this.ended = false;
     this.startedAt = Date.now();
     this.survival = mode === 'survival' ? { wave: 0, timer: 6, score: 0, kills: 0 } : null;
@@ -66,7 +69,7 @@ class Room {
   humans() { return this.players.filter(p => !p.bot && !p.director); }
 
   send(p, msg) { if (p.client && p.connected) p.client.send(msg); }
-  broadcast(msg) { for (const p of this.players) this.send(p, msg); }
+  broadcast(msg) { const raw = JSON.stringify(msg); for (const p of this.players) if (p.client && p.connected) p.client.sendRaw ? p.client.sendRaw(raw) : p.client.send(msg); }
 
   start() {
     for (const p of this.players) {
@@ -213,7 +216,12 @@ class Room {
       this.acc -= step;
     }
     if (this.survival) this.survival.score = this.survival.kills * 10 + this.survival.wave * 50 + Math.floor(this.game.state.time);
-    this.broadcast({ t: 'snap', s: this.game.snapshot(), ev: events, sv: this.survivalInfo() });
+    if (events.length) this.pendingEvents = this.pendingEvents.concat(events);
+    this.frame += 1;
+    if (this.frame % SNAP_EVERY === 0 || this.game.state.over || this.pendingEvents.length) {
+      this.broadcast({ t: 'snap', s: this.game.snapshot(), ev: this.pendingEvents, sv: this.survivalInfo() });
+      this.pendingEvents = [];
+    }
     if (this.game.state.over) this.finish();
   }
 
