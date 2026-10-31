@@ -89,8 +89,22 @@ app.use('/api', (req, res, next) => {
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'Trop de tentatives, réessaie dans 15 minutes' } });
 const apiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 240, standardHeaders: true, legacyHeaders: false, message: { error: 'Trop de requêtes' } });
 app.use('/api', apiLimiter);
+// ---------- Version de build : empreinte des fichiers du client. Change à chaque déploiement => les navigateurs rechargent les scripts. ----------
+function computeBuild() {
+  const h = crypto.createHash('sha1');
+  const dirs = [path.join(__dirname, '..', 'public'), path.join(__dirname, '..', 'shared')];
+  for (const dir of dirs) for (const f of fs.readdirSync(dir, { recursive: true })) { const fp = path.join(dir, String(f)); if (/\.(js|css|html)$/.test(fp)) { try { h.update(fs.readFileSync(fp)); } catch (e) { /* dossier */ } } }
+  return h.digest('hex').slice(0, 10);
+}
+const BUILD = computeBuild();
+const INDEX_HTML = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8')
+  .replace(/\?v=\d+"/g, `?v=${BUILD}"`)
+  .replace('<meta charset="UTF-8">', `<meta charset="UTF-8">\n  <meta name="build" content="${BUILD}">`);
+app.get(['/', '/index.html'], (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.type('html').send(INDEX_HTML); });
+app.get('/api/version', (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ build: BUILD }); });
+
 app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
-app.use((req, res, next) => { if (/\.(js|css|html)$/.test(req.path) || req.path === '/') res.setHeader('Cache-Control', 'no-cache'); next(); });
+app.use((req, res, next) => { if (/\.(js|css|html)$/.test(req.path)) res.setHeader('Cache-Control', 'no-cache'); next(); });
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ---------- Auth REST ----------
@@ -513,5 +527,5 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 db.init().then(() => {
-  server.listen(PORT, () => console.log(`Glouglou Arena -> http://localhost:${PORT}  (db: ${db.kind})`));
+  server.listen(PORT, () => console.log(`Glouglou Arena -> http://localhost:${PORT}  (db: ${db.kind}, build ${BUILD})`));
 }).catch(err => { console.error('Impossible de démarrer la base :', err.message); process.exit(1); });

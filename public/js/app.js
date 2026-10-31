@@ -463,5 +463,13 @@
   requestAnimationFrame(drawShowcase);
 
   Net.api('/api/config').then(c => { config = c; }).catch(() => {});
+  // Mise à jour automatique : si le serveur a une nouvelle version, on recharge la page (hors partie en cours).
+  const myBuild = (document.querySelector('meta[name="build"]') || {}).content || null;
+  async function checkBuild() {
+    if (!myBuild) return;
+    try { const { build } = await Net.api('/api/version'); if (build && build !== myBuild && current !== 'game') location.reload(); } catch (e) { /* hors-ligne */ }
+  }
+  setInterval(checkBuild, 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkBuild(); });
   tryResume();
 })();
