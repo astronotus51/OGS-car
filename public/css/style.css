@@ -225,6 +225,7 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 5px; border-radius: 5
 .logo.glou .bubbles i:nth-child(3) { width: 13px; height: 13px; left: 8px; animation-delay: 2s; }
 @keyframes bub { 0% { bottom: 0; opacity: 0; } 20% { opacity: 0.9; } 100% { bottom: 50px; opacity: 0; } }
 
+.google-btn { display: flex; justify-content: center; margin: 14px 0; min-height: 44px; }
 .badge-modo { display: inline-block; font-size: 10px; letter-spacing: 1px; background: linear-gradient(90deg, #06b6d4, #6366f1); color: #fff; padding: 2px 7px; border-radius: 999px; vertical-align: middle; font-weight: 800; }
 .admin-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow: auto; }
 .admin-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 6px 10px; background: rgba(255,255,255,0.05); border-radius: 10px; }

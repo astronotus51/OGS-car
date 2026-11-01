@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const http = require('http');
 const express = require('express');
 const { WebSocketServer } = require('ws');
+const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -42,10 +43,15 @@ function loadAdminKey() {
   try { return fs.readFileSync(file, 'utf8').trim(); } catch (e) { /* créé ci-dessous */ }
   const key = crypto.randomBytes(12).toString('base64url');
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, key);
+  fs.writeFileSync(file, key + '\n');
   return key;
 }
 const ADMIN_KEY = loadAdminKey();
+// Connexion Google (seul moyen de se connecter quand GOOGLE_CLIENT_ID est défini).
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+// E-mails Google administrateurs (ADMIN_EMAILS, séparés par des virgules) : admin d'office à la connexion.
+const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
 // Pseudos réservés à l'admin (ADMIN_NAMES, séparés par des virgules) : ils ne peuvent être pris qu'avec la clé admin,
 // et le joueur qui les prend est admin d'office (tous les skins, panneau d'administration).
 const ADMIN_NAMES = new Set((process.env.ADMIN_NAMES || 'Aluego,Alugo').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
@@ -60,12 +66,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", 'https://accounts.google.com/gsi/client'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'blob:'],
-      connectSrc: ["'self'", 'ws:', 'wss:'],
-      frameSrc: ["'none'"],
+      connectSrc: ["'self'", 'ws:', 'wss:', 'https://accounts.google.com/gsi/'],
+      frameSrc: ['https://accounts.google.com/gsi/'],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
@@ -103,7 +109,7 @@ function computeBuild() {
 const BUILD = computeBuild();
 const INDEX_HTML = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8')
   .replace(/\?v=\d+"/g, `?v=${BUILD}"`)
-  .replace('<meta charset="UTF-8">', `<meta charset="UTF-8">\n  <meta name="build" content="${BUILD}">`);
+  .replace('<meta charset="UTF-8">', `<meta charset="UTF-8">\n  <meta name="build" content="${BUILD}">\n  <meta name="google-client-id" content="${GOOGLE_CLIENT_ID}">`);
 app.get(['/', '/index.html'], (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.type('html').send(INDEX_HTML); });
 app.get('/api/version', (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ build: BUILD }); });
 
@@ -145,10 +151,43 @@ async function authMiddleware(req, res, next) {
 }
 const wrap = fn => (req, res) => fn(req, res).catch(err => { console.error(err); res.status(500).json({ error: 'Erreur serveur' }); });
 
-app.get('/api/config', (req, res) => { res.json({ avatarPresets: Catalog.AVATAR_PRESETS, secure: isSecure(req) }); });
+app.get('/api/config', (req, res) => { res.json({ avatarPresets: Catalog.AVATAR_PRESETS, secure: isSecure(req), google: !!GOOGLE_CLIENT_ID }); });
 
 // ---------- Identité joueur : pas de compte. Un pseudo + un cookie sécurisé sur cet appareil. ----------
+// ---------- Connexion Google ----------
+// Le client envoie le jeton d'identité (credential) fourni par Google Identity Services ; on le vérifie côté serveur
+// (signature Google, audience = notre client id). 1re connexion : on demande un pseudo, puis on crée le joueur.
+app.post('/api/auth/google', authLimiter, wrap(async (req, res) => {
+  if (!googleClient) return res.status(503).json({ error: 'Connexion Google non configurée sur ce serveur (GOOGLE_CLIENT_ID)' });
+  const { credential, username } = req.body || {};
+  if (typeof credential !== 'string' || credential.length > 4096) return res.status(400).json({ error: 'Jeton Google manquant' });
+  let info;
+  try { info = (await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID })).getPayload(); }
+  catch (e) { return res.status(401).json({ error: 'Jeton Google invalide ou expiré, réessaie' }); }
+  if (!info || !info.sub) return res.status(401).json({ error: 'Jeton Google invalide' });
+  const email = String(info.email || '').toLowerCase();
+  const admin = !!(email && info.email_verified && ADMIN_EMAILS.has(email));
+  let user = await db.getUserByGoogleSub(info.sub);
+  if (!user) {
+    if (typeof username !== 'string' || !username) {
+      // 1re connexion : le client doit proposer un pseudo. On en suggère un à partir du prénom Google.
+      const base = String(info.given_name || info.name || 'Joueur').normalize('NFD').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 12) || 'Joueur';
+      let suggested = base; for (let i = 2; await db.getUserByUsername(suggested); i += 1) suggested = `${base}${i}`;
+      return res.json({ needUsername: true, suggested, admin });
+    }
+    if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
+    if (ADMIN_NAMES.has(username.toLowerCase()) && !admin) return res.status(403).json({ error: 'Ce pseudo est réservé à l’admin' });
+    if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris, choisis-en un autre' });
+    user = await db.createUser(username, { google_sub: info.sub, email, is_admin: admin });
+  } else if (admin && !user.is_admin) {
+    user = await db.updateUser(user.id, { is_admin: true, email });
+  }
+  setSession(req, res, user);
+  res.json({ profile: publicProfile(user) });
+}));
+
 app.post('/api/guest', authLimiter, wrap(async (req, res) => {
+  if (googleClient) return res.status(403).json({ error: 'Connexion uniquement avec un compte Google' });
   const { username, key } = req.body || {};
   if (typeof username !== 'string' || !USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
   const reserved = ADMIN_NAMES.has(username.toLowerCase());
@@ -182,6 +221,7 @@ app.post('/api/transfer/code', authMiddleware, wrap(async (req, res) => {
   res.json({ code });
 }));
 app.post('/api/transfer/claim', authLimiter, wrap(async (req, res) => {
+  if (googleClient) return res.status(403).json({ error: 'Connexion uniquement avec un compte Google' });
   const code = String((req.body && req.body.code) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (code.length !== 8) return res.status(400).json({ error: 'Code invalide' });
   const user = await db.getUserByTransferCode(`${code.slice(0, 4)}-${code.slice(4)}`);
@@ -573,5 +613,5 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 db.init().then(() => {
-  server.listen(PORT, () => console.log(`Glouglou Arena -> http://localhost:${PORT}  (db: ${db.kind}, build ${BUILD})`));
+  server.listen(PORT, () => console.log(`Glouglou Arena -> http://localhost:${PORT}  (db: ${db.kind}, build ${BUILD}, connexion : ${GOOGLE_CLIENT_ID ? 'Google uniquement' : 'pseudo (GOOGLE_CLIENT_ID non défini)'}, admins : ${[...ADMIN_EMAILS].join(', ') || 'clé admin'})`));
 }).catch(err => { console.error('Impossible de démarrer la base :', err.message); process.exit(1); });

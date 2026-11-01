@@ -6,14 +6,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const USER_COLUMNS = `id, username, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily, survival_best, quests, avatar, session_version, transfer_code, transfer_expires, is_admin, is_modo`;
+const USER_COLUMNS = `id, username, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily, survival_best, quests, avatar, session_version, transfer_code, transfer_expires, is_admin, is_modo, google_sub, email`;
 
 function defaultUser(username, extra) {
   return Object.assign({
     username,
     trophies: 0, best_trophies: 0, xp: 0, coins: 50, wins: 0, losses: 0, draws: 0, streak: 0,
     equipped: {}, skins: [], created_at: new Date().toISOString(), last_daily: null, survival_best: 0, quests: {},
-    avatar: null, session_version: 0, transfer_code: null, transfer_expires: null, is_admin: false, is_modo: false,
+    avatar: null, session_version: 0, transfer_code: null, transfer_expires: null, is_admin: false, is_modo: false, google_sub: null, email: null,
   }, extra || {});
 }
 
@@ -41,6 +41,7 @@ function createPgStore(url) {
         [u.username, u.coins, JSON.stringify(u.equipped), JSON.stringify(u.skins)]))[0];
     },
     async getUserByTransferCode(code) { return (await q(`SELECT ${USER_COLUMNS} FROM users WHERE transfer_code = $1`, [code]))[0] || null; },
+    async getUserByGoogleSub(sub) { return (await q(`SELECT ${USER_COLUMNS} FROM users WHERE google_sub = $1`, [sub]))[0] || null; },
     async wipe() { await q('DELETE FROM matches'); await q('DELETE FROM users'); },
     async updateUser(id, patch) {
       const keys = Object.keys(patch);
@@ -103,6 +104,7 @@ function createJsonStore(file) {
       data.users.push(u); save(); return clone(u);
     },
     async getUserByTransferCode(code) { return clone(data.users.find(u => u.transfer_code === code) || null); },
+    async getUserByGoogleSub(sub) { return clone(data.users.find(u => u.google_sub === sub) || null); },
     async wipe() { data = { users: [], matches: [], nextUser: 1, nextMatch: 1 }; writeNow(); },
     async updateUser(id, patch) {
       const u = data.users.find(x => x.id === id);

@@ -25,13 +25,11 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS transfer_code TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS transfer_expires TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_modo BOOLEAN NOT NULL DEFAULT false;
--- Anciennes colonnes de comptes (mot de passe, Google) : rendues facultatives puis ignorées.
-ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
-ALTER TABLE users ALTER COLUMN password_hash SET DEFAULT '';
-DROP INDEX IF EXISTS users_google_sub;
-ALTER TABLE users DROP COLUMN IF EXISTS google_sub;
-ALTER TABLE users DROP COLUMN IF EXISTS email;
+-- Connexion Google : identifiant Google (sub) + e-mail. Plus de mot de passe.
 ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users (google_sub) WHERE google_sub IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_transfer_code ON users (transfer_code) WHERE transfer_code IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower ON users (lower(username));
 CREATE INDEX IF NOT EXISTS users_trophies ON users (trophies DESC, wins DESC);

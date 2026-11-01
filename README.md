@@ -53,13 +53,21 @@ Un seul service Node, qui sert le site **et** le WebSocket :
 - **Railway** : *Deploy from GitHub*, mêmes variables. `PORT` est fourni automatiquement.
 - **VPS** : `node server/index.js` derrière Nginx (penser à proxifier `/ws` avec `Upgrade`/`Connection` headers).
 
-## Joueurs (sans compte) et sécurité
+## Connexion (compte Google uniquement) et sécurité
 
-Il n'y a **aucun compte** : pas d'inscription, pas de mot de passe, pas de connexion Google. À la première visite, le joueur choisit un pseudo (unique) et joue. Sa progression (trophées, niveau, pièces, skins, avatar) est liée à l'appareil par un cookie de session sécurisé (`httpOnly`, `SameSite=Lax`, `Secure` en HTTPS, signé, 30 jours).
+Quand `GOOGLE_CLIENT_ID` est défini, **la seule façon de se connecter est un compte Google** (bouton « Continuer avec Google »). Pas de mot de passe à gérer : Google authentifie, le serveur vérifie le jeton (signature Google, audience = notre client id) et ouvre une session dans un cookie sécurisé (`httpOnly`, `SameSite=Lax`, `Secure` en HTTPS, signé, 30 jours). À la première connexion, le joueur choisit son pseudo (unique, visible des autres). Sa progression suit son compte Google sur tous ses appareils.
 
-- **Changer de joueur** (lobby ou profil) oublie le joueur sur cet appareil.
-- **Transfert** : dans le profil, « Générer un code » donne un code à usage unique valable 24 h ; sur l'autre appareil, « J'ai un code de transfert » à l'accueil récupère la progression (l'ancien appareil est déconnecté).
-- **Admin** : une clé secrète, dans `data/admin-key.txt` (générée au premier démarrage) ou la variable `ADMIN_KEY`. Un joueur l'entre une fois dans son profil → badge ADMIN, tous les skins, panneau d'administration (comptes, joueurs en ligne, parties en cours, don de pièces/trophées). Les pseudos `ADMIN_NAMES` (par défaut **Aluego** et Alugo) sont réservés : on ne peut les prendre qu'en entrant la clé admin sur l'écran d'accueil, et on est alors admin d'office. Dans son profil, l'admin voit la liste des joueurs et peut **nommer un modo** (badge MODO + tous les skins), **débloquer tous les skins** d'un joueur ou lui **donner des pièces/trophées**.
+Mise en place (une fois, ~5 min) :
+
+1. Il faut un **nom de domaine** pointant sur le serveur (Google refuse une adresse IP nue comme origine OAuth) et de préférence HTTPS (`certbot`, voir le déploiement).
+2. [console.cloud.google.com](https://console.cloud.google.com) → créer un projet → **API et services → Écran de consentement OAuth** (type Externe, nom « Glouglou Arena », ton e-mail) → **Identifiants → Créer → ID client OAuth → Application Web**. Origines JavaScript autorisées : `https://ton-domaine.fr` (et `http://localhost:3000` pour tester en local). Pas besoin d'URI de redirection.
+3. Dans `.env` du serveur : `GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com` et `ADMIN_EMAILS=ton.email@gmail.com`, puis `pm2 restart ogs`.
+
+Sans `GOOGLE_CLIENT_ID`, le jeu retombe sur l'ancien mode : pseudo + cookie sur l'appareil, code de transfert.
+
+- **Se déconnecter** (lobby ou profil) ferme la session sur cet appareil.
+- **Admin** : les e-mails Google listés dans `ADMIN_EMAILS` sont admin d'office à la connexion → badge ADMIN, tous les skins, panneau d'administration. (La clé `data/admin-key.txt` / `ADMIN_KEY` reste utilisable dans le profil, et les pseudos `ADMIN_NAMES` — Aluego, Alugo — sont réservés aux admins.) Dans son profil, l'admin voit la liste des joueurs et peut **nommer un modo** (badge MODO + tous les skins), **débloquer tous les skins** d'un joueur ou lui **donner des pièces/trophées**.
+- **Passer un joueur admin sans clé** (sur le serveur) : `node scripts/make-admin.js Aluego` puis `pm2 restart ogs` (`--retirer` pour annuler).
 - **Tout effacer** : `node scripts/wipe-all.js --oui` supprime tous les joueurs et toutes les parties (puis `pm2 restart ogs`).
 - Protections serveur : en-têtes helmet (CSP stricte, pas de framing), limite de requêtes (anti-abus), vérification d'origine sur l'API et le WebSocket, validation des entrées, avatars vérifiés (format, taille ≤ 64 Ko).
 - **HTTPS** : il reste à mettre un domaine + `certbot` (voir le déploiement) pour chiffrer le trafic et marquer le cookie `Secure`.
