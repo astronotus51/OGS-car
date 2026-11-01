@@ -52,9 +52,6 @@ const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 // E-mails Google administrateurs (ADMIN_EMAILS, séparés par des virgules) : admin d'office à la connexion.
 const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
-// Pseudos réservés à l'admin (ADMIN_NAMES, séparés par des virgules) : ils ne peuvent être pris qu'avec la clé admin,
-// et le joueur qui les prend est admin d'office (tous les skins, panneau d'administration).
-const ADMIN_NAMES = new Set((process.env.ADMIN_NAMES || 'Aluego,Alugo').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
 function isAdminKey(key) { return typeof key === 'string' && key.length === ADMIN_KEY.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(ADMIN_KEY)); }
 
 const db = createStore();
@@ -185,7 +182,6 @@ app.post('/api/auth/google/link', authMiddleware, authLimiter, wrap(async (req, 
   const username = req.body && req.body.username;
   if (typeof username === 'string' && username && username.toLowerCase() !== req.user.username.toLowerCase()) {
     if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
-    if (ADMIN_NAMES.has(username.toLowerCase()) && !(req.user.is_admin || g.admin)) return res.status(403).json({ error: 'Ce pseudo est réservé à l’admin' });
     if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris, choisis-en un autre' });
     patch.username = username;
   }
@@ -206,7 +202,6 @@ app.post('/api/auth/google', authLimiter, wrap(async (req, res) => {
       return res.json({ needUsername: true, suggested, admin });
     }
     if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
-    if (ADMIN_NAMES.has(username.toLowerCase()) && !admin) return res.status(403).json({ error: 'Ce pseudo est réservé à l’admin' });
     if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris, choisis-en un autre' });
     user = await db.createUser(username, { google_sub: info.sub, email, is_admin: admin });
   } else if (admin && !user.is_admin) {
@@ -217,25 +212,14 @@ app.post('/api/auth/google', authLimiter, wrap(async (req, res) => {
 }));
 
 app.post('/api/guest', authLimiter, wrap(async (req, res) => {
-  let { username, key } = req.body || {};
+  let { username } = req.body || {};
   if (username === undefined || username === null || username === '') {
     // Invité en un clic : pseudo « Invité-1234 » attribué par le serveur.
     do { username = `Invité-${crypto.randomInt(1000, 10000)}`; } while (await db.getUserByUsername(username));
   }
   if (typeof username !== 'string' || !USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
-  const reserved = ADMIN_NAMES.has(username.toLowerCase());
-  if (reserved && !isAdminKey(String(key || ''))) return res.status(403).json({ error: key ? 'Clé admin incorrecte' : 'Ce pseudo est réservé à l’admin : entre la clé admin', reserved: true });
-  const existing = await db.getUserByUsername(username);
-  if (existing && !reserved) return res.status(409).json({ error: 'Ce pseudo est déjà pris, choisis-en un autre' });
-  let user;
-  if (existing) {
-    // Pseudo admin déjà existant : la clé admin suffit pour le reprendre (depuis n'importe quel appareil).
-    // On le passe admin si besoin et on déconnecte l'éventuel autre appareil.
-    user = await db.updateUser(existing.id, { is_admin: true, session_version: (existing.session_version || 0) + 1 });
-    const prev = byUser.get(existing.id); if (prev) { prev.send({ t: 'kicked', reason: 'Connecté depuis un autre appareil' }); prev.ws.close(); }
-  } else {
-    user = await db.createUser(username, reserved ? { is_admin: true } : {});
-  }
+  if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris, choisis-en un autre' });
+  const user = await db.createUser(username);
   setSession(req, res, user);
   res.json({ profile: publicProfile(user) });
 }));

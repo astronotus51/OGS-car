@@ -69,8 +69,8 @@ Mise en place de Google (une fois, ~5 min) :
 3. Dans `.env` du serveur : `GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com` et `ADMIN_EMAILS=ton.email@gmail.com`, puis `pm2 restart ogs`.
 
 - **Se déconnecter / Quitter** (lobby ou profil) ferme la session sur cet appareil.
-- **Admin** : les e-mails Google listés dans `ADMIN_EMAILS` sont admin d'office à la connexion → badge ADMIN, tous les skins, panneau d'administration. (La clé `data/admin-key.txt` / `ADMIN_KEY` reste utilisable dans le profil, et les pseudos `ADMIN_NAMES` — Aluego, Alugo — sont réservés aux admins.) Dans son profil, l'admin voit la liste des joueurs et peut **nommer un modo** (badge MODO + tous les skins), **débloquer tous les skins** d'un joueur ou lui **donner des pièces/trophées**.
-- **Passer un joueur admin sans clé** (sur le serveur) : `node scripts/make-admin.js Aluego` puis `pm2 restart ogs` (`--retirer` pour annuler).
+- **Admin** : les e-mails Google listés dans `ADMIN_EMAILS` sont admin d'office à la connexion → badge ADMIN, tous les skins, panneau d'administration. La clé admin (`ADMIN_KEY` dans `.env`, sinon `data/admin-key.txt`) s'entre dans le profil, ouvert avec `?admin` dans l'adresse (`https://ton-domaine/?admin`). Aucun pseudo n'est réservé. Dans son profil, l'admin voit la liste des joueurs et peut **nommer un modo** (badge MODO + tous les skins), **débloquer tous les skins** d'un joueur ou lui **donner des pièces/trophées**.
+- **Passer un joueur admin sans clé** (sur le serveur) : `node scripts/make-admin.js MonPseudo` puis `pm2 restart ogs` (`--retirer` pour annuler).
 - **Tout effacer** : `node scripts/wipe-all.js --oui` supprime tous les joueurs et toutes les parties (puis `pm2 restart ogs`).
 - Protections serveur : en-têtes helmet (CSP stricte, pas de framing), limite de requêtes (anti-abus), vérification d'origine sur l'API et le WebSocket, validation des entrées, avatars vérifiés (format, taille ≤ 64 Ko).
 - **HTTPS** : il reste à mettre un domaine + `certbot` (voir le déploiement) pour chiffrer le trafic et marquer le cookie `Secure`.

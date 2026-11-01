@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Passe un joueur administrateur (ou lui retire le rôle), directement sur le serveur, sans clé :
- *   node scripts/make-admin.js Aluego            -> Aluego devient admin (tous les skins, panneau admin)
- *   node scripts/make-admin.js Aluego --retirer  -> Aluego redevient joueur normal
+ *   node scripts/make-admin.js MonPseudo            -> MonPseudo devient admin (tous les skins, panneau admin)
+ *   node scripts/make-admin.js MonPseudo --retirer  -> MonPseudo redevient joueur normal
  * Puis : pm2 restart ogs (pour que le serveur recharge le profil).
  */
 'use strict';
