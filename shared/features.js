@@ -12,6 +12,7 @@
 
   const FEATURES = {
     // --- Règles de partie (cases à cocher) ---
+    tightSpacing: { enabled: true, scope: 'match', default: true, ranked: true, group: 'Règles', label: 'Pose rapprochée', desc: 'On peut reposer une créature sur une case dès que la précédente s’en est un peu écartée (sinon il faut attendre qu’elle ait quitté la case).' },
     abilities: { enabled: true, scope: 'match', default: true, ranked: true, group: 'Règles', label: 'Capacités actives', desc: 'Maj + touche (ou clic sur ⚡) : chaque créature a un pouvoir (10 mana, 20 s de recharge).' },
     evolution: { enabled: true, scope: 'match', default: true, ranked: true, group: 'Règles', label: 'Évolution des unités', desc: 'Repose Krak, Blok ou Mojo sur lui-même : niveau 2 puis 3 (plus de PV, plus fort).' },
     overtime: { enabled: true, scope: 'match', default: true, ranked: true, group: 'Règles', label: 'Mort subite', desc: 'Égalité au temps écoulé : mana ×3, le premier qui prend un dégât perd.' },

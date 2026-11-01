@@ -244,6 +244,9 @@
     function onPointerDown(ev) {
       if (!active) return;
       ev.preventDefault();
+      // Clic droit : annule la créature sélectionnée (clic gauche : pose).
+      if (ev.button === 2) { if (selection) { selection = null; if (window.OGSAudio) OGSAudio.sfx('select'); } return; }
+      if (ev.button !== 0) return;
       const { p, w, cell } = pointerCell(ev);
       // Slots (bande du bas).
       if (p.y > renderer.H - renderer.BAND + renderer.BEACH) {

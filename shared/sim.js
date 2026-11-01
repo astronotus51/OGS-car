@@ -39,7 +39,8 @@
     orangeCooldown: 1.5,
     wingedCooldown: 0.8,
     orangeRange: 2, // Krak : 2 cases tout autour (carré 5×5), uniquement dans son propre camp
-    rikoWallDamage: 1, // PV perdus par un Blok à chaque rebond d'un Riko dessus (0 = le mur est indestructible pour Riko)
+    rikoWallDamage: 1,
+    tightSpacingFactor: 0.35, // option « pose rapprochée » : rayon de blocage d'une case réduit (0.35 × rayon) => on repose bien plus vite derrière une créature // PV perdus par un Blok à chaque rebond d'un Riko dessus (0 = le mur est indestructible pour Riko)
     wingedRangeCells: 1,
     projectileSpeed: 700,
     projectileLifetime: 2.5,
@@ -99,6 +100,9 @@
   function dirOf(player) { return player === 'top' ? 1 : -1; }
   // Vrai si l'ordonnée y est dans la moitié de terrain de ce joueur (la ligne médiane n'appartient à personne).
   function inOwnHalf(player, y) { return player === 'top' ? y < FIELD.h / 2 : y > FIELD.h / 2; }
+  // Une créature « rebondie » avance à contresens (vers sa propre base). Si elle repasse la frontière dans ce sens,
+  // elle change de camp : elle devient une créature ennemie (ciblée par les tourelles, etc.).
+  function markBounced(e) { if (e.vy) e.bounced = Math.sign(e.vy) !== dirOf(e.player); }
   function cellCenter(col, row) { return { x: (col + 0.5) * CELL_W, y: (row + 0.5) * CELL_H }; }
   function cellOf(x, y) {
     if (x < 0 || x >= FIELD.w || y < 0 || y >= FIELD.h) return null;
@@ -158,7 +162,9 @@
     // ----- Placement -----
     function cellOccupied(col, row, ignoreAir) {
       const rx = col * CELL_W, ry = row * CELL_H;
-      return S.entities.some(e => (!ignoreAir || !e.air) && circleRect(e.x, e.y, RADIUS, rx, ry, CELL_W, CELL_H));
+      // Pose rapprochée : une créature en mouvement ne bloque la case que tant que son centre en est tout proche.
+      const r = F.tightSpacing ? RADIUS * RULES.tightSpacingFactor : RADIUS;
+      return S.entities.some(e => (!ignoreAir || !e.air) && circleRect(e.x, e.y, e.movement === 'static' ? RADIUS : r, rx, ry, CELL_W, CELL_H));
     }
 
     // Évolution : l'unité statique (Krak, Blok, Mojo) du même joueur et du même type présente sur la case, si elle peut encore monter de niveau.
@@ -224,6 +230,7 @@
         id: S.nextId++, ogId, player, owner: player, x: pos.x, y: pos.y, vx: vx * mult, vy: vy * mult,
         hp: og.hp, hpMax: og.hp, cooldown: 0, air: og.air, speed: og.speed * mult, movement: og.movement,
         rot: 0, rotTarget: 0, born: S.time, level: 1, boostUntil: 0, frozenUntil: 0, healTimer: 0,
+        bounced: false, visitedEnemy: false, // rebond à contresens / a déjà été dans le camp adverse (changement de camp à la frontière)
       };
       if (ogId === 3 || ogId === 7) { e.rot = e.rotTarget = player === 'top' ? Math.PI / 2 : -Math.PI / 2; }
       if (ogId === 2) { e.rot = vx >= 0 ? Math.PI : 0; }
@@ -425,15 +432,21 @@
           const step = 6 * dt;
           e.rot = Math.abs(d) <= step ? e.rotTarget : e.rot + Math.sign(d) * step;
         }
-        // Bout de terrain.
+        // Frontière : une créature rebondie qui revient dans son camp après être allée chez l'adversaire change de camp.
+        if (e.movement !== 'static') {
+          if (e.bounced && e.visitedEnemy && inOwnHalf(e.player, e.y)) {
+            e.player = other(e.player); e.bounced = false; e.visitedEnemy = true;
+            emit('bounce', { id: e.id, x: e.x, y: e.y, flip: true, player: e.player });
+          } else if (!inOwnHalf(e.player, e.y + dirOf(e.player) * RADIUS)) e.visitedEnemy = true; // son avant a franchi la ligne
+        }
+        // Bout de terrain : atteindre la base adverse fait des dégâts ; revenir à sa propre base (après un rebond chez soi) = sortie sans dégât.
         const reachedEnemy = (e.player === 'top' && e.y + RADIUS >= FIELD.h) || (e.player === 'bottom' && e.y - RADIUS <= 0);
         const reachedOwn = (e.player === 'top' && e.y - RADIUS <= 0) || (e.player === 'bottom' && e.y + RADIUS >= FIELD.h);
-        if (reachedEnemy || reachedOwn) {
-          const target = reachedEnemy ? other(e.player) : e.player;
+        if (reachedEnemy) {
           const dmg = OGS[e.ogId].baseDamage;
-          if (dmg > 0) hurtBase(target, dmg, e);
+          if (dmg > 0) hurtBase(other(e.player), dmg, e);
           kill(e, null, 'base');
-        }
+        } else if (reachedOwn) kill(e, null, 'home');
       }
     }
 
@@ -484,19 +497,18 @@
         }
         for (const b of blues) {
           if (dead.has(y.id) || dead.has(b.id)) continue;
-          if (b.player === y.player) continue; // passe au-dessus de ses propres murs (BALANCE.md)
           const d2 = dist2(y, b);
           if (d2 <= minD2) {
+            // Rebond sur tout Blok, le sien compris (il faut laisser des allées à ses alliés). Le camp change à la frontière.
             const d = Math.max(Math.sqrt(d2), 1e-6);
             const overlap = minDist - d;
             y.x += (y.x - b.x) / d * overlap * 0.5;
             y.y += (y.y - b.y) / d * overlap * 0.5;
-            // Rebond complet + changement de camp.
             y.vx = -(y.vx || 0);
             y.vy = -(y.vy || dirOf(y.player) * y.speed);
-            y.player = other(y.player);
-            emit('bounce', { id: y.id, x: y.x, y: y.y, flip: true, player: y.player });
-            damage(b, 1, y.owner, 'runner');
+            markBounced(y);
+            emit('bounce', { id: y.id, x: y.x, y: y.y });
+            if (b.player !== y.player) damage(b, 1, y.owner, 'runner');
           }
         }
         for (const r of reds) {
@@ -530,7 +542,7 @@
           if (v.player === r.player || dead.has(v.id) || dead.has(r.id)) continue;
           if (dist2(r, v) <= minD2) {
             if (F.powerPatches) { // Gromp renvoie Riko (qui perd 1 PV) au lieu de mourir avec
-              r.vy = -r.vy; r.vx = -r.vx; r.y += Math.sign(r.vy) * RADIUS * 0.6;
+              r.vy = -r.vy; r.vx = -r.vx; r.y += Math.sign(r.vy) * RADIUS * 0.6; markBounced(r);
               emit('bounce', { id: r.id, x: r.x, y: r.y }); damage(r, 1, v.player, 'violet');
             } else { kill(r, v.player, 'violet'); kill(v, r.player, 'red'); }
           }
@@ -544,16 +556,18 @@
           if (dist2(r, g) <= minD2) { kill(g, r.player, 'red'); damage(r, 1, g.player, 'impact'); }
         }
         for (const b of blues) {
-          if (b.player === r.player || dead.has(b.id) || dead.has(r.id)) continue;
+          if (dead.has(b.id) || dead.has(r.id)) continue;
           if (dist2(r, b) <= minD2) {
-            // Riko rebondit sur un Blok (le seul Og sur lequel il rebondit) : réflexion de sa vitesse sur la normale
-            // au point de contact, puis on le ressort du mur ; le mur encaisse RULES.rikoWallDamage PV.
+            // Riko rebondit sur tout Blok (le sien compris) : réflexion de sa vitesse sur la normale au point de contact,
+            // puis on le ressort du mur ; un mur ennemi encaisse RULES.rikoWallDamage PV. S'il repart à contresens, il
+            // deviendra ennemi en repassant la frontière.
             let nx = r.x - b.x, ny = r.y - b.y; const len = Math.hypot(nx, ny) || 1; nx /= len; ny /= len;
             const dot = r.vx * nx + r.vy * ny;
             if (dot < 0) { r.vx -= 2 * dot * nx; r.vy -= 2 * dot * ny; }
             r.x = b.x + nx * (minDist + 1); r.y = b.y + ny * (minDist + 1);
+            markBounced(r);
             emit('bounce', { id: r.id, x: r.x, y: r.y });
-            if (RULES.rikoWallDamage > 0) damage(b, RULES.rikoWallDamage, r.player, 'red');
+            if (b.player !== r.player && RULES.rikoWallDamage > 0) damage(b, RULES.rikoWallDamage, r.player, 'red');
           }
         }
       }

@@ -41,21 +41,34 @@ let flipped = false;
 for (let i = 0; i < 30 * 30; i++) { g3.step(1 / 30); const ev = g3.drainEvents(); if (ev.some(e => e.type === 'bounce' && e.flip)) flipped = true; }
 assert.ok(flipped, 'le jaune doit rebondir sur le mur ennemi');
 
-// 5) Jaune passe au-dessus de son propre mur.
+// 5) Jaune rebondit sur son propre mur, rentre chez lui sans dégât (ni pour lui ni pour l'adversaire), le mur est intact.
 const g4 = Sim.createGame({ seed: 3, hazard: false });
 g4.state.mana.bottom = 70;
 g4.place('bottom', 5, 4, 5); g4.state.mana.bottom = 70;
 g4.place('bottom', 1, 4, 7);
-for (let i = 0; i < 30 * 30; i++) g4.step(1 / 30);
-assert.strictEqual(g4.state.hp.top, 29, 'jaune traverse son propre mur');
+let homeExit = false;
+for (let i = 0; i < 30 * 30; i++) { g4.step(1 / 30); for (const e of g4.drainEvents()) if (e.type === 'kill' && e.ogId === 1 && e.cause === 'home') homeExit = true; }
+assert.strictEqual(g4.state.hp.top, 30, 'jaune bloqué par son propre mur : pas de dégât adverse');
+assert.strictEqual(g4.state.hp.bottom, 30, 'pas de dégât à sa propre base non plus');
+assert.ok(g4.state.entities.some(e => e.ogId === 5 && e.hp === 3), 'son propre mur est intact');
+assert.ok(homeExit, 'le jaune est sorti par sa propre base');
+
+// 5b) Riko qui rebondit sur un mur ennemi devient une créature ennemie en repassant la frontière, et va frapper la base de son ancien maître.
+const g4b = Sim.createGame({ seed: 5, hazard: false });
+g4b.state.mana.top = 70;
+for (let c = 0; c < 9; c++) { g4b.state.mana.top = 70; g4b.place('top', 5, c, 3); } // rangée de murs juste derrière la frontière
+g4b.state.mana.bottom = 70; g4b.place('bottom', 4, 4, 7);
+let flippedRed = false;
+for (let i = 0; i < 30 * 40; i++) { g4b.step(1 / 30); for (const e of g4b.drainEvents()) if (e.type === 'bounce' && e.flip) flippedRed = true; }
+assert.ok(flippedRed, 'Riko a changé de camp à la frontière');
+assert.ok(g4b.state.hp.bottom < 30, 'la base de son ancien maître a été touchée par le Riko devenu ennemi');
 // 6) Rouge rebondit sur un mur ennemi (sans mourir), le mur perd 1 PV par rebond.
 const g5 = Sim.createGame({ seed: 4, hazard: false });
 g5.state.mana.top = 70; g5.state.mana.bottom = 70;
 for (let c = 0; c < 9; c++) { g5.state.mana.top = 70; g5.place('top', 5, c, 3); } g5.place('bottom', 4, 4, 7);
-let bounces = 0, redDead = false, wallHit = false;
-for (let i = 0; i < 30 * 6; i++) { g5.step(1 / 30); for (const e of g5.drainEvents()) { if (e.type === 'bounce') bounces += 1; if (e.type === 'kill' && e.ogId === 4) redDead = true; if (e.type === 'hit' && e.ogId === 5) wallHit = true; } }
-assert.ok(bounces >= 1 && wallHit && !redDead, 'rouge rebondit sur le mur (mur −1 PV, rouge vivant)');
-assert.ok(g5.state.entities.some(e => e.ogId === 4 && e.player === 'bottom'), 'le rouge est toujours en jeu après le rebond');
+let bounces = 0, redDeadOnWall = false, wallHit = false;
+for (let i = 0; i < 30 * 6; i++) { g5.step(1 / 30); for (const e of g5.drainEvents()) { if (e.type === 'bounce' && !e.flip) bounces += 1; if (e.type === 'kill' && e.ogId === 4 && e.cause === 'wall') redDeadOnWall = true; if (e.type === 'hit' && e.ogId === 5) wallHit = true; } }
+assert.ok(bounces >= 1 && wallHit && !redDeadOnWall, 'rouge rebondit sur le mur (mur −1 PV, rouge vivant)');
 // 7) Snapshot roundtrip
 const snap = g1.snapshot(); const dec = Sim.decodeSnapshot(snap);
 assert.strictEqual(dec.entities.length, snap.e.length);
@@ -127,3 +140,14 @@ wall.y = Sim.FIELD.h / 2 + 1; // franchit la frontière
 for (let i = 0; i < 30 * 3; i++) { gk3.step(1 / 30); for (const e of gk3.drainEvents()) if (e.type === 'shot') shots3 += 1; }
 assert.ok(shots3 >= 1, 'tir dès que l’ennemi a franchi la frontière');
 console.log('frontière Krak OK');
+
+// Pose rapprochée : avec l'option, la case se libère bien plus tôt derrière un Zip qui vient de partir.
+function freeAfter(features) {
+  const g = Sim.createGame({ seed: 21, duration: 0, features });
+  g.state.mana.bottom = 70; assert.ok(g.place('bottom', 1, 4, 7).ok);
+  for (let i = 1; i < 60; i++) { g.step(1 / 30); if (!g.cellOccupied(4, 7)) return i; }
+  return 999;
+}
+const tight = freeAfter({ tightSpacing: true }), loose = freeAfter({ tightSpacing: false });
+assert.ok(tight < loose, `pose rapprochée : case libre après ${tight} ticks (contre ${loose} sans l'option)`);
+console.log(`espacement OK (${tight} vs ${loose} ticks)`);
