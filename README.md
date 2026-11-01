@@ -157,7 +157,7 @@ Skins = thèmes dessinés par le même code : classique, **Halloween** (Zip Citr
 Les règles du jeu d'origine sont conservées (`legacy/README.md`, `legacy/BALANCE.md`), avec les correctifs notés dans `BALANCE.md` :
 
 - le Runner jaune **passe au-dessus de ses propres Murs** et ne rebondit que sur les Murs ennemis (en changeant de camp) ;
-- l'Éponge rouge **casse un Mur ennemi mais meurt** sur le coup ; elle **encaisse maintenant les projectiles** (3 PV) au lieu d'y être immunisée ;
+- l'Éponge rouge (Riko) **rebondit sur les Murs bleus** (−1 PV au mur par rebond), seul Og sur lequel elle rebondit ; elle **encaisse maintenant les projectiles** (3 PV) au lieu d'y être immunisée ;
 - Tourelle et Tourelle ailée ont **2 PV** ; l'Ailée cible aussi les Ailées adverses (1 / 3 / 6 / 7) ;
 - le scorpion noir est **désactivé** (il cassait le gameplay ; le code reste dans `sim.js`, option `hazard`) ;
 - Zip, Riko et Zéphir se posent **uniquement sur la ligne du fond** (la plus éloignée de l'adversaire) ; Gromp, Krak, Blok et Mojo n'importe où sur sa moitié ;

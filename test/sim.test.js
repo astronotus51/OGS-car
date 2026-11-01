@@ -48,13 +48,14 @@ g4.place('bottom', 5, 4, 5); g4.state.mana.bottom = 70;
 g4.place('bottom', 1, 4, 7);
 for (let i = 0; i < 30 * 30; i++) g4.step(1 / 30);
 assert.strictEqual(g4.state.hp.top, 29, 'jaune traverse son propre mur');
-// 6) Rouge casse un mur ennemi et meurt.
+// 6) Rouge rebondit sur un mur ennemi (sans mourir), le mur perd 1 PV par rebond.
 const g5 = Sim.createGame({ seed: 4, hazard: false });
 g5.state.mana.top = 70; g5.state.mana.bottom = 70;
 for (let c = 0; c < 9; c++) { g5.state.mana.top = 70; g5.place('top', 5, c, 3); } g5.place('bottom', 4, 4, 7);
-let wallDead = false, redDead = false;
-for (let i = 0; i < 30 * 25; i++) { g5.step(1 / 30); for (const e of g5.drainEvents()) { if (e.type === 'kill' && e.ogId === 5) wallDead = true; if (e.type === 'kill' && e.ogId === 4) redDead = true; } }
-assert.ok(wallDead && redDead, 'rouge vs mur');
+let bounces = 0, redDead = false, wallHit = false;
+for (let i = 0; i < 30 * 6; i++) { g5.step(1 / 30); for (const e of g5.drainEvents()) { if (e.type === 'bounce') bounces += 1; if (e.type === 'kill' && e.ogId === 4) redDead = true; if (e.type === 'hit' && e.ogId === 5) wallHit = true; } }
+assert.ok(bounces >= 1 && wallHit && !redDead, 'rouge rebondit sur le mur (mur −1 PV, rouge vivant)');
+assert.ok(g5.state.entities.some(e => e.ogId === 4 && e.player === 'bottom'), 'le rouge est toujours en jeu après le rebond');
 // 7) Snapshot roundtrip
 const snap = g1.snapshot(); const dec = Sim.decodeSnapshot(snap);
 assert.strictEqual(dec.entities.length, snap.e.length);

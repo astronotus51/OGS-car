@@ -39,6 +39,7 @@
     orangeCooldown: 1.5,
     wingedCooldown: 0.8,
     orangeRange: 2, // Krak : 2 cases tout autour (carré 5×5), uniquement dans son propre camp
+    rikoWallDamage: 1, // PV perdus par un Blok à chaque rebond d'un Riko dessus (0 = le mur est indestructible pour Riko)
     wingedRangeCells: 1,
     projectileSpeed: 700,
     projectileLifetime: 2.5,
@@ -544,7 +545,16 @@
         }
         for (const b of blues) {
           if (b.player === r.player || dead.has(b.id) || dead.has(r.id)) continue;
-          if (dist2(r, b) <= minD2) { kill(b, r.player, 'red'); kill(r, b.player, 'wall'); } // casse le mur mais meurt (BALANCE.md)
+          if (dist2(r, b) <= minD2) {
+            // Riko rebondit sur un Blok (le seul Og sur lequel il rebondit) : réflexion de sa vitesse sur la normale
+            // au point de contact, puis on le ressort du mur ; le mur encaisse RULES.rikoWallDamage PV.
+            let nx = r.x - b.x, ny = r.y - b.y; const len = Math.hypot(nx, ny) || 1; nx /= len; ny /= len;
+            const dot = r.vx * nx + r.vy * ny;
+            if (dot < 0) { r.vx -= 2 * dot * nx; r.vy -= 2 * dot * ny; }
+            r.x = b.x + nx * (minDist + 1); r.y = b.y + ny * (minDist + 1);
+            emit('bounce', { id: r.id, x: r.x, y: r.y });
+            if (RULES.rikoWallDamage > 0) damage(b, RULES.rikoWallDamage, r.player, 'red');
+          }
         }
       }
     }
