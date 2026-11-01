@@ -81,7 +81,10 @@ app.use(helmet({
     },
   },
   crossOriginEmbedderPolicy: false,
-  crossOriginOpenerPolicy: { policy: 'same-origin' },
+  // La fenêtre de connexion Google doit pouvoir répondre à la page qui l'a ouverte : « same-origin » strict la rend muette (page blanche).
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  // Google vérifie l'origine de la page via le Referer : « no-referrer » (défaut helmet) fait échouer le bouton.
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   hsts: false,
 }));
 app.use((req, res, next) => { if (isSecure(req)) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains'); next(); });
