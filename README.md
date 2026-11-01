@@ -53,12 +53,14 @@ Un seul service Node, qui sert le site **et** le WebSocket :
 - **Railway** : *Deploy from GitHub*, mêmes variables. `PORT` est fourni automatiquement.
 - **VPS** : `node server/index.js` derrière Nginx (penser à proxifier `/ws` avec `Upgrade`/`Connection` headers).
 
-## Connexion (sans compte, ou compte Google) et sécurité
+## Connexion (invité, ou compte Google) et sécurité
 
-Deux façons de jouer, au choix du joueur sur l'écran d'accueil :
+Deux façons de jouer, au choix sur l'écran d'accueil :
 
-- **Sans compte** : un pseudo (unique) et c'est parti. La progression est liée à l'appareil par un cookie de session sécurisé (`httpOnly`, `SameSite=Lax`, `Secure` en HTTPS, signé, 30 jours). Un code de transfert (profil) permet de la déplacer sur un autre appareil.
-- **Avec un compte Google** (bouton « Continuer avec Google », affiché quand `GOOGLE_CLIENT_ID` est défini) : Google authentifie, le serveur vérifie le jeton (signature Google, audience = notre client id). À la première connexion, le joueur choisit son pseudo. Sa progression suit son compte Google sur tous ses appareils. Un joueur sans compte peut **lier son compte Google** plus tard depuis son profil (il garde toute sa progression).
+- **Rejoindre sans compte** : un clic, le serveur attribue un pseudo `Invité-1234`, et on joue (classée, bot, amical, survie, trophées). La progression est liée à l'appareil par un cookie de session sécurisé (`httpOnly`, `SameSite=Lax`, `Secure` en HTTPS, signé, 30 jours). Quand le serveur propose les comptes Google, **skins, avatar, quêtes et bonus quotidien sont verrouillés** pour les invités (bannière dans le lobby, panneau « Crée ton compte » sur l'écran des skins).
+- **Compte Google** (bouton « Continuer avec Google », affiché quand `GOOGLE_CLIENT_ID` est défini) : Google authentifie, le serveur vérifie le jeton (signature Google, audience = notre client id). À la première connexion, le joueur choisit son pseudo. Sa progression suit son compte Google sur tous ses appareils. Un invité peut **créer son compte depuis son profil** (ou l'écran des skins) : il choisit son pseudo et garde ses trophées et ses pièces.
+
+Sans `GOOGLE_CLIENT_ID`, tout le monde joue en invité et rien n'est verrouillé.
 
 Mise en place de Google (une fois, ~5 min) :
 
@@ -66,7 +68,7 @@ Mise en place de Google (une fois, ~5 min) :
 2. [console.cloud.google.com](https://console.cloud.google.com) → créer un projet → **API et services → Écran de consentement OAuth** (type Externe, nom « Glouglou Arena », ton e-mail) → **Identifiants → Créer → ID client OAuth → Application Web**. Origines JavaScript autorisées : `https://ton-domaine.fr` (et `http://localhost:3000` pour tester en local). Pas besoin d'URI de redirection.
 3. Dans `.env` du serveur : `GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com` et `ADMIN_EMAILS=ton.email@gmail.com`, puis `pm2 restart ogs`.
 
-- **Se déconnecter / Changer de joueur** (lobby ou profil) ferme la session sur cet appareil.
+- **Se déconnecter / Quitter** (lobby ou profil) ferme la session sur cet appareil.
 - **Admin** : les e-mails Google listés dans `ADMIN_EMAILS` sont admin d'office à la connexion → badge ADMIN, tous les skins, panneau d'administration. (La clé `data/admin-key.txt` / `ADMIN_KEY` reste utilisable dans le profil, et les pseudos `ADMIN_NAMES` — Aluego, Alugo — sont réservés aux admins.) Dans son profil, l'admin voit la liste des joueurs et peut **nommer un modo** (badge MODO + tous les skins), **débloquer tous les skins** d'un joueur ou lui **donner des pièces/trophées**.
 - **Passer un joueur admin sans clé** (sur le serveur) : `node scripts/make-admin.js Aluego` puis `pm2 restart ogs` (`--retirer` pour annuler).
 - **Tout effacer** : `node scripts/wipe-all.js --oui` supprime tous les joueurs et toutes les parties (puis `pm2 restart ogs`).

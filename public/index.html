@@ -20,31 +20,24 @@
   <section id="screen-auth" class="screen">
     <div class="panel auth-panel">
       <div class="logo glou"><span class="g1">GLOUGLOU</span><span class="g2">ARENA</span><span class="bubbles"><i></i><i></i><i></i></span></div>
-      <div class="tagline">Duel de bestioles en 1 contre 1 · inspiré du jeu iPad OGS</div>
-      <!-- Connexion Google (affichée quand le serveur a un GOOGLE_CLIENT_ID) -->
+      <div class="tagline">Duel de bestioles en 1 contre 1, en ligne</div>
+      <!-- Compte Google (affiché quand le serveur a un GOOGLE_CLIENT_ID) -->
       <div id="googleAuth" hidden>
-        <div class="info">Avec un compte Google, ta progression te suit sur tous tes appareils.</div>
+        <div class="info">Crée ton compte avec Google : skins, avatar, quêtes, et ta progression sur tous tes appareils.</div>
         <div id="googleBtn" class="google-btn"></div>
         <form id="googleNameForm" autocomplete="off" hidden>
-          <div class="info">Première connexion : choisis ton pseudo de joueur (visible par les autres).</div>
+          <div class="info">Bienvenue ! Choisis ton pseudo de joueur (visible par les autres).</div>
           <label>Pseudo<input id="googleUser" maxlength="16" required autocomplete="off" placeholder="3 à 16 caractères"></label>
           <div class="row"><button type="submit" class="btn primary">C’est parti !</button><button type="button" class="btn small" id="googleNameCancel">Annuler</button></div>
         </form>
         <div id="googleError" class="error"></div>
-        <div class="or-sep"><span>ou sans compte</span></div>
+        <div class="or-sep"><span>ou</span></div>
       </div>
-      <form id="authForm" autocomplete="off">
-        <div class="info">Sans compte : choisis un pseudo et joue. Ta progression reste sur cet appareil (tu pourras la lier à Google plus tard depuis ton profil).</div>
-        <label>Pseudo<input id="authUser" name="username" maxlength="16" required autocomplete="off" placeholder="3 à 16 caractères"></label>
-        <div id="authAdminWrap" hidden><label>Clé admin<input id="authAdminKey" type="password" maxlength="64" autocomplete="off" placeholder="fichier data/admin-key.txt du serveur"></label></div>
-        <div class="row">
-          <button type="submit" class="btn primary">Jouer</button>
-        </div>
+      <div id="guestAuth">
+        <div class="row"><button type="button" class="btn primary" id="btnGuest">Rejoindre sans compte</button></div>
+        <div class="info" id="guestInfo">Pour jouer tout de suite, avec un pseudo d’invité. Skins, avatar et quêtes restent verrouillés tant que tu n’as pas de compte.</div>
         <div id="authError" class="error"></div>
-      </form>
-      <details class="transfer" id="transferDetails"><summary>J’ai un code de transfert (progression venue d’un autre appareil)</summary>
-        <form id="transferForm"><label>Code<input id="transferCode" class="input code" maxlength="9" placeholder="XXXX-XXXX"></label><div class="row"><button type="submit" class="btn small">Récupérer ma progression</button></div><div id="transferError" class="error"></div></form>
-      </details>
+      </div>
       <div id="soundHint" class="sound-hint">♪ Clique n’importe où pour lancer la musique</div>
       <div class="auth-foot">Clavier : <b>A Z E R T Y U</b> (ou 1-7) pour choisir un Og · flèches + Entrée ou clic pour poser · <b>O</b> ramasse une orbe</div>
     </div>
@@ -106,7 +99,7 @@
           <button id="btnSurvival" class="btn survival">Survie <span class="small">vagues · solo · record</span></button>
         </div>
         <details class="options" id="optionsBox">
-          <summary>Options de partie (entraînement, amical, survie) — expérimentations à cocher</summary>
+          <summary>Options de partie (entraînement, amical, survie)</summary>
           <div id="featureList" class="feature-list"></div>
         </details>
         <div class="row friendly">
@@ -115,6 +108,7 @@
           <button id="btnFriendlyJoin" class="btn">Rejoindre</button>
         </div>
         <div id="lobbyMsg" class="info"></div>
+        <div class="guest-banner hidden" id="guestBanner">🔒 Tu joues en invité : skins, avatar et quêtes sont verrouillés. <button class="btn small gold" id="btnGuestUpgrade">Créer mon compte Google</button></div>
         <canvas id="lobbyShowcase" width="1400" height="300" title="Tes Ogs équipés"></canvas>
       </div>
       <div class="lobby-right">
@@ -220,8 +214,7 @@
         <div class="card"><div class="card-title">Avatar</div><button class="btn small" id="btnAvatar">Choisir un avatar ou une photo</button></div>
         <div class="card hidden" id="googleCard"><div class="card-title">Compte Google</div>
           <div id="googleLinked" hidden><p class="info" style="text-align:left" id="googleLinkedInfo"></p></div>
-          <div id="googleUnlinked" hidden><p class="info" style="text-align:left">Lie ce joueur à ton compte Google pour retrouver ta progression (trophées, skins, pièces) sur tous tes appareils.</p><div id="googleLinkBtn" class="google-btn" style="justify-content:flex-start"></div><div id="googleLinkMsg" class="error"></div></div></div>
-        <div class="card" id="transferCard"><div class="card-title">Transférer ma progression</div><p class="info" style="text-align:left">Pas de compte : ta progression est liée à cet appareil. Pour la retrouver ailleurs, génère un code (valable 24 h, usage unique) et entre-le sur l’autre appareil à l’écran d’accueil.</p><button class="btn small" id="btnTransfer">Générer un code</button><div id="transferOut" class="queue-code hidden" style="font-size:22px"></div></div>
+          <div id="googleUnlinked" hidden><p class="info" style="text-align:left">Crée ton compte avec Google : tu gardes tes trophées et tes pièces, tu débloques skins, avatar et quêtes, et tu retrouves ta progression sur tous tes appareils.</p><label>Pseudo de joueur<input id="googleLinkUser" class="input" maxlength="16" autocomplete="off" placeholder="3 à 16 caractères"></label><div id="googleLinkBtn" class="google-btn" style="justify-content:flex-start"></div><div id="googleLinkMsg" class="error"></div></div></div>
         <div class="card" id="adminKeyCard"><div class="card-title">Administration</div><form id="adminKeyForm" class="row" style="justify-content:flex-start"><input id="adminKey" class="input" type="password" style="width:200px" placeholder="Clé admin"><button class="btn small" type="submit">Activer</button></form><div id="adminKeyMsg" class="info"></div></div>
         <div class="card hidden" id="adminCard" style="grid-column: 1 / -1"><div class="card-title">Administration</div><div id="adminInfo" class="info" style="text-align:left"></div>
           <div class="card-title" style="margin-top:10px">Joueurs</div>
@@ -229,7 +222,7 @@
           <div id="adminPlayers" class="admin-list"></div>
           <div class="card-title" style="margin-top:10px">Donner un montant précis</div>
           <form id="adminGrant" class="row" style="justify-content:flex-start"><input id="grantUser" class="input" style="width:160px" placeholder="Pseudo"><input id="grantCoins" class="input" style="width:110px" type="number" placeholder="+ pièces"><input id="grantTrophies" class="input" style="width:110px" type="number" placeholder="+ trophées"><button class="btn small gold" type="submit">Donner</button></form><div id="adminMsg" class="info"></div>
-          <p class="info" style="text-align:left">Clé admin : fichier <code>data/admin-key.txt</code> du serveur (ou variable <code>ADMIN_KEY</code>). Un admin possède tous les skins. Un <b>modo</b> (nommé par un admin) a le badge MODO et tous les skins.</p></div>
+          <p class="info" style="text-align:left">Un admin possède tous les skins. Un <b>modo</b> (nommé par un admin) a le badge MODO et tous les skins.</p></div>
         <div class="card" id="deviceCard"><div class="card-title">Cet appareil</div><p class="info" style="text-align:left" id="deviceInfo">Ton pseudo est mémorisé ici par un cookie sécurisé. « Changer de joueur » l’oublie sur cet appareil (génère un code de transfert avant si tu veux garder ta progression).</p><button class="btn small danger" id="btnLogout2">Changer de joueur</button></div>
       </div>
     </main>
@@ -253,9 +246,9 @@
   <section id="screen-skins" class="screen hidden">
     <header class="topbar"><button class="btn back" data-screen="lobby">← Menu</button><h2>Skins</h2><div class="chip coins"><span class="coin"></span><span id="skinsCoins">0</span></div></header>
     <main class="page">
+      <div class="locked-panel hidden" id="skinsLocked"><div class="locked-icon">🔒</div><h3>Les skins sont réservés aux joueurs avec un compte</h3><p class="info">Crée ton compte avec Google : tu gardes tes trophées et tes pièces, et tu débloques les skins, l’avatar et les quêtes.</p><div id="googleSkinsBtn" class="google-btn"></div><div id="googleSkinsMsg" class="error"></div></div>
       <div class="og-tabs" id="skinTabs"></div>
       <div class="skin-grid" id="skinGrid"></div>
-      <p class="hint">Pour ajouter un skin : une entrée dans <code>shared/catalog.js</code> + une image <code>public/assets/skins/&lt;id&gt;.png</code>. Sans image, l’effet du skin est appliqué au sprite classique.</p>
     </main>
   </section>
 

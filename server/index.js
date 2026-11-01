@@ -150,6 +150,11 @@ async function authMiddleware(req, res, next) {
   next();
 }
 const wrap = fn => (req, res) => fn(req, res).catch(err => { console.error(err); res.status(500).json({ error: 'Erreur serveur' }); });
+// Invité (sans compte Google) alors que le serveur propose les comptes : skins, avatar, quêtes et bonus verrouillés (sauf admins).
+function accountOnly(req, res, next) {
+  if (googleClient && !req.user.google_sub && !isAdmin(req.user)) return res.status(403).json({ error: 'Réservé aux joueurs avec un compte Google', guest: true });
+  next();
+}
 
 app.get('/api/config', (req, res) => { res.json({ avatarPresets: Catalog.AVATAR_PRESETS, secure: isSecure(req), google: !!GOOGLE_CLIENT_ID }); });
 
@@ -172,7 +177,16 @@ app.post('/api/auth/google/link', authMiddleware, authLimiter, wrap(async (req, 
   if (req.user.google_sub) return res.status(400).json({ error: 'Ce joueur est déjà lié à un compte Google' });
   const taken = await db.getUserByGoogleSub(g.info.sub);
   if (taken) return res.status(409).json({ error: `Ce compte Google est déjà lié au joueur « ${taken.username} » : connecte-toi avec Google à l’accueil pour le retrouver` });
-  const user = await db.updateUser(req.user.id, { google_sub: g.info.sub, email: g.email, is_admin: req.user.is_admin || g.admin });
+  const patch = { google_sub: g.info.sub, email: g.email, is_admin: req.user.is_admin || g.admin };
+  // Nouveau pseudo choisi à la création du compte (facultatif : sinon on garde l'actuel).
+  const username = req.body && req.body.username;
+  if (typeof username === 'string' && username && username.toLowerCase() !== req.user.username.toLowerCase()) {
+    if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
+    if (ADMIN_NAMES.has(username.toLowerCase()) && !(req.user.is_admin || g.admin)) return res.status(403).json({ error: 'Ce pseudo est réservé à l’admin' });
+    if (await db.getUserByUsername(username)) return res.status(409).json({ error: 'Ce pseudo est déjà pris, choisis-en un autre' });
+    patch.username = username;
+  }
+  const user = await db.updateUser(req.user.id, patch);
   res.json({ profile: refreshLiveProfile(user) });
 }));
 // Connexion avec Google. 1re connexion : on demande un pseudo, puis on crée le joueur.
@@ -200,7 +214,11 @@ app.post('/api/auth/google', authLimiter, wrap(async (req, res) => {
 }));
 
 app.post('/api/guest', authLimiter, wrap(async (req, res) => {
-  const { username, key } = req.body || {};
+  let { username, key } = req.body || {};
+  if (username === undefined || username === null || username === '') {
+    // Invité en un clic : pseudo « Invité-1234 » attribué par le serveur.
+    do { username = `Invité-${crypto.randomInt(1000, 10000)}`; } while (await db.getUserByUsername(username));
+  }
   if (typeof username !== 'string' || !USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
   const reserved = ADMIN_NAMES.has(username.toLowerCase());
   if (reserved && !isAdminKey(String(key || ''))) return res.status(403).json({ error: key ? 'Clé admin incorrecte' : 'Ce pseudo est réservé à l’admin : entre la clé admin', reserved: true });
@@ -252,7 +270,7 @@ app.post('/api/admin/activate', authMiddleware, authLimiter, wrap(async (req, re
 }));
 
 // ---------- Avatar : 15 propositions ou photo importée (data URL, redimensionnée côté client) ----------
-app.post('/api/avatar', authMiddleware, wrap(async (req, res) => {
+app.post('/api/avatar', authMiddleware, accountOnly, wrap(async (req, res) => {
   const { avatar } = req.body || {};
   if (avatar === null || avatar === '') { const user = await db.updateUser(req.user.id, { avatar: null }); return res.json({ profile: publicProfile(user) }); }
   if (typeof avatar !== 'string') return res.status(400).json({ error: 'Avatar invalide' });
@@ -276,7 +294,7 @@ app.get('/api/me', authMiddleware, wrap(async (req, res) => {
   res.json({ profile: publicProfile(req.user, { leaderboardRank: rank, dailyAvailable: lastDaily !== today, dailyCoins: DAILY_COINS }) });
 }));
 
-app.post('/api/daily', authMiddleware, wrap(async (req, res) => {
+app.post('/api/daily', authMiddleware, accountOnly, wrap(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const lastDaily = req.user.last_daily ? String(req.user.last_daily).slice(0, 10) : null;
   if (lastDaily === today) return res.status(400).json({ error: 'Déjà récupéré aujourd’hui' });
@@ -288,7 +306,7 @@ app.get('/api/quests', authMiddleware, wrap(async (req, res) => {
   if (!Features.enabled('quests')) return res.json({ quests: null });
   res.json({ quests: questsView(req.user) });
 }));
-app.post('/api/quests/claim', authMiddleware, wrap(async (req, res) => {
+app.post('/api/quests/claim', authMiddleware, accountOnly, wrap(async (req, res) => {
   if (!Features.enabled('quests')) return res.status(400).json({ error: 'Quêtes désactivées' });
   const quests = questsOf(req.user);
   const item = quests.items.find(q => q.id === String(req.body && req.body.id));
@@ -321,7 +339,7 @@ app.get('/api/history', authMiddleware, wrap(async (req, res) => {
   }) });
 }));
 
-app.post('/api/skins/buy', authMiddleware, wrap(async (req, res) => {
+app.post('/api/skins/buy', authMiddleware, accountOnly, wrap(async (req, res) => {
   const skin = Catalog.SKIN_BY_ID[String(req.body && req.body.skinId)];
   if (!skin) return res.status(404).json({ error: 'Skin inconnu' });
   const owned = ownedSkins(req.user);
@@ -335,7 +353,7 @@ app.post('/api/skins/buy', authMiddleware, wrap(async (req, res) => {
   res.json({ profile: refreshLiveProfile(user) });
 }));
 
-app.post('/api/skins/equip', authMiddleware, wrap(async (req, res) => {
+app.post('/api/skins/equip', authMiddleware, accountOnly, wrap(async (req, res) => {
   const skin = Catalog.SKIN_BY_ID[String(req.body && req.body.skinId)];
   if (!skin) return res.status(404).json({ error: 'Skin inconnu' });
   if (!ownedSkins(req.user).includes(skin.id)) return res.status(403).json({ error: 'Skin non possédé' });

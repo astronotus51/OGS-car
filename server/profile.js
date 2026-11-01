@@ -50,6 +50,7 @@ function publicProfile(user, extra) {
     admin: isAdmin(user),
     modo: isModo(user),
     google: !!user.google_sub,
+    guest: !user.google_sub,
     email: user.email || null,
     createdAt: user.created_at,
   }, extra || {});

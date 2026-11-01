@@ -1,7 +1,7 @@
 {
   "name": "glouglou-arena",
   "version": "2.0.0",
-  "description": "Glouglou Arena – duel en ligne de bestioles (remake du jeu iPad OGS) : 1v1 temps réel, matchmaking, comptes, skins.",
+  "description": "Glouglou Arena – duel en ligne de bestioles : 1v1 temps réel, matchmaking, comptes, skins.",
   "private": true,
   "main": "server/index.js",
   "scripts": {

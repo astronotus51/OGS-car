@@ -6,8 +6,7 @@ const OUT = process.env.OUT || '/tmp';
 
 async function login(page, name) {
   await page.goto(BASE);
-  await page.fill('#authUser', name);
-  await page.click('#authForm button[type=submit]');
+  await page.click('#btnGuest'); // invité en un clic (le pseudo est attribué par le serveur)
   await page.waitForSelector('#screen-lobby:not(.hidden)', { timeout: 10000 });
 }
 async function setOptions(page, opts) {

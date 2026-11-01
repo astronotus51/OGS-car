@@ -69,13 +69,15 @@
     el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; el.classList.toggle('hurry', left <= 20 && view.phase !== 'over');
   }
 
-  // ----- Connexion Google (en plus du mode sans compte, quand le serveur a un GOOGLE_CLIENT_ID) -----
+  // ----- Compte Google (quand le serveur a un GOOGLE_CLIENT_ID) ou invité sans compte -----
   const GOOGLE_CLIENT_ID = (document.querySelector('meta[name="google-client-id"]') || {}).content || '';
   const GOOGLE_MODE = !!GOOGLE_CLIENT_ID;
   let googleCredential = null;
-  let googleIntent = 'login'; // 'login' (accueil) ou 'link' (profil : lier le joueur courant à Google)
+  let googleIntent = 'login'; // 'login' (accueil) ou 'link' (créer son compte à partir du joueur invité courant)
   let gsiReady = false;
   const GOOGLE_BTN = { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'continue_with', locale: 'fr' };
+  // Invité verrouillé : pas de compte Google alors que le serveur le propose (les admins ne sont jamais verrouillés).
+  const isLocked = () => GOOGLE_MODE && profile && profile.guest && !profile.admin;
   function renderGoogleButton(el, intent) {
     if (!gsiReady || !el) return;
     el.innerHTML = ''; el.dataset.intent = intent;
@@ -90,64 +92,59 @@
       google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCredential, ux_mode: 'popup', auto_select: false });
       renderGoogleButton($('googleBtn'), 'login');
       if (current === 'profile') renderGoogleButton($('googleLinkBtn'), 'link');
+      if (current === 'skins') renderGoogleButton($('googleSkinsBtn'), 'link');
     };
     s.onerror = () => { $('googleError').textContent = 'Impossible de charger la connexion Google (réseau ?)'; };
     document.head.appendChild(s);
+  } else {
+    $('guestInfo').textContent = 'Pour jouer tout de suite, avec un pseudo d’invité. Ta progression reste sur cet appareil.';
   }
   async function onGoogleCredential(resp) {
     googleCredential = resp.credential;
     if (googleIntent === 'link') {
-      $('googleLinkMsg').textContent = '';
-      try { profile = (await Net.api('/api/auth/google/link', { credential: googleCredential })).profile; toast('Compte Google lié : ta progression te suit partout', 'good'); openProfile(); }
-      catch (err) { $('googleLinkMsg').textContent = err.message; }
+      // Création du compte à partir du joueur invité : on garde sa progression, on prend le pseudo choisi (profil) s'il y en a un.
+      const msgEl = current === 'skins' ? $('googleSkinsMsg') : $('googleLinkMsg'); msgEl.textContent = '';
+      const username = current === 'profile' ? $('googleLinkUser').value.trim() : '';
+      try {
+        profile = (await Net.api('/api/auth/google/link', Object.assign({ credential: googleCredential }, username ? { username } : {}))).profile;
+        toast('Compte créé ! Skins, avatar et quêtes débloqués', 'good');
+        if (current === 'skins') openSkins(); else openProfile();
+      } catch (err) { msgEl.textContent = err.message; }
       return;
     }
     $('googleError').textContent = '';
     try {
       const d = await Net.api('/api/auth/google', { credential: googleCredential });
-      if (d.needUsername) { $('googleNameForm').hidden = false; $('authForm').hidden = true; $('googleUser').value = d.suggested || ''; $('googleUser').focus(); return; }
+      if (d.needUsername) { $('googleNameForm').hidden = false; $('guestAuth').hidden = true; $('googleBtn').hidden = true; $('googleUser').value = d.suggested || ''; $('googleUser').focus(); return; }
       profile = d.profile; enterLobby();
     } catch (err) { $('googleError').textContent = err.message; }
   }
+  function closeGoogleName() { $('googleNameForm').hidden = true; $('guestAuth').hidden = false; $('googleBtn').hidden = false; }
   $('googleNameForm').addEventListener('submit', async (ev) => {
     ev.preventDefault(); $('googleError').textContent = '';
-    try { profile = (await Net.api('/api/auth/google', { credential: googleCredential, username: $('googleUser').value.trim() })).profile; $('googleNameForm').hidden = true; $('authForm').hidden = false; enterLobby(); }
-    catch (err) { $('googleError').textContent = err.message; if (err.status === 401) { $('googleNameForm').hidden = true; $('authForm').hidden = false; } }
+    try { profile = (await Net.api('/api/auth/google', { credential: googleCredential, username: $('googleUser').value.trim() })).profile; closeGoogleName(); enterLobby(); }
+    catch (err) { $('googleError').textContent = err.message; if (err.status === 401) closeGoogleName(); }
   });
-  $('googleNameCancel').addEventListener('click', () => { $('googleNameForm').hidden = true; $('authForm').hidden = false; googleCredential = null; });
+  $('googleNameCancel').addEventListener('click', () => { closeGoogleName(); googleCredential = null; });
 
-  // ----- Identité joueur sans Google (pseudo sur cet appareil) -----
-  $('authForm').addEventListener('submit', async (ev) => {
-    ev.preventDefault(); $('authError').textContent = '';
-    const body = { username: $('authUser').value.trim() };
-    const key = $('authAdminKey').value.trim();
-    if (key) body.key = key;
-    try { profile = (await Net.api('/api/guest', body)).profile; $('authAdminKey').value = ''; enterLobby(); }
-    catch (err) {
-      $('authError').textContent = err.message;
-      // Pseudo réservé à l'admin : on fait apparaître le champ « clé admin ».
-      if (err.data && err.data.reserved) { $('authAdminWrap').hidden = false; $('authAdminKey').focus(); }
-    }
+  // Invité : un clic, le serveur attribue un pseudo « Invité-1234 ».
+  $('btnGuest').addEventListener('click', async () => {
+    $('authError').textContent = ''; $('btnGuest').disabled = true;
+    try { profile = (await Net.api('/api/guest', {})).profile; enterLobby(); }
+    catch (err) { $('authError').textContent = err.message; }
+    $('btnGuest').disabled = false;
   });
-  $('authUser').addEventListener('input', () => { if (!$('authAdminWrap').hidden && !$('authAdminKey').value) $('authAdminWrap').hidden = true; });
-  $('transferForm').addEventListener('submit', async (ev) => {
-    ev.preventDefault(); $('transferError').textContent = '';
-    try { profile = (await Net.api('/api/transfer/claim', { code: $('transferCode').value.trim() })).profile; $('transferCode').value = ''; enterLobby(); }
-    catch (err) { $('transferError').textContent = err.message; }
-  });
+  function goUpgrade() { show('profile'); setTimeout(() => { const c = $('googleCard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); $('googleLinkUser').focus(); }, 300); }
+  $('btnGuestUpgrade').addEventListener('click', goUpgrade);
   async function logout() {
     const linked = profile && profile.google;
-    if (!confirm(linked ? 'Se déconnecter de cet appareil ? (tu retrouveras ta progression en te reconnectant avec Google)' : 'Oublier ce joueur sur cet appareil ? (génère un code de transfert ou lie un compte Google avant si tu veux garder ta progression)')) return;
+    if (!confirm(linked ? 'Se déconnecter de cet appareil ? (tu retrouveras ta progression en te reconnectant avec Google)' : 'Quitter ? Ce joueur invité sera oublié sur cet appareil (crée un compte Google avant si tu veux garder ta progression)')) return;
     if (GOOGLE_MODE && window.google) try { google.accounts.id.disableAutoSelect(); } catch (e) { /* ignore */ }
     try { await Net.api('/api/logout', {}); } catch (e) { /* ignore */ }
     Net.disconnect(); profile = null; show('auth');
   }
   $('btnLogout').addEventListener('click', logout);
   $('btnLogout2').addEventListener('click', logout);
-  $('btnTransfer').addEventListener('click', async () => {
-    try { const d = await Net.api('/api/transfer/code', {}); $('transferOut').textContent = d.code; $('transferOut').classList.remove('hidden'); }
-    catch (e) { $('transferOut').textContent = e.message; $('transferOut').classList.remove('hidden'); }
-  });
   $('adminKeyForm').addEventListener('submit', async (ev) => {
     ev.preventDefault(); $('adminKeyMsg').textContent = '';
     try { profile = (await Net.api('/api/admin/activate', { key: $('adminKey').value })).profile; $('adminKey').value = ''; $('adminKeyMsg').textContent = 'Mode admin activé !'; openProfile(); }
@@ -184,6 +181,7 @@
     return `<span class="avatar"><span>${fallback || ''}</span></span>`;
   }
   async function openAvatar() {
+    if (isLocked()) { toast('L’avatar est réservé aux joueurs avec un compte', 'bad'); return goUpgrade(); }
     show('avatar');
     const grid = $('avatarGrid'); grid.innerHTML = '';
     for (const id of config.avatarPresets) {
@@ -248,7 +246,8 @@
     $('lobbyCoins').textContent = profile.coins;
     $('lobbyXp').style.width = `${Math.round(profile.xpInto / profile.xpNeed * 100)}%`;
     $('lobbyXpText').textContent = `Niv. ${profile.level} · ${profile.xpInto}/${profile.xpNeed} XP`;
-    $('btnDaily').classList.toggle('hidden', !profile.dailyAvailable);
+    $('btnDaily').classList.toggle('hidden', !profile.dailyAvailable || isLocked());
+    $('guestBanner').classList.toggle('hidden', !isLocked());
     const next = profile.nextRank;
     $('lobbyLeague').innerHTML = `<span style="color:${profile.rankColor}">${profile.rank}</span><small>${next ? `${next.min - profile.trophies} trophées avant ${next.name}` : 'Ligue maximale !'}${profile.leaderboardRank ? ` · #${profile.leaderboardRank} mondial` : ''}</small>`;
     try {
@@ -289,6 +288,7 @@
   // ----- Quêtes du jour -----
   async function refreshQuests() {
     if (!Features.enabled('quests')) return;
+    if (isLocked()) { $('questList').innerHTML = '<li class="info">🔒 Les quêtes sont réservées aux joueurs avec un compte Google.</li>'; return; }
     try {
       const { quests } = await Net.api('/api/quests');
       if (!quests) return;
@@ -386,17 +386,17 @@
     show('profile');
     try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
     $('profileName').innerHTML = esc(profile.username) + badgeOf(profile);
-    $('adminCard').classList.toggle('hidden', !profile.admin); $('adminKeyCard').classList.toggle('hidden', !!profile.admin); if (profile.admin) loadAdmin();
+    $('adminCard').classList.toggle('hidden', !profile.admin); $('adminKeyCard').classList.toggle('hidden', profile.admin || !/[?&]admin\b/.test(location.search)); if (profile.admin) loadAdmin();
     // Compte Google : lié ou proposition de liaison (si le serveur le permet).
     $('googleCard').classList.toggle('hidden', !GOOGLE_MODE);
     $('googleLinked').hidden = !profile.google; $('googleUnlinked').hidden = !!profile.google;
-    if (profile.google) $('googleLinkedInfo').textContent = `Lié au compte Google ${profile.email || ''}. Connecte-toi avec Google sur n’importe quel appareil pour retrouver cette progression.`;
-    else renderGoogleButton($('googleLinkBtn'), 'link');
-    $('transferCard').classList.toggle('hidden', !!profile.google);
+    if (profile.google) $('googleLinkedInfo').textContent = `Compte Google ${profile.email || ''}. Connecte-toi avec Google sur n’importe quel appareil pour retrouver cette progression.`;
+    else { if (!$('googleLinkUser').value) $('googleLinkUser').value = /^Invité/.test(profile.username) ? '' : profile.username; renderGoogleButton($('googleLinkBtn'), 'link'); }
     $('deviceInfo').textContent = profile.google
       ? 'Tu es connecté avec ton compte Google. « Se déconnecter » ferme ta session sur cet appareil ; ta progression reste liée à ton compte.'
-      : 'Ton pseudo est mémorisé ici par un cookie sécurisé. « Changer de joueur » l’oublie sur cet appareil (lie un compte Google ou génère un code de transfert avant si tu veux garder ta progression).';
-    $('btnLogout2').textContent = profile.google ? 'Se déconnecter' : 'Changer de joueur'; $('btnLogout').textContent = profile.google ? 'Se déconnecter' : 'Changer de joueur';
+      : 'Tu joues en invité : ce joueur est mémorisé sur cet appareil seulement. « Quitter » l’oublie (crée ton compte Google avant si tu veux garder ta progression).';
+    $('btnLogout2').textContent = profile.google ? 'Se déconnecter' : 'Quitter'; $('btnLogout').textContent = profile.google ? 'Se déconnecter' : 'Quitter';
+    $('btnAvatar').textContent = isLocked() ? '🔒 Avatar (réservé aux comptes)' : 'Choisir un avatar ou une photo';
     $('profileLevel').textContent = profile.level; renderAvatar($('profileAvatar'), profile, profile.level);
 
     $('profileSub').innerHTML = `<span style="color:${profile.rankColor}">${profile.rank}</span> · 🏆 ${profile.trophies} (record ${profile.bestTrophies})${profile.leaderboardRank ? ` · #${profile.leaderboardRank} mondial` : ''} · membre depuis ${new Date(profile.createdAt).toLocaleDateString('fr-FR')}`;
@@ -416,10 +416,10 @@
     try {
       const o = await Net.api('/api/admin/overview');
       loadAdminPlayers();
-      $('adminInfo').innerHTML = `${o.users} comptes · ${o.online} en ligne · ${o.inQueue} en file · ${o.rooms.length} partie(s) en cours · base ${o.db} · serveur démarré depuis ${Math.round(o.uptime / 60)} min<br>${o.rooms.map(r => `#${r.id} ${r.mode} : ${r.players.map(esc).join(' vs ')} (${r.time}s)`).join('<br>')}`;
+      $('adminInfo').innerHTML = `${o.users} comptes · ${o.online} en ligne · ${o.inQueue} en file · ${o.rooms.length} partie(s) en cours · en ligne depuis ${Math.round(o.uptime / 60)} min<br>${o.rooms.map(r => `#${r.id} ${r.mode} : ${r.players.map(esc).join(' vs ')} (${r.time}s)`).join('<br>')}`;
     } catch (e) { $('adminInfo').textContent = e.message; }
   }
-  function badgeOf(p) { return p.admin ? ' <span class="badge-admin">ADMIN</span>' : p.modo ? ' <span class="badge-modo">MODO</span>' : ''; }
+  function badgeOf(p) { return p.admin ? ' <span class="badge-admin">ADMIN</span>' : p.modo ? ' <span class="badge-modo">MODO</span>' : (GOOGLE_MODE && p.guest) ? ' <span class="badge-guest">INVITÉ</span>' : ''; }
   // Liste des joueurs du panneau admin : nommer modo, débloquer tous les skins, donner des pièces.
   async function loadAdminPlayers() {
     try {
@@ -461,6 +461,9 @@
     show('skins');
     try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
     $('skinsCoins').textContent = profile.coins;
+    const locked = isLocked();
+    $('skinsLocked').classList.toggle('hidden', !locked); $('skinTabs').classList.toggle('hidden', locked); $('skinGrid').classList.toggle('hidden', locked);
+    if (locked) { renderGoogleButton($('googleSkinsBtn'), 'link'); return; }
     $('skinTabs').innerHTML = [1, 2, 3, 4, 5, 6, 7].map(og => `<button class="og-tab ${og === skinTab ? 'active' : ''}" data-og="${og}">${Catalog.OG_NAMES[og]} <small>· ${Catalog.OG_ROLES[og]}</small></button>`).join('');
     $('skinTabs').querySelectorAll('.og-tab').forEach(b => b.addEventListener('click', () => { skinTab = Number(b.dataset.og); openSkins(); }));
     const owned = new Set(profile.skins);
@@ -532,7 +535,7 @@
       <h3>Options de partie</h3>
       ${Features.matchFeatures().map(f => `<p><b>${esc(f.label)}</b>${f.ranked ? ' (actif en classée)' : ''} : ${esc(f.desc)}</p>`).join('')}
       <p><b>Survie</b> : seul contre des vagues de plus en plus nombreuses, sans limite de temps. Score = éliminations ×10 + vagues ×50 + secondes. XP et pièces selon le score, record sauvegardé, classement dédié.</p>
-      <h3>Progression</h3><p>Partie classée : trophées gagnés/perdus selon l’écart (style Brawl Stars), ligues Bronze → Légendaire. XP à chaque partie (niveau), pièces pour la boutique de skins, bonus de série, récompense quotidienne.</p>`;
+      <h3>Progression</h3><p>Partie classée : trophées gagnés/perdus selon l’écart de niveau, ligues Bronze → Légendaire. XP à chaque partie (niveau), pièces pour la boutique de skins, bonus de série, récompense quotidienne.</p>`;
     $('rulesPage').querySelectorAll('canvas[data-og]').forEach(c => { const id = Number(c.dataset.og); Creatures.draw(c.getContext('2d'), id, profile ? profile.equipped[id] : `og${id}_default`, 56, 60, 84, 0, { moving: false }); });
   }
 
