@@ -176,7 +176,13 @@ app.post('/api/auth/google/link', authMiddleware, authLimiter, wrap(async (req, 
   const g = await verifyGoogle(req, res); if (!g) return;
   if (req.user.google_sub) return res.status(400).json({ error: 'Ce joueur est déjà lié à un compte Google' });
   const taken = await db.getUserByGoogleSub(g.info.sub);
-  if (taken) return res.status(409).json({ error: `Ce compte Google est déjà lié au joueur « ${taken.username} » : connecte-toi avec Google à l’accueil pour le retrouver` });
+  if (taken) {
+    // Ce compte Google a déjà un joueur : on bascule dessus (toute sa progression est reprise), l'invité courant est abandonné.
+    const user = g.admin && !taken.is_admin ? await db.updateUser(taken.id, { is_admin: true }) : taken;
+    const prev = byUser.get(user.id); if (prev) { prev.send({ t: 'kicked', reason: 'Connecté depuis un autre appareil' }); prev.ws.close(); }
+    setSession(req, res, user);
+    return res.json({ profile: publicProfile(user), switched: true });
+  }
   const patch = { google_sub: g.info.sub, email: g.email, is_admin: req.user.is_admin || g.admin };
   // Nouveau pseudo choisi à la création du compte (facultatif : sinon on garde l'actuel).
   const username = req.body && req.body.username;

@@ -89,8 +89,11 @@
     s.onload = () => {
       if (!window.google) return;
       gsiReady = true;
-      google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCredential, ux_mode: 'popup', auto_select: false });
+      google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCredential, ux_mode: 'popup', auto_select: true, cancel_on_tap_outside: false, itp_support: true });
       renderGoogleButton($('googleBtn'), 'login');
+      // Déjà connu de Google sur cet appareil : la bulle « Continuer en tant que … » reconnecte en un clic (ou automatiquement),
+      // sans redemander de pseudo : toute la progression du compte est reprise.
+      if (current === 'auth') { googleIntent = 'login'; try { google.accounts.id.prompt(); } catch (e) { /* ignore */ } }
       if (current === 'profile') renderGoogleButton($('googleLinkBtn'), 'link');
       if (current === 'skins') renderGoogleButton($('googleSkinsBtn'), 'link');
     };
@@ -106,7 +109,9 @@
       const msgEl = current === 'skins' ? $('googleSkinsMsg') : $('googleLinkMsg'); msgEl.textContent = '';
       const username = current === 'profile' ? $('googleLinkUser').value.trim() : '';
       try {
-        profile = (await Net.api('/api/auth/google/link', Object.assign({ credential: googleCredential }, username ? { username } : {}))).profile;
+        const d = await Net.api('/api/auth/google/link', Object.assign({ credential: googleCredential }, username ? { username } : {}));
+        profile = d.profile;
+        if (d.switched) { toast(`Ce compte Google existait déjà : te revoilà ${profile.username}, avec toute ta progression`, 'good'); Net.disconnect(); enterLobby(); return; }
         toast('Compte créé ! Skins, avatar et quêtes débloqués', 'good');
         if (current === 'skins') openSkins(); else openProfile();
       } catch (err) { msgEl.textContent = err.message; }
