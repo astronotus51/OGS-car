@@ -10,7 +10,7 @@ Valeurs dans `shared/sim.js` (`RULES`, `OGS`). Base 30 PV, mana max 70, +2/s (+5
 | 4 Riko (rouge) | 40 | 3 | diagonale, rebonds latéraux, ligne du fond uniquement | 2 | tue Tourelle et Chargeur au contact (−1 PV à elle-même) ; casse un Mur mais meurt ; destruction mutuelle avec Défenseur / Éponge ; projectiles : −1 PV |
 | 5 Mur (bleu) | 50 | 3 | statique | 0 | bloque la case ; renvoie les Runners ennemis ; laisse passer sa propre équipe |
 | 6 Chargeur (vert) | 60 | 3 | statique | 0 | +50 % regen mana (cumulable) ; one-shot par Éponge ; −1 PV par Runner ; cible des Ailées |
-| 7 Zéphir (orange/noir) | 70 | 2 | aérien tout droit, ligne du fond uniquement | 5 | ignore sol et murs ; tir 0,8 s, 1 case, sur 1 / 3 / 6 / 7 ; abattue par Tourelles et Ailées |
+| 7 Zéphir (orange/noir) | 70 | 2 | aérien tout droit, ligne du fond uniquement | 5 | ignore sol et murs ; tir 0,8 s, 1 case, sur 1 / 3 / 6 / 7, jamais côté adverse (comme Krak : un ennemi devient ciblable dès qu'il franchit la ligne médiane) ; abattue par Tourelles et Ailées |
 
 Scorpion noir : **désactivé** (option `hazard` de `createGame`, conservée pour un éventuel mode « chaos »). Durées : classée 3 min ; entraînement/amical 2, 3, 5 min ou illimité (`RULES.durations`).
 

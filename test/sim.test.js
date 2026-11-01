@@ -113,3 +113,16 @@ assert.ok(wIn.hp < 3 || !gk2.state.entities.includes(wIn), 'la cible dans la zon
 assert.strictEqual(wEnemy.hp, 3, 'le camp adverse n\'est jamais visé');
 assert.strictEqual(wSide.hp, 3, 'hors zone latérale : intact');
 console.log('portée Krak OK');
+
+// Frontière : Krak (bas, row 4) ne vise pas un ennemi à 1 case devant mais côté adverse (row 3) ; dès qu'il franchit la ligne, il tire.
+const gk3 = Sim.createGame({ seed: 12, duration: 0 });
+gk3.state.mana.bottom = 70; assert.ok(gk3.place('bottom', 3, 4, 4).ok);
+gk3.state.mana.top = 70; assert.ok(gk3.place('top', 5, 4, 0).ok);
+const wall = gk3.state.entities[gk3.state.entities.length - 1];
+let cNear = Sim.cellCenter(4, 3); wall.x = cNear.x; wall.y = cNear.y; // côté adverse, collé à la frontière
+let shots3 = 0; for (let i = 0; i < 30 * 3; i++) { gk3.step(1 / 30); for (const e of gk3.drainEvents()) if (e.type === 'shot') shots3 += 1; }
+assert.strictEqual(shots3, 0, 'pas de tir sur un ennemi encore côté adverse');
+wall.y = Sim.FIELD.h / 2 + 1; // franchit la frontière
+for (let i = 0; i < 30 * 3; i++) { gk3.step(1 / 30); for (const e of gk3.drainEvents()) if (e.type === 'shot') shots3 += 1; }
+assert.ok(shots3 >= 1, 'tir dès que l’ennemi a franchi la frontière');
+console.log('frontière Krak OK');

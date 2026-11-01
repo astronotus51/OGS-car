@@ -567,9 +567,11 @@
             if (Math.abs(e.y - s.y) > (RULES.orangeRange + 0.5) * CELL_H) continue;
             if (!inOwnHalf(s.player, e.y)) continue;
           } else {
+            // Zéphir : tir vers l'avant, à 1 case, et jamais sur un ennemi encore dans le camp adverse.
             if (dist2(s, e) > range2) continue;
             if (!WINGED_TARGETS.has(e.ogId)) continue;
             if (forward < 0) continue; // tir vers l'avant uniquement
+            if (!inOwnHalf(s.player, e.y)) continue;
           }
           const d = dist2(s, e);
           if (d < best) { best = d; target = e; }
