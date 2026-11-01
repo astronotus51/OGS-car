@@ -69,38 +69,52 @@
     el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; el.classList.toggle('hurry', left <= 20 && view.phase !== 'over');
   }
 
-  // ----- Connexion Google (seule connexion possible quand le serveur a un GOOGLE_CLIENT_ID) -----
+  // ----- Connexion Google (en plus du mode sans compte, quand le serveur a un GOOGLE_CLIENT_ID) -----
   const GOOGLE_CLIENT_ID = (document.querySelector('meta[name="google-client-id"]') || {}).content || '';
   const GOOGLE_MODE = !!GOOGLE_CLIENT_ID;
   let googleCredential = null;
+  let googleIntent = 'login'; // 'login' (accueil) ou 'link' (profil : lier le joueur courant à Google)
+  let gsiReady = false;
+  const GOOGLE_BTN = { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'continue_with', locale: 'fr' };
+  function renderGoogleButton(el, intent) {
+    if (!gsiReady || !el) return;
+    el.innerHTML = ''; el.dataset.intent = intent;
+    google.accounts.id.renderButton(el, Object.assign({}, GOOGLE_BTN, { click_listener: () => { googleIntent = intent; } }));
+  }
   if (GOOGLE_MODE) {
-    $('authForm').hidden = true; $('transferDetails').hidden = true; $('googleAuth').hidden = false;
-    $('transferCard').classList.add('hidden');
-    $('deviceInfo').textContent = 'Tu es connecté avec ton compte Google. « Se déconnecter » ferme ta session sur cet appareil ; ta progression reste liée à ton compte.';
-    $('btnLogout2').textContent = 'Se déconnecter'; $('btnLogout').textContent = 'Se déconnecter';
+    $('googleAuth').hidden = false;
     const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; s.defer = true;
     s.onload = () => {
       if (!window.google) return;
+      gsiReady = true;
       google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCredential, ux_mode: 'popup', auto_select: false });
-      google.accounts.id.renderButton($('googleBtn'), { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'continue_with', locale: 'fr' });
+      renderGoogleButton($('googleBtn'), 'login');
+      if (current === 'profile') renderGoogleButton($('googleLinkBtn'), 'link');
     };
     s.onerror = () => { $('googleError').textContent = 'Impossible de charger la connexion Google (réseau ?)'; };
     document.head.appendChild(s);
   }
   async function onGoogleCredential(resp) {
-    $('googleError').textContent = '';
     googleCredential = resp.credential;
+    if (googleIntent === 'link') {
+      $('googleLinkMsg').textContent = '';
+      try { profile = (await Net.api('/api/auth/google/link', { credential: googleCredential })).profile; toast('Compte Google lié : ta progression te suit partout', 'good'); openProfile(); }
+      catch (err) { $('googleLinkMsg').textContent = err.message; }
+      return;
+    }
+    $('googleError').textContent = '';
     try {
       const d = await Net.api('/api/auth/google', { credential: googleCredential });
-      if (d.needUsername) { $('googleNameForm').hidden = false; $('googleUser').value = d.suggested || ''; $('googleUser').focus(); return; }
+      if (d.needUsername) { $('googleNameForm').hidden = false; $('authForm').hidden = true; $('googleUser').value = d.suggested || ''; $('googleUser').focus(); return; }
       profile = d.profile; enterLobby();
     } catch (err) { $('googleError').textContent = err.message; }
   }
   $('googleNameForm').addEventListener('submit', async (ev) => {
     ev.preventDefault(); $('googleError').textContent = '';
-    try { profile = (await Net.api('/api/auth/google', { credential: googleCredential, username: $('googleUser').value.trim() })).profile; $('googleNameForm').hidden = true; enterLobby(); }
-    catch (err) { $('googleError').textContent = err.message; if (err.status === 401) { $('googleNameForm').hidden = true; } }
+    try { profile = (await Net.api('/api/auth/google', { credential: googleCredential, username: $('googleUser').value.trim() })).profile; $('googleNameForm').hidden = true; $('authForm').hidden = false; enterLobby(); }
+    catch (err) { $('googleError').textContent = err.message; if (err.status === 401) { $('googleNameForm').hidden = true; $('authForm').hidden = false; } }
   });
+  $('googleNameCancel').addEventListener('click', () => { $('googleNameForm').hidden = true; $('authForm').hidden = false; googleCredential = null; });
 
   // ----- Identité joueur sans Google (pseudo sur cet appareil) -----
   $('authForm').addEventListener('submit', async (ev) => {
@@ -122,7 +136,8 @@
     catch (err) { $('transferError').textContent = err.message; }
   });
   async function logout() {
-    if (!confirm(GOOGLE_MODE ? 'Se déconnecter de cet appareil ?' : 'Oublier ce joueur sur cet appareil ? (génère un code de transfert avant si tu veux garder ta progression)')) return;
+    const linked = profile && profile.google;
+    if (!confirm(linked ? 'Se déconnecter de cet appareil ? (tu retrouveras ta progression en te reconnectant avec Google)' : 'Oublier ce joueur sur cet appareil ? (génère un code de transfert ou lie un compte Google avant si tu veux garder ta progression)')) return;
     if (GOOGLE_MODE && window.google) try { google.accounts.id.disableAutoSelect(); } catch (e) { /* ignore */ }
     try { await Net.api('/api/logout', {}); } catch (e) { /* ignore */ }
     Net.disconnect(); profile = null; show('auth');
@@ -372,6 +387,16 @@
     try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
     $('profileName').innerHTML = esc(profile.username) + badgeOf(profile);
     $('adminCard').classList.toggle('hidden', !profile.admin); $('adminKeyCard').classList.toggle('hidden', !!profile.admin); if (profile.admin) loadAdmin();
+    // Compte Google : lié ou proposition de liaison (si le serveur le permet).
+    $('googleCard').classList.toggle('hidden', !GOOGLE_MODE);
+    $('googleLinked').hidden = !profile.google; $('googleUnlinked').hidden = !!profile.google;
+    if (profile.google) $('googleLinkedInfo').textContent = `Lié au compte Google ${profile.email || ''}. Connecte-toi avec Google sur n’importe quel appareil pour retrouver cette progression.`;
+    else renderGoogleButton($('googleLinkBtn'), 'link');
+    $('transferCard').classList.toggle('hidden', !!profile.google);
+    $('deviceInfo').textContent = profile.google
+      ? 'Tu es connecté avec ton compte Google. « Se déconnecter » ferme ta session sur cet appareil ; ta progression reste liée à ton compte.'
+      : 'Ton pseudo est mémorisé ici par un cookie sécurisé. « Changer de joueur » l’oublie sur cet appareil (lie un compte Google ou génère un code de transfert avant si tu veux garder ta progression).';
+    $('btnLogout2').textContent = profile.google ? 'Se déconnecter' : 'Changer de joueur'; $('btnLogout').textContent = profile.google ? 'Se déconnecter' : 'Changer de joueur';
     $('profileLevel').textContent = profile.level; renderAvatar($('profileAvatar'), profile, profile.level);
 
     $('profileSub').innerHTML = `<span style="color:${profile.rankColor}">${profile.rank}</span> · 🏆 ${profile.trophies} (record ${profile.bestTrophies})${profile.leaderboardRank ? ` · #${profile.leaderboardRank} mondial` : ''} · membre depuis ${new Date(profile.createdAt).toLocaleDateString('fr-FR')}`;

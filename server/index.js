@@ -154,19 +154,32 @@ const wrap = fn => (req, res) => fn(req, res).catch(err => { console.error(err);
 app.get('/api/config', (req, res) => { res.json({ avatarPresets: Catalog.AVATAR_PRESETS, secure: isSecure(req), google: !!GOOGLE_CLIENT_ID }); });
 
 // ---------- Identité joueur : pas de compte. Un pseudo + un cookie sécurisé sur cet appareil. ----------
-// ---------- Connexion Google ----------
-// Le client envoie le jeton d'identité (credential) fourni par Google Identity Services ; on le vérifie côté serveur
-// (signature Google, audience = notre client id). 1re connexion : on demande un pseudo, puis on crée le joueur.
-app.post('/api/auth/google', authLimiter, wrap(async (req, res) => {
-  if (!googleClient) return res.status(503).json({ error: 'Connexion Google non configurée sur ce serveur (GOOGLE_CLIENT_ID)' });
-  const { credential, username } = req.body || {};
-  if (typeof credential !== 'string' || credential.length > 4096) return res.status(400).json({ error: 'Jeton Google manquant' });
-  let info;
-  try { info = (await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID })).getPayload(); }
-  catch (e) { return res.status(401).json({ error: 'Jeton Google invalide ou expiré, réessaie' }); }
-  if (!info || !info.sub) return res.status(401).json({ error: 'Jeton Google invalide' });
+// ---------- Connexion Google (en plus du mode sans compte) ----------
+// Vérifie un jeton d'identité Google Identity Services côté serveur (signature Google, audience = notre client id).
+async function verifyGoogle(req, res) {
+  if (!googleClient) { res.status(503).json({ error: 'Connexion Google non configurée sur ce serveur (GOOGLE_CLIENT_ID)' }); return null; }
+  const credential = req.body && req.body.credential;
+  if (typeof credential !== 'string' || credential.length > 4096) { res.status(400).json({ error: 'Jeton Google manquant' }); return null; }
+  let info = null;
+  try { info = (await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID })).getPayload(); } catch (e) { /* invalide */ }
+  if (!info || !info.sub) { res.status(401).json({ error: 'Jeton Google invalide ou expiré, réessaie' }); return null; }
   const email = String(info.email || '').toLowerCase();
-  const admin = !!(email && info.email_verified && ADMIN_EMAILS.has(email));
+  return { info, email, admin: !!(email && info.email_verified && ADMIN_EMAILS.has(email)) };
+}
+// Lier le joueur courant (sans compte) à un compte Google : il garde toute sa progression.
+app.post('/api/auth/google/link', authMiddleware, authLimiter, wrap(async (req, res) => {
+  const g = await verifyGoogle(req, res); if (!g) return;
+  if (req.user.google_sub) return res.status(400).json({ error: 'Ce joueur est déjà lié à un compte Google' });
+  const taken = await db.getUserByGoogleSub(g.info.sub);
+  if (taken) return res.status(409).json({ error: `Ce compte Google est déjà lié au joueur « ${taken.username} » : connecte-toi avec Google à l’accueil pour le retrouver` });
+  const user = await db.updateUser(req.user.id, { google_sub: g.info.sub, email: g.email, is_admin: req.user.is_admin || g.admin });
+  res.json({ profile: refreshLiveProfile(user) });
+}));
+// Connexion avec Google. 1re connexion : on demande un pseudo, puis on crée le joueur.
+app.post('/api/auth/google', authLimiter, wrap(async (req, res) => {
+  const g = await verifyGoogle(req, res); if (!g) return;
+  const { info, email, admin } = g;
+  const { username } = req.body || {};
   let user = await db.getUserByGoogleSub(info.sub);
   if (!user) {
     if (typeof username !== 'string' || !username) {
@@ -187,7 +200,6 @@ app.post('/api/auth/google', authLimiter, wrap(async (req, res) => {
 }));
 
 app.post('/api/guest', authLimiter, wrap(async (req, res) => {
-  if (googleClient) return res.status(403).json({ error: 'Connexion uniquement avec un compte Google' });
   const { username, key } = req.body || {};
   if (typeof username !== 'string' || !USERNAME_RE.test(username)) return res.status(400).json({ error: 'Pseudo : 3 à 16 caractères (lettres, chiffres, _ -)' });
   const reserved = ADMIN_NAMES.has(username.toLowerCase());
@@ -221,7 +233,6 @@ app.post('/api/transfer/code', authMiddleware, wrap(async (req, res) => {
   res.json({ code });
 }));
 app.post('/api/transfer/claim', authLimiter, wrap(async (req, res) => {
-  if (googleClient) return res.status(403).json({ error: 'Connexion uniquement avec un compte Google' });
   const code = String((req.body && req.body.code) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (code.length !== 8) return res.status(400).json({ error: 'Code invalide' });
   const user = await db.getUserByTransferCode(`${code.slice(0, 4)}-${code.slice(4)}`);
@@ -613,5 +624,5 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 db.init().then(() => {
-  server.listen(PORT, () => console.log(`Glouglou Arena -> http://localhost:${PORT}  (db: ${db.kind}, build ${BUILD}, connexion : ${GOOGLE_CLIENT_ID ? 'Google uniquement' : 'pseudo (GOOGLE_CLIENT_ID non défini)'}, admins : ${[...ADMIN_EMAILS].join(', ') || 'clé admin'})`));
+  server.listen(PORT, () => console.log(`Glouglou Arena -> http://localhost:${PORT}  (db: ${db.kind}, build ${BUILD}, connexion : ${GOOGLE_CLIENT_ID ? 'sans compte ou Google' : 'sans compte (GOOGLE_CLIENT_ID non défini)'}, admins : ${[...ADMIN_EMAILS].join(', ') || 'clé admin'})`));
 }).catch(err => { console.error('Impossible de démarrer la base :', err.message); process.exit(1); });

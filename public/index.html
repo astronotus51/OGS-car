@@ -23,17 +23,18 @@
       <div class="tagline">Duel de bestioles en 1 contre 1 · inspiré du jeu iPad OGS</div>
       <!-- Connexion Google (affichée quand le serveur a un GOOGLE_CLIENT_ID) -->
       <div id="googleAuth" hidden>
-        <div class="info">Connecte-toi avec ton compte Google : ta progression te suit sur tous tes appareils.</div>
+        <div class="info">Avec un compte Google, ta progression te suit sur tous tes appareils.</div>
         <div id="googleBtn" class="google-btn"></div>
         <form id="googleNameForm" autocomplete="off" hidden>
           <div class="info">Première connexion : choisis ton pseudo de joueur (visible par les autres).</div>
           <label>Pseudo<input id="googleUser" maxlength="16" required autocomplete="off" placeholder="3 à 16 caractères"></label>
-          <div class="row"><button type="submit" class="btn primary">C’est parti !</button></div>
+          <div class="row"><button type="submit" class="btn primary">C’est parti !</button><button type="button" class="btn small" id="googleNameCancel">Annuler</button></div>
         </form>
         <div id="googleError" class="error"></div>
+        <div class="or-sep"><span>ou sans compte</span></div>
       </div>
       <form id="authForm" autocomplete="off">
-        <div class="info">Pas de compte, pas de mot de passe : choisis un pseudo et joue. Ta progression reste sur cet appareil.</div>
+        <div class="info">Sans compte : choisis un pseudo et joue. Ta progression reste sur cet appareil (tu pourras la lier à Google plus tard depuis ton profil).</div>
         <label>Pseudo<input id="authUser" name="username" maxlength="16" required autocomplete="off" placeholder="3 à 16 caractères"></label>
         <div id="authAdminWrap" hidden><label>Clé admin<input id="authAdminKey" type="password" maxlength="64" autocomplete="off" placeholder="fichier data/admin-key.txt du serveur"></label></div>
         <div class="row">
@@ -217,6 +218,9 @@
       <h3>Compte et sécurité</h3>
       <div class="account">
         <div class="card"><div class="card-title">Avatar</div><button class="btn small" id="btnAvatar">Choisir un avatar ou une photo</button></div>
+        <div class="card hidden" id="googleCard"><div class="card-title">Compte Google</div>
+          <div id="googleLinked" hidden><p class="info" style="text-align:left" id="googleLinkedInfo"></p></div>
+          <div id="googleUnlinked" hidden><p class="info" style="text-align:left">Lie ce joueur à ton compte Google pour retrouver ta progression (trophées, skins, pièces) sur tous tes appareils.</p><div id="googleLinkBtn" class="google-btn" style="justify-content:flex-start"></div><div id="googleLinkMsg" class="error"></div></div></div>
         <div class="card" id="transferCard"><div class="card-title">Transférer ma progression</div><p class="info" style="text-align:left">Pas de compte : ta progression est liée à cet appareil. Pour la retrouver ailleurs, génère un code (valable 24 h, usage unique) et entre-le sur l’autre appareil à l’écran d’accueil.</p><button class="btn small" id="btnTransfer">Générer un code</button><div id="transferOut" class="queue-code hidden" style="font-size:22px"></div></div>
         <div class="card" id="adminKeyCard"><div class="card-title">Administration</div><form id="adminKeyForm" class="row" style="justify-content:flex-start"><input id="adminKey" class="input" type="password" style="width:200px" placeholder="Clé admin"><button class="btn small" type="submit">Activer</button></form><div id="adminKeyMsg" class="info"></div></div>
         <div class="card hidden" id="adminCard" style="grid-column: 1 / -1"><div class="card-title">Administration</div><div id="adminInfo" class="info" style="text-align:left"></div>

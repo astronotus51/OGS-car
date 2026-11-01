@@ -190,7 +190,6 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 5px; border-radius: 5
 
 .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin: 14px 0 10px; }
 .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-.google-btn { display: flex; justify-content: center; min-height: 40px; }
 .audio-ctl { display: flex; align-items: center; gap: 6px; }
 .audio-ctl input[type=range] { width: 70px; accent-color: var(--accent); }
 .icon-btn { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; font-size: 16px; }
@@ -225,6 +224,8 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 5px; border-radius: 5
 .logo.glou .bubbles i:nth-child(3) { width: 13px; height: 13px; left: 8px; animation-delay: 2s; }
 @keyframes bub { 0% { bottom: 0; opacity: 0; } 20% { opacity: 0.9; } 100% { bottom: 50px; opacity: 0; } }
 
+.or-sep { display: flex; align-items: center; gap: 10px; margin: 6px 0 12px; opacity: 0.6; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+.or-sep::before, .or-sep::after { content: ''; flex: 1; height: 1px; background: currentColor; opacity: 0.4; }
 .google-btn { display: flex; justify-content: center; margin: 14px 0; min-height: 44px; }
 .badge-modo { display: inline-block; font-size: 10px; letter-spacing: 1px; background: linear-gradient(90deg, #06b6d4, #6366f1); color: #fff; padding: 2px 7px; border-radius: 999px; vertical-align: middle; font-weight: 800; }
 .admin-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow: auto; }

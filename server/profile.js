@@ -49,6 +49,8 @@ function publicProfile(user, extra) {
     avatar: user.avatar || null,
     admin: isAdmin(user),
     modo: isModo(user),
+    google: !!user.google_sub,
+    email: user.email || null,
     createdAt: user.created_at,
   }, extra || {});
 }

@@ -11,6 +11,9 @@ const SIDES = ['top', 'bottom'];
 
 let nextRoomId = 1;
 
+// Profil vu par l'adversaire : sans données privées (e-mail, pièces, quêtes…).
+function publicView(p) { if (!p) return p; const { email, coins, google, ...pub } = p; return pub; }
+
 // Vagues du mode Survie : liste d'unités par vague (ogId), de plus en plus fortes.
 function waveComposition(n, rng) {
   const units = [];
@@ -89,7 +92,7 @@ class Room {
       phase: this.phase, draftSeconds: this.phase === 'draft' ? Math.ceil(this.draftTimer) : 0,
       countdown: this.countdown, duration: this.duration, features: this.features,
       bans: this.game ? this.game.bans : { top: [], bottom: [] },
-      me: p.profile, opponent: opp.profile, opponentIsBot: !!opp.bot || !!opp.director,
+      me: p.profile, opponent: publicView(opp.profile), opponentIsBot: !!opp.bot || !!opp.director,
       survival: this.survival ? { wave: this.survival.wave, score: this.survival.score } : null,
     };
   }
