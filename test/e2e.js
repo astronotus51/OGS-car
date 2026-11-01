@@ -61,7 +61,7 @@ async function login(page, name) {
   await A.click('#screen-skins [data-screen="lobby"]'); await A.click('#screen-lobby [data-screen="profile"]'); await A.waitForTimeout(800); await A.screenshot({ path: path.join(OUT, 'shot_profile.png') });
   // Entraînement vs IA
   await A.click('#screen-profile [data-screen="lobby"]'); await A.waitForTimeout(300);
-  await A.selectOption('#botLevel', 'difficile'); await A.click('#btnBot');
+  await A.click('#modeCard'); await A.click('.mode-tile[data-mode="bot"]'); await A.selectOption('#botLevel', 'difficile'); await A.click('#btnModeOk'); await A.click('#btnPlay');
   await A.waitForSelector('#screen-game:not(.hidden)', { timeout: 10000 });
   await A.waitForTimeout(9000);
   await A.screenshot({ path: path.join(OUT, 'shot_bot.png') });

@@ -23,16 +23,17 @@ async function setOptions(page, opts) {
   const suf = String(Date.now()).slice(-5);
   await login(A, 'Feat' + suf); await login(B, 'Ure' + suf);
   await A.waitForTimeout(500);
-  const quests = await A.$$eval('#questList li', l => l.length);
+  await A.click('#btnQuests'); await A.waitForTimeout(600);
+  const quests = await A.$$eval('#questList li', l => l.length); await A.click('[data-close="questsModal"]');
   console.log('quêtes affichées :', quests);
   await A.screenshot({ path: path.join(OUT, 'f_lobby.png') });
 
   // Partie amicale avec draft + roi du centre + capacités + évolution
   await setOptions(A, { draft: true, kingOfCenter: true, abilities: true, evolution: true, powerPatches: true, fog: false });
-  await A.click('#btnFriendlyCreate');
+  await A.click('#modeCard'); await A.click('.mode-tile[data-mode="friendly"]'); await A.click('#btnModeOk'); await A.click('#btnPlay');
   await A.waitForSelector('#queueCode:not(.hidden)', { timeout: 5000 });
   const code = await A.$eval('#queueCode', e => e.textContent.trim());
-  await B.fill('#friendlyCode', code); await B.click('#btnFriendlyJoin');
+  await B.click('#modeCard'); await B.click('.mode-tile[data-mode="friendly"]'); await B.fill('#friendlyCode', code); await B.click('#btnFriendlyJoin');
   await A.waitForSelector('#screen-game:not(.hidden)', { timeout: 10000 });
   await B.waitForSelector('#screen-game:not(.hidden)', { timeout: 10000 });
   await A.waitForTimeout(800);
@@ -61,7 +62,7 @@ async function setOptions(page, opts) {
   await A.click('#btnResultMenu'); await A.waitForTimeout(400);
 
   // Survie
-  await A.click('#btnSurvival');
+  await A.click('#modeCard'); await A.click('.mode-tile[data-mode="survival"]'); await A.click('#btnModeOk'); await A.click('#btnPlay');
   await A.waitForSelector('#screen-game:not(.hidden)', { timeout: 10000 });
   await A.waitForTimeout(16000);
   await A.keyboard.press('t'); await A.keyboard.press('Enter');

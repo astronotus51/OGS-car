@@ -147,7 +147,7 @@
   $('btnLogout2').addEventListener('click', logout);
   $('adminKeyForm').addEventListener('submit', async (ev) => {
     ev.preventDefault(); $('adminKeyMsg').textContent = '';
-    try { profile = (await Net.api('/api/admin/activate', { key: $('adminKey').value })).profile; $('adminKey').value = ''; $('adminKeyMsg').textContent = 'Mode admin activé !'; openProfile(); }
+    try { profile = (await Net.api('/api/admin/activate', { key: $('adminKey').value })).profile; $('adminKey').value = ''; $('adminKeyMsg').textContent = 'Mode admin activé !'; $('adminKeyCard').classList.add('hidden'); closeModal('settingsModal'); refreshLobby(); toast('Tu es maintenant ADMIN', 'good'); }
     catch (e) { $('adminKeyMsg').textContent = e.message; }
   });
 
@@ -279,8 +279,8 @@
     $('featureList').innerHTML = groups.map(g => `<div class="feature-group">${esc(g)}</div>` + feats.filter(f => f.group === g).map(f => `<label class="feature"><input type="checkbox" data-feature="${f.key}" ${(typeof saved[f.key] === 'boolean' ? saved[f.key] : f.default) ? 'checked' : ''}><span>${esc(f.label)}${f.ranked ? ' <small style="display:inline;color:#4ade80">· actif en classée</small>' : ''}<small>${esc(f.desc)}</small></span></label>`).join('')).join('');
     $('featureList').querySelectorAll('input').forEach(i => i.addEventListener('change', () => saveOptions(currentOptions())));
     $('optionsBox').classList.toggle('hidden', !feats.length);
-    $('btnSurvival').classList.toggle('hidden', !Features.enabled('survival'));
-    $('questsCard').classList.toggle('hidden', !Features.enabled('quests'));
+    $('tileSurvival').classList.toggle('hidden', !Features.enabled('survival'));
+    $('btnQuests').classList.toggle('hidden', !Features.enabled('quests'));
   }
   renderFeatureList();
   $('mapSelect').innerHTML = '<option value="random">Aléatoire</option>' + Catalog.MAPS.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
@@ -292,16 +292,57 @@
     try {
       const { quests } = await Net.api('/api/quests');
       if (!quests) return;
+      const doneN = quests.items.filter(q => q.done).length, claimable = quests.items.filter(q => q.done && !q.claimed).length;
+      $('questsHint').textContent = claimable ? `${claimable} à récupérer !` : `${doneN}/${quests.items.length} terminées`;
       $('questList').innerHTML = quests.items.map(q => `<li><div class="row"><span>${esc(q.label)}</span><span>${q.claimed ? '✔' : q.done ? `<button class="btn gold" data-claim="${q.id}">+${q.coins} 🪙</button>` : `${q.progress}/${q.goal}`}</span></div><div class="bar"><div style="width:${Math.round(q.progress / q.goal * 100)}%"></div></div></li>`).join('');
       $('questList').querySelectorAll('[data-claim]').forEach(b => b.addEventListener('click', async () => { try { const d = await Net.api('/api/quests/claim', { id: b.dataset.claim }); profile = d.profile; $('lobbyMsg').textContent = `+${d.coins} pièces !`; refreshLobby(); } catch (e) { $('lobbyMsg').textContent = e.message; } }));
     } catch (e) { /* ignore */ }
   }
 
   $('btnSurvival').addEventListener('click', () => { lastMatchKind = { t: 'survival' }; Net.send({ t: 'survival', options: currentOptions(), map: $('mapSelect').value }); openQueue('Les vagues arrivent…', 'bot'); });
-  $('btnPlay').addEventListener('click', () => { lastMatchKind = { t: 'queue' }; Net.send({ t: 'queue' }); openQueue('Recherche d’un adversaire…', 'queue'); });
+  // ----- Modes de jeu (façon Brawl : une carte « mode » + un gros bouton JOUER) -----
+  const MODES = {
+    ranked: { icon: '⚔️', name: 'Classée 1v1', desc: 'Trophées · adversaire de ton niveau', sub: 'Partie classée' },
+    duo: { icon: '🤝', name: 'Duo 2v2', desc: 'Grande arène, à deux contre deux', sub: 'Duo 2v2', soon: true },
+    trio: { icon: '👥', name: 'Trio 3v3', desc: 'Arène géante, à trois contre trois', sub: 'Trio 3v3', soon: true },
+    bot: { icon: '🤖', name: 'Entraînement', desc: 'Contre l’IA, sans enjeu', sub: 'Contre l’IA' },
+    survival: { icon: '🌊', name: 'Survie', desc: 'Vagues · solo · record', sub: 'Survie' },
+    friendly: { icon: '🎟️', name: 'Amical', desc: 'Crée une salle, partage le code', sub: 'Créer une salle amicale' },
+  };
+  let selectedMode = (() => { try { return localStorage.getItem('ogs_mode') || 'ranked'; } catch (e) { return 'ranked'; } })();
+  if (!MODES[selectedMode] || MODES[selectedMode].soon) selectedMode = 'ranked';
+  function applyMode() {
+    const m = MODES[selectedMode];
+    $('modeIcon').textContent = m.icon; $('modeName').textContent = m.name; $('modeDesc').textContent = m.desc; $('playSub').textContent = m.sub;
+    $('modeGrid').querySelectorAll('.mode-tile').forEach(t => { t.classList.toggle('active', t.dataset.mode === selectedMode); t.classList.toggle('soon-tile', !!(MODES[t.dataset.mode] || {}).soon); });
+    document.querySelectorAll('#modeModal .mode-opt, #modeModal [data-for]').forEach(el => el.classList.toggle('show', el.dataset.for.split(' ').includes(selectedMode)));
+    document.querySelectorAll('#modeModal label[data-for]').forEach(el => { el.style.display = el.dataset.for.split(' ').includes(selectedMode) ? '' : 'none'; });
+    try { localStorage.setItem('ogs_mode', selectedMode); } catch (e) { /* ignore */ }
+  }
+  $('modeGrid').addEventListener('click', (ev) => {
+    const t = ev.target.closest('.mode-tile'); if (!t) return;
+    if ((MODES[t.dataset.mode] || {}).soon) return toast('Ce mode arrive bientôt !', 'warn');
+    selectedMode = t.dataset.mode; applyMode(); Audio.sfx('ui');
+  });
+  const openModal = (id) => { $(id).classList.remove('hidden'); Audio.sfx('ui'); };
+  const closeModal = (id) => $(id).classList.add('hidden');
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => closeModal(b.dataset.close)));
+  document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', (ev) => { if (ev.target === m) m.classList.add('hidden'); }));
+  $('modeCard').addEventListener('click', () => openModal('modeModal'));
+  $('btnModeOk').addEventListener('click', () => closeModal('modeModal'));
+  $('btnSettings').addEventListener('click', () => { $('adminKeyCard').classList.toggle('hidden', !!(profile && profile.admin)); openModal('settingsModal'); });
+  $('btnQuests').addEventListener('click', () => { refreshQuests(); openModal('questsModal'); });
+  applyMode();
+  $('btnPlay').addEventListener('click', () => {
+    closeModal('modeModal');
+    if (selectedMode === 'bot') return $('btnBot').click();
+    if (selectedMode === 'survival') return $('btnSurvival').click();
+    if (selectedMode === 'friendly') return $('btnFriendlyCreate').click();
+    lastMatchKind = { t: 'queue' }; Net.send({ t: 'queue' }); openQueue('Recherche d’un adversaire…', 'queue');
+  });
   $('btnBot').addEventListener('click', () => { const difficulty = $('botLevel').value; lastMatchKind = { t: 'bot', difficulty }; Net.send({ t: 'bot', difficulty, duration: Number($('durationSelect').value), options: currentOptions(), map: $('mapSelect').value }); openQueue('Préparation de l’IA…', 'bot'); });
   $('btnFriendlyCreate').addEventListener('click', () => { Net.send({ t: 'friendly_create', duration: Number($('durationSelect').value), options: currentOptions(), map: $('mapSelect').value }); openQueue('Partie amicale : partage ce code', 'friendly'); });
-  $('btnFriendlyJoin').addEventListener('click', () => { const code = $('friendlyCode').value.trim().toUpperCase(); if (code.length < 4) return ($('lobbyMsg').textContent = 'Entre le code à 5 caractères'); Net.send({ t: 'friendly_join', code }); $('lobbyMsg').textContent = 'Connexion à la salle…'; });
+  $('btnFriendlyJoin').addEventListener('click', () => { const code = $('friendlyCode').value.trim().toUpperCase(); if (code.length < 4) return toast('Entre le code à 5 caractères', 'bad'); closeModal('modeModal'); Net.send({ t: 'friendly_join', code }); $('lobbyMsg').textContent = 'Connexion à la salle…'; });
   $('btnCancelQueue').addEventListener('click', () => { Net.send({ t: queueMode === 'friendly' ? 'friendly_leave' : 'cancel' }); closeQueue(); });
 
   function openQueue(title, mode) {
@@ -378,7 +419,7 @@
     show('lobby');
     if (lastMatchKind && lastMatchKind.t === 'bot') $('btnBot').click();
     else if (lastMatchKind && lastMatchKind.t === 'survival') $('btnSurvival').click();
-    else $('btnPlay').click();
+    else { lastMatchKind = { t: 'queue' }; Net.send({ t: 'queue' }); openQueue('Recherche d’un adversaire…', 'queue'); }
   });
 
   // ----- Profil -----
@@ -386,7 +427,7 @@
     show('profile');
     try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
     $('profileName').innerHTML = esc(profile.username) + badgeOf(profile);
-    $('adminCard').classList.toggle('hidden', !profile.admin); $('adminKeyCard').classList.toggle('hidden', profile.admin || !/[?&]admin\b/.test(location.search)); if (profile.admin) loadAdmin();
+    $('adminCard').classList.toggle('hidden', !profile.admin); if (profile.admin) loadAdmin();
     // Compte Google : lié ou proposition de liaison (si le serveur le permet).
     $('googleCard').classList.toggle('hidden', !GOOGLE_MODE);
     $('googleLinked').hidden = !profile.google; $('googleUnlinked').hidden = !!profile.google;
