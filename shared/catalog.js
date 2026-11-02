@@ -9,8 +9,8 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const OG_NAMES = { 1: 'Zip', 2: 'Gromp', 3: 'Krak', 4: 'Riko', 5: 'Blok', 6: 'Mojo', 7: 'Zéphir' };
-  const OG_ROLES = { 1: 'Runner', 2: 'Défenseur', 3: 'Tourelle', 4: 'Étoile rebondissante', 5: 'Mur', 6: 'Chargeur de mana', 7: 'Dragonnet volant' };
+  const OG_NAMES = { 1: 'Zip', 2: 'Gromp', 3: 'Krak', 4: 'Riko', 5: 'Blok', 6: 'Mojo', 7: 'Zéphir', 8: 'Pik', 9: 'Bulle', 10: 'Zazou', 11: 'Boum', 12: 'Rafale', 13: 'Tiktak', 14: 'Fantôme', 15: 'Glu', 16: 'Sirène', 17: 'Kraken' };
+  const OG_ROLES = { 1: 'Runner', 2: 'Défenseur', 3: 'Tourelle', 4: 'Étoile rebondissante', 5: 'Mur', 6: 'Chargeur de mana', 7: 'Dragonnet volant', 8: 'Hérisson à ressort', 9: 'Bulle de soin', 10: 'Moustique', 11: 'Mine', 12: 'Ventilo', 13: 'Bombe à retardement', 14: 'Spectre', 15: 'Flaque gluante', 16: 'Charmeuse', 17: 'Colosse' };
   const OG_LORE = {
     1: 'Petite boule d’énergie qui ne sait faire qu’une chose : foncer. Tout droit. Toujours.',
     2: 'Grincheux à griffes qui patrouille sa ligne et croque tout Zip qui passe.',
@@ -19,11 +19,20 @@
     5: 'Bloc têtu avec des dents. Ne parle pas, ne bouge pas, encaisse.',
     6: 'Trèfle à quatre branches qui ronronne de mana. Fragile, mais précieux.',
     7: 'Dragonnet rondouillard qui vole au-dessus de tout et crache des boules de feu.',
+    8: 'Boule de piquants sur ressort. Pas rapide, mais il en faut deux pour l’arrêter.',
+    9: 'Bulle rêveuse qui flotte jusqu’à l’autre bout et soigne ta base en éclatant.',
+    10: 'Moustique insupportable : trop rapide, trop petit, pique la base et s’en va.',
+    11: 'Mine boudeuse enfouie dans le sable. Clignote. Attend. Boum.',
+    12: 'Ventilateur grincheux qui souffle tout ce qui s’approche vers l’arrière.',
+    13: 'Bombe pressée avec un réveil dans le ventre. Compte à rebours ambulant.',
+    14: 'Drap qui hante son propre camp, invisible, et passe au travers des murs.',
+    15: 'Flaque de bave verte. Tout ce qui marche dedans y reste collé un moment.',
+    16: 'Chanteuse des abysses : qui l’entend change de camp.',
+    17: 'Le seigneur des profondeurs. Lent, immense, et il n’aime pas les murs.',
   };
 
   // ----- Collection de créatures (façon Clash Royale) -----
-  // Les 7 de base sont acquises. Les suivantes arrivent par capsules et route des trophées ; `playable:false` tant que
-  // leur comportement n'est pas dans la simulation (elles se collectionnent déjà, elles seront jouables à leur sortie).
+  // Les 7 de base sont acquises. Les suivantes arrivent par capsules et route des trophées (`playable:false` servirait à en annoncer une avant sa sortie).
   const RARITIES = {
     commune: { name: 'Commune', color: '#8fb7c9', weight: 70, copiesPerStar: 2 },
     rare: { name: 'Rare', color: '#22e3c8', weight: 22, copiesPerStar: 2 },
@@ -39,16 +48,16 @@
     { id: 6, name: 'Mojo', role: 'Chargeur de mana', cost: 60, rarity: 'rare', base: true, playable: true, power: '+50 % de régénération de mana pour toute ton équipe.' },
     { id: 7, name: 'Zéphir', role: 'Dragonnet volant', cost: 70, rarity: 'epique', base: true, playable: true, power: 'Vole au-dessus de tout, tire à 1 case, 5 dégâts à la base.' },
     // --- 10 nouveaux types (pouvoirs inédits), jouables à la prochaine mise à jour ---
-    { id: 8, name: 'Pik', role: 'Hérisson à ressort', cost: 10, rarity: 'commune', playable: false, power: 'Runner lent mais à 2 PV : il encaisse un coup et continue.' },
-    { id: 9, name: 'Bulle', role: 'Bulle de soin', cost: 10, rarity: 'rare', playable: false, power: 'Flotte lentement au-dessus de tout. Si elle atteint la base ennemie, ta base récupère 1 PV.' },
-    { id: 10, name: 'Zazou', role: 'Moustique', cost: 20, rarity: 'commune', playable: false, power: 'Minuscule volant très rapide, 1 PV : ignore les unités au sol, 1 dégât à la base.' },
-    { id: 11, name: 'Boum', role: 'Mine', cost: 30, rarity: 'rare', playable: false, power: 'Statique et discret : explose au premier contact ennemi, 2 dégâts dans la case autour.' },
-    { id: 12, name: 'Rafale', role: 'Ventilo', cost: 30, rarity: 'epique', playable: false, power: 'Tourelle qui souffle : repousse d’une case les ennemis au sol devant elle, toutes les 2 s.' },
-    { id: 13, name: 'Tiktak', role: 'Bombe à retardement', cost: 40, rarity: 'rare', playable: false, power: 'Marche lentement, 3 PV. Explose à l’arrivée (4 dégâts) ou à sa mort (1 dégât autour).' },
-    { id: 14, name: 'Fantôme', role: 'Spectre', cost: 40, rarity: 'epique', playable: false, power: 'Invisible tant qu’il est dans ton camp, traverse les murs. 2 PV, 2 dégâts.' },
-    { id: 15, name: 'Glu', role: 'Flaque gluante', cost: 50, rarity: 'commune', playable: false, power: 'Zone collante : les ennemis au sol qui la traversent sont ralentis de moitié.' },
-    { id: 16, name: 'Sirène', role: 'Charmeuse', cost: 60, rarity: 'legendaire', playable: false, power: 'Toutes les 8 s, charme l’ennemi au sol le plus proche (2 cases) : il change de camp.' },
-    { id: 17, name: 'Kraken', role: 'Colosse', cost: 70, rarity: 'legendaire', playable: false, power: 'Lent, 6 PV, 3 dégâts. Écrase les murs en passant (−1 PV pour lui).' },
+    { id: 8, name: 'Pik', role: 'Hérisson à ressort', cost: 10, rarity: 'commune', playable: true, power: 'Runner lent mais à 2 PV : il encaisse un coup et continue.' },
+    { id: 9, name: 'Bulle', role: 'Bulle de soin', cost: 10, rarity: 'rare', playable: true, power: 'Flotte lentement au-dessus de tout. Si elle atteint la base ennemie, ta base récupère 1 PV.' },
+    { id: 10, name: 'Zazou', role: 'Moustique', cost: 20, rarity: 'commune', playable: true, power: 'Minuscule volant très rapide, 1 PV : ignore les unités au sol, 1 dégât à la base.' },
+    { id: 11, name: 'Boum', role: 'Mine', cost: 30, rarity: 'rare', playable: true, power: 'Statique et discret : explose au premier contact ennemi, 2 dégâts dans la case autour.' },
+    { id: 12, name: 'Rafale', role: 'Ventilo', cost: 30, rarity: 'epique', playable: true, power: 'Tourelle qui souffle : repousse d’une case les ennemis au sol devant elle, toutes les 2 s.' },
+    { id: 13, name: 'Tiktak', role: 'Bombe à retardement', cost: 40, rarity: 'rare', playable: true, power: 'Marche lentement, 3 PV. Explose à l’arrivée (4 dégâts) ou à sa mort (1 dégât autour).' },
+    { id: 14, name: 'Fantôme', role: 'Spectre', cost: 40, rarity: 'epique', playable: true, power: 'Invisible tant qu’il est dans ton camp, traverse les murs. 2 PV, 2 dégâts.' },
+    { id: 15, name: 'Glu', role: 'Flaque gluante', cost: 50, rarity: 'commune', playable: true, power: 'Zone collante : les ennemis au sol qui la traversent sont ralentis de moitié.' },
+    { id: 16, name: 'Sirène', role: 'Charmeuse', cost: 60, rarity: 'legendaire', playable: true, power: 'Toutes les 8 s, charme l’ennemi au sol le plus proche (2 cases) : il change de camp.' },
+    { id: 17, name: 'Kraken', role: 'Colosse', cost: 70, rarity: 'legendaire', playable: true, power: 'Lent, 6 PV, 3 dégâts. Écrase les murs en passant (−1 PV pour lui).' },
   ];
   const CREATURE_BY_ID = Object.fromEntries(CREATURES.map(c => [c.id, c]));
   const DECK_COSTS = [10, 20, 30, 40, 50, 60, 70];
@@ -138,7 +147,7 @@
   // 15 avatars de profil proposés (dessinés par creatures.js) ; sinon photo importée (data URL).
   const AVATAR_PRESETS = ['og1_default', 'og2_default', 'og3_default', 'og4_default', 'og5_default', 'og6_default', 'og7_default', 'og1_pirate', 'og2_royal', 'og4_candy', 'og7_cyber', 'og6_astro', 'og3_ninja', 'og5_lava', 'og1_halloween'];
   const SKINS = [];
-  for (let og = 1; og <= 7; og += 1) {
+  for (let og = 1; og <= 17; og += 1) {
     for (const th of THEMES) {
       SKINS.push({ id: `og${og}_${th.suffix}`, ogId: og, theme: th.theme, name: th.name(OG_NAMES[og], og), rarity: th.rarity, unlock: typeof th.unlock === 'function' ? th.unlock(og) : th.unlock });
     }
@@ -148,7 +157,7 @@
   for (const [old, theme] of Object.entries(LEGACY)) for (let og = 1; og <= 7; og += 1) SKINS.push({ id: `og${og}_${old}`, ogId: og, theme, name: `${OG_NAMES[og]} (ancien)`, rarity: 'commun', unlock: { type: 'hidden' }, hidden: true });
 
   const SKIN_BY_ID = Object.fromEntries(SKINS.map(s => [s.id, s]));
-  const DEFAULT_EQUIP = Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map(og => [og, `og${og}_default`]));
+  const DEFAULT_EQUIP = Object.fromEntries(Array.from({ length: 17 }, (_, i) => i + 1).map(og => [og, `og${og}_default`]));
 
   const RANKS = [
     { name: 'Bronze', min: 0, color: '#b45309' },

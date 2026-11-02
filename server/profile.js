@@ -9,7 +9,8 @@ function allSkinIds() { return Catalog.SKINS.filter(s => !s.hidden).map(s => s.i
 // Collection : exemplaires par créature (les 7 de base toujours présentes ; admins et modos : tout).
 function collectionOf(user) {
   const col = Object.assign({}, Catalog.BASE_COLLECTION, user.collection || {});
-  if (isAdmin(user) || isModo(user)) for (const c of Catalog.CREATURES) col[c.id] = Math.max(col[c.id] || 0, 1);
+  // Admins : toute la collection au niveau maximum (5 étoiles) ; modos : tout, 1 exemplaire.
+  for (const c of Catalog.CREATURES) { if (isAdmin(user)) col[c.id] = Math.max(col[c.id] || 0, 99); else if (isModo(user)) col[c.id] = Math.max(col[c.id] || 0, 1); }
   return col;
 }
 // Équipe : une créature par coût ; une entrée invalide (non possédée, non jouable, mauvais coût) retombe sur la créature de base.
@@ -72,7 +73,7 @@ function publicProfile(user, extra) {
     guest: !user.google_sub,
     deck: deckOf(user),
     collection: collectionOf(user),
-    capsules: user.capsules || 0,
+    capsules: isAdmin(user) ? Catalog.CAPSULE.max : (user.capsules || 0), // admin : capsules illimitées
     road: Array.isArray(user.road) ? user.road : [],
     email: user.email || null,
     createdAt: user.created_at,

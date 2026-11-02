@@ -8,7 +8,7 @@
   const OUTLINE = '#2a2438';
   const TAU = Math.PI * 2;
 
-  const NAMES = { 1: 'Zip', 2: 'Gromp', 3: 'Krak', 4: 'Riko', 5: 'Blok', 6: 'Mojo', 7: 'Zéphir' };
+  const NAMES = { 1: 'Zip', 2: 'Gromp', 3: 'Krak', 4: 'Riko', 5: 'Blok', 6: 'Mojo', 7: 'Zéphir', 8: 'Pik', 9: 'Bulle', 10: 'Zazou', 11: 'Boum', 12: 'Rafale', 13: 'Tiktak', 14: 'Fantôme', 15: 'Glu', 16: 'Sirène', 17: 'Kraken' };
   const ROLES = { 1: 'Runner', 2: 'Défenseur', 3: 'Tourelle', 4: 'Étoile rebondissante', 5: 'Mur', 6: 'Chargeur de mana', 7: 'Dragonnet volant' };
 
   // Palettes de base par créature (classique).
@@ -20,6 +20,16 @@
     5: { base: '#60a5fa', light: '#dbeafe', dark: '#1d4ed8' },
     6: { base: '#4ade80', light: '#dcfce7', dark: '#15803d' },
     7: { base: '#fb923c', light: '#fed7aa', dark: '#9a3412' },
+    8: { base: '#d9b36b', light: '#f5e6c4', dark: '#8a6a2b' },
+    9: { base: '#7dd3fc', light: '#e0f2fe', dark: '#0284c7' },
+    10: { base: '#a3e635', light: '#ecfccb', dark: '#4d7c0f' },
+    11: { base: '#475569', light: '#94a3b8', dark: '#1e293b' },
+    12: { base: '#93c5fd', light: '#dbeafe', dark: '#1d4ed8' },
+    13: { base: '#334155', light: '#64748b', dark: '#0f172a' },
+    14: { base: '#e2e8f0', light: '#ffffff', dark: '#94a3b8' },
+    15: { base: '#84cc16', light: '#d9f99d', dark: '#3f6212' },
+    16: { base: '#f0abfc', light: '#fae8ff', dark: '#a21caf' },
+    17: { base: '#7c3aed', light: '#c4b5fd', dark: '#3b0764' },
   };
   // Palettes Halloween, spécifiques par créature.
   const HALLOWEEN = {
@@ -54,7 +64,7 @@
     return 'default';
   }
   function colorsFor(ogId, theme) {
-    if (theme === 'halloween') return HALLOWEEN[ogId];
+    if (theme === 'halloween') return HALLOWEEN[ogId] || BASE[ogId];
     if (theme === 'neon') return { base: '#111827', light: '#1f2937', dark: '#030712', glow: BASE[ogId].base };
     if (theme === 'lava' || theme === 'cyber') return THEME_PALETTE[theme];
     if (THEME_PALETTE[theme]) return THEME_PALETTE[theme];
@@ -420,7 +430,194 @@
     ctx.restore();
   }
 
-  const DRAWERS = { 1: drawZip, 2: drawGromp, 3: drawKrak, 4: drawRiko, 5: drawBlok, 6: drawMojo, 7: drawZephir };
+  // ----- Les 10 nouvelles créatures -----
+  function drawPik(ctx, s, t, st, C, theme) {
+    // Hérisson à ressort : boule de piquants qui se hérissent en marchant, petites pattes, museau pointu.
+    const run = st.moving ? 1 : 0, ph = t * (run ? 9 : 2) + st.phase;
+    const bob = run ? Math.abs(Math.sin(ph)) * s * 0.04 : 0;
+    ctx.save(); ctx.translate(0, -bob);
+    // pattes
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.06; ctx.lineCap = 'round';
+    for (const sx of [-1, 1]) { const k = Math.sin(ph + (sx > 0 ? 0 : Math.PI)) * run; ctx.beginPath(); ctx.moveTo(sx * s * 0.18, s * 0.3); ctx.lineTo(sx * s * 0.22 + k * s * 0.08, s * 0.46); ctx.stroke(); }
+    // piquants
+    const n = 14, bristle = run ? 0.5 + 0.5 * Math.sin(ph * 2) : 0.2 + 0.1 * Math.sin(t * 2);
+    ctx.fillStyle = C.dark; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03;
+    for (let i = 0; i < n; i += 1) { const a = -Math.PI * 1.05 + (i / (n - 1)) * Math.PI * 1.1, L = s * (0.46 + bristle * 0.12 + 0.04 * Math.sin(i * 1.7 + t * 3)); ctx.beginPath(); ctx.moveTo(Math.cos(a + 0.12) * s * 0.3, Math.sin(a + 0.12) * s * 0.3); ctx.lineTo(Math.cos(a) * L, Math.sin(a) * L); ctx.lineTo(Math.cos(a - 0.12) * s * 0.3, Math.sin(a - 0.12) * s * 0.3); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    // corps
+    ctx.beginPath(); ctx.ellipse(0, s * 0.05, s * 0.34, s * 0.3, 0, 0, TAU); paint(ctx, C, s, theme, 0, 0);
+    shine(ctx, -s * 0.12, -s * 0.08, s * 0.08, s * 0.05);
+    // museau clair en bas du visage, truffe au bout
+    ctx.fillStyle = C.light; ctx.beginPath(); ctx.ellipse(0, s * 0.14, s * 0.14, s * 0.1, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03; ctx.stroke();
+    ctx.fillStyle = OUTLINE; ctx.beginPath(); ctx.ellipse(0, s * 0.1, s * 0.05, s * 0.035, 0, 0, TAU); ctx.fill();
+    eye(ctx, -s * 0.13, -s * 0.04, s * 0.055, s * 0.07, t, st.phase, { theme }); eye(ctx, s * 0.13, -s * 0.04, s * 0.055, s * 0.07, t, st.phase + 1, { theme });
+    mouth(ctx, 0, s * 0.2, s * 0.12, 'smile', t);
+    ctx.restore();
+  }
+  function drawBulle(ctx, s, t, st, C, theme) {
+    // Bulle de soin : sphère translucide qui ondule, visage serein, petites bulles satellites.
+    const w = Math.sin(t * 3 + st.phase) * 0.06;
+    ctx.save(); ctx.scale(1 + w, 1 - w);
+    ctx.globalAlpha *= 0.85;
+    const g = ctx.createRadialGradient(-s * 0.15, -s * 0.15, s * 0.05, 0, 0, s * 0.45); g.addColorStop(0, 'rgba(255,255,255,0.9)'); g.addColorStop(0.5, C.base + 'cc'); g.addColorStop(1, C.dark + 'aa');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, s * 0.42, 0, TAU); ctx.fill();
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.045; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = s * 0.05; ctx.beginPath(); ctx.arc(0, 0, s * 0.3, Math.PI * 1.1, Math.PI * 1.45); ctx.stroke();
+    ctx.globalAlpha = 1;
+    eye(ctx, -s * 0.12, -s * 0.02, s * 0.05, s * 0.07, t, st.phase, { theme }); eye(ctx, s * 0.12, -s * 0.02, s * 0.05, s * 0.07, t, st.phase + 2, { theme });
+    mouth(ctx, 0, s * 0.14, s * 0.14, 'smile', t);
+    // croix de soin rose sur le ventre
+    ctx.fillStyle = '#fb7185'; ctx.fillRect(-s * 0.03, s * 0.18, s * 0.06, s * 0.16); ctx.fillRect(-s * 0.08, s * 0.23, s * 0.16, s * 0.06);
+    ctx.restore();
+    for (let i = 0; i < 3; i += 1) { const k = (t * 0.6 + i * 0.33 + st.phase) % 1; ctx.strokeStyle = `rgba(255,255,255,${0.6 * (1 - k)})`; ctx.lineWidth = s * 0.02; ctx.beginPath(); ctx.arc(s * (0.3 + i * 0.1) * Math.sin(i * 2), s * 0.3 - k * s * 0.6, s * 0.05, 0, TAU); ctx.stroke(); }
+  }
+  function drawZazou(ctx, s, t, st, C, theme) {
+    // Moustique : corps fin rayé, ailes qui vrombissent, trompe, grands yeux.
+    const buzz = Math.sin(t * 60 + st.phase);
+    ctx.save(); ctx.translate(Math.sin(t * 17) * s * 0.01, Math.cos(t * 13) * s * 0.01);
+    // ailes
+    ctx.fillStyle = 'rgba(224,242,254,0.55)'; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.025;
+    for (const sx of [-1, 1]) { ctx.save(); ctx.rotate(sx * (0.5 + buzz * 0.35)); ctx.beginPath(); ctx.ellipse(sx * s * 0.28, -s * 0.05, s * 0.3, s * 0.1, 0, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore(); }
+    // pattes
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03; for (const sx of [-1, 1]) for (let i = 0; i < 3; i += 1) { ctx.beginPath(); ctx.moveTo(sx * s * 0.08, s * (0.05 + i * 0.08)); ctx.lineTo(sx * s * 0.3, s * (0.15 + i * 0.1) + Math.sin(t * 20 + i) * s * 0.02); ctx.stroke(); }
+    // abdomen rayé
+    ctx.beginPath(); ctx.ellipse(0, s * 0.18, s * 0.11, s * 0.28, 0, 0, TAU); paint(ctx, C, s, theme, 0, s * 0.18);
+    ctx.save(); ctx.beginPath(); ctx.ellipse(0, s * 0.18, s * 0.11, s * 0.28, 0, 0, TAU); ctx.clip(); ctx.fillStyle = 'rgba(0,0,0,0.25)'; for (let i = 0; i < 4; i += 1) ctx.fillRect(-s * 0.2, s * (0.02 + i * 0.12), s * 0.4, s * 0.05); ctx.restore();
+    // thorax + tête
+    ctx.beginPath(); ctx.arc(0, -s * 0.08, s * 0.13, 0, TAU); paint(ctx, C, s, theme, 0, -s * 0.08);
+    ctx.beginPath(); ctx.arc(0, -s * 0.3, s * 0.15, 0, TAU); paint(ctx, C, s, theme, 0, -s * 0.3);
+    eye(ctx, -s * 0.07, -s * 0.32, s * 0.06, s * 0.07, t, st.phase, { theme, white: true, pupil: '#991b1b' }); eye(ctx, s * 0.07, -s * 0.32, s * 0.06, s * 0.07, t, st.phase + 1, { theme, white: true, pupil: '#991b1b' });
+    // trompe
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.04; ctx.beginPath(); ctx.moveTo(0, -s * 0.4); ctx.lineTo(0, -s * 0.66); ctx.stroke();
+    ctx.restore();
+  }
+  function drawBoum(ctx, s, t, st, C, theme) {
+    // Mine : sphère sombre à nubs, voyant rouge qui clignote, à demi enfouie (ombre).
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(0, s * 0.3, s * 0.4, s * 0.12, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = C.dark; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.04;
+    for (let i = 0; i < 8; i += 1) { const a = i / 8 * TAU + 0.4; ctx.beginPath(); ctx.arc(Math.cos(a) * s * 0.36, Math.sin(a) * s * 0.36 * 0.9, s * 0.07, 0, TAU); ctx.fill(); ctx.stroke(); }
+    ctx.beginPath(); ctx.ellipse(0, 0, s * 0.33, s * 0.3, 0, 0, TAU); paint(ctx, C, s, theme, 0, 0);
+    shine(ctx, -s * 0.12, -s * 0.12, s * 0.07, s * 0.04, 0.3);
+    const on = Math.sin(t * 6 + st.phase) > 0.3;
+    ctx.fillStyle = on ? '#ff3b5c' : '#5b1020'; ctx.beginPath(); ctx.arc(0, -s * 0.06, s * 0.08, 0, TAU); ctx.fill(); ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03; ctx.stroke();
+    if (on) { ctx.fillStyle = 'rgba(255,59,92,0.35)'; ctx.beginPath(); ctx.arc(0, -s * 0.06, s * 0.16, 0, TAU); ctx.fill(); }
+    // petit sourire sournois
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03; ctx.beginPath(); ctx.arc(0, s * 0.1, s * 0.1, 0.3, Math.PI - 0.3); ctx.stroke();
+    ctx.restore();
+  }
+  function drawRafale(ctx, s, t, st, C, theme) {
+    // Ventilo : socle, cage ronde, pales qui tournent, souffle vers l'avant (haut).
+    ctx.save();
+    const spin = t * 14 + st.phase;
+    // souffle
+    ctx.strokeStyle = 'rgba(219,234,254,0.5)'; ctx.lineWidth = s * 0.03; ctx.lineCap = 'round';
+    for (let i = 0; i < 3; i += 1) { const k = (t * 1.6 + i * 0.33) % 1; ctx.globalAlpha = 1 - k; ctx.beginPath(); ctx.moveTo(-s * 0.2 + Math.sin(i * 2 + t * 5) * s * 0.05, -s * 0.5 - k * s * 0.45); ctx.lineTo(s * 0.2 + Math.sin(i * 2 + t * 5) * s * 0.05, -s * 0.5 - k * s * 0.45); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    // socle
+    ctx.fillStyle = C.dark; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.04; ctx.beginPath(); rr(ctx, -s * 0.22, s * 0.22, s * 0.44, s * 0.2, s * 0.05); ctx.fill(); ctx.stroke();
+    ctx.fillRect(-s * 0.05, s * 0.05, s * 0.1, s * 0.2);
+    // cage
+    ctx.beginPath(); ctx.arc(0, -s * 0.08, s * 0.36, 0, TAU); paint(ctx, C, s, theme, 0, -s * 0.08);
+    ctx.fillStyle = '#0b1b33'; ctx.beginPath(); ctx.arc(0, -s * 0.08, s * 0.29, 0, TAU); ctx.fill();
+    // pales
+    ctx.save(); ctx.translate(0, -s * 0.08); ctx.rotate(spin); ctx.fillStyle = C.light; ctx.globalAlpha = 0.85;
+    for (let i = 0; i < 3; i += 1) { ctx.rotate(TAU / 3); ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s * 0.22, -s * 0.05, s * 0.27, s * 0.08); ctx.quadraticCurveTo(s * 0.12, s * 0.1, 0, 0); ctx.fill(); }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(219,234,254,0.5)'; ctx.lineWidth = s * 0.02; for (let i = 0; i < 4; i += 1) { ctx.beginPath(); ctx.moveTo(-s * 0.29, -s * 0.08 + (i - 1.5) * s * 0.13); ctx.lineTo(s * 0.29, -s * 0.08 + (i - 1.5) * s * 0.13); ctx.stroke(); }
+    ctx.fillStyle = C.dark; ctx.beginPath(); ctx.arc(0, -s * 0.08, s * 0.06, 0, TAU); ctx.fill();
+    eye(ctx, -s * 0.1, s * 0.3, s * 0.035, s * 0.045, t, st.phase, { theme, white: true }); eye(ctx, s * 0.1, s * 0.3, s * 0.035, s * 0.045, t, st.phase + 1, { theme, white: true });
+    ctx.restore();
+  }
+  function drawTiktak(ctx, s, t, st, C, theme) {
+    // Bombe à retardement : boule noire avec cadran, mèche qui crépite, petites jambes pressées.
+    const run = st.moving ? 1 : 0, ph = t * (run ? 8 : 2) + st.phase;
+    const tick = Math.floor(t * 2) % 2 ? 1 : -1;
+    ctx.save(); ctx.scale(1 + 0.03 * Math.sin(t * 12), 1 - 0.03 * Math.sin(t * 12));
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.06; ctx.lineCap = 'round';
+    for (const sx of [-1, 1]) { const k = Math.sin(ph + (sx > 0 ? 0 : Math.PI)) * run; ctx.beginPath(); ctx.moveTo(sx * s * 0.14, s * 0.3); ctx.lineTo(sx * s * 0.18 + k * s * 0.1, s * 0.47); ctx.stroke(); }
+    // mèche
+    ctx.strokeStyle = '#a16207'; ctx.lineWidth = s * 0.045; ctx.beginPath(); ctx.moveTo(s * 0.08, -s * 0.34); ctx.quadraticCurveTo(s * 0.2, -s * 0.5, s * 0.14, -s * 0.6); ctx.stroke();
+    const spark = 0.7 + 0.3 * Math.sin(t * 25); ctx.fillStyle = `rgba(255,214,77,${spark})`; ctx.beginPath(); ctx.arc(s * 0.14, -s * 0.6, s * 0.06 * spark, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s * 0.14, -s * 0.6, s * 0.025, 0, TAU); ctx.fill();
+    ctx.fillStyle = C.light; ctx.fillRect(-s * 0.02, -s * 0.4, s * 0.12, s * 0.07);
+    // corps
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.36, 0, TAU); paint(ctx, C, s, theme, 0, 0);
+    shine(ctx, -s * 0.14, -s * 0.14, s * 0.09, s * 0.05, 0.35);
+    // cadran
+    ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.arc(0, s * 0.02, s * 0.17, 0, TAU); ctx.fill(); ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03; ctx.stroke();
+    ctx.strokeStyle = '#dc2626'; ctx.lineWidth = s * 0.03; ctx.beginPath(); ctx.moveTo(0, s * 0.02); ctx.lineTo(tick * s * 0.1, -s * 0.06); ctx.stroke();
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.025; ctx.beginPath(); ctx.moveTo(0, s * 0.02); ctx.lineTo(Math.sin(t * 2) * s * 0.11, s * 0.02 - Math.cos(t * 2) * s * 0.11); ctx.stroke();
+    eye(ctx, -s * 0.14, -s * 0.18, s * 0.05, s * 0.06, t, st.phase, { theme, white: true, angry: true, browColor: '#fff' }); eye(ctx, s * 0.14, -s * 0.18, s * 0.05, s * 0.06, t, st.phase + 1, { theme, white: true, angry: true, angrySide: -1, browColor: '#fff' });
+    ctx.restore();
+  }
+  function drawFantome(ctx, s, t, st, C, theme) {
+    // Spectre : drap qui flotte, bas ondulé, yeux creux ; légèrement transparent et scintillant.
+    const fl = 0.7 + 0.2 * Math.sin(t * 9 + st.phase);
+    ctx.save(); ctx.globalAlpha *= fl; ctx.translate(0, Math.sin(t * 2.5 + st.phase) * s * 0.04);
+    const body = () => { ctx.moveTo(-s * 0.34, s * 0.4); ctx.lineTo(-s * 0.34, -s * 0.1); ctx.arc(0, -s * 0.1, s * 0.34, Math.PI, TAU); ctx.lineTo(s * 0.34, s * 0.4); for (let i = 0; i < 5; i += 1) { const x = s * 0.34 - (i + 1) * s * 0.136; ctx.quadraticCurveTo(x + s * 0.068, s * 0.4 + (i % 2 ? -1 : 1) * s * (0.08 + 0.04 * Math.sin(t * 6 + i)), x, s * 0.4); } ctx.closePath(); };
+    ctx.beginPath(); body(); paint(ctx, C, s, theme, 0, 0);
+    // yeux creux + bouche
+    ctx.fillStyle = '#0b1b33'; ctx.beginPath(); ctx.ellipse(-s * 0.12, -s * 0.1, s * 0.07, s * 0.1, 0, 0, TAU); ctx.ellipse(s * 0.12, -s * 0.1, s * 0.07, s * 0.1, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, s * 0.12, s * 0.06, s * 0.09 * (0.7 + 0.3 * Math.sin(t * 4)), 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(34,227,200,0.6)'; ctx.beginPath(); ctx.arc(-s * 0.12, -s * 0.1, s * 0.025, 0, TAU); ctx.arc(s * 0.12, -s * 0.1, s * 0.025, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function drawGlu(ctx, s, t, st, C, theme) {
+    // Flaque gluante : galette qui bulle, gouttes qui s'étirent, yeux qui flottent dedans.
+    ctx.save(); ctx.translate(0, s * 0.12);
+    const flat = () => { ctx.moveTo(-s * 0.46, 0); ctx.bezierCurveTo(-s * 0.5, -s * 0.3, -s * 0.1, -s * 0.34, s * 0.05, -s * 0.26); ctx.bezierCurveTo(s * 0.3, -s * 0.32, s * 0.5, -s * 0.15, s * 0.46, 0); ctx.bezierCurveTo(s * 0.4, s * 0.22, -s * 0.4, s * 0.22, -s * 0.46, 0); ctx.closePath(); };
+    ctx.beginPath(); flat(); paint(ctx, C, s, theme, 0, 0);
+    ctx.save(); ctx.beginPath(); flat(); ctx.clip();
+    for (let i = 0; i < 5; i += 1) { const k = (t * 0.5 + i * 0.2) % 1; ctx.fillStyle = `rgba(255,255,255,${0.35 * (1 - k)})`; ctx.beginPath(); ctx.arc(-s * 0.3 + i * s * 0.15, s * 0.05 - k * s * 0.2, s * (0.03 + k * 0.05), 0, TAU); ctx.fill(); }
+    ctx.restore();
+    // gouttes qui s'étirent
+    ctx.fillStyle = C.base; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03;
+    for (const [x, ph] of [[-s * 0.25, 0], [s * 0.2, 2]]) { const L = s * (0.1 + 0.06 * Math.sin(t * 2 + ph)); ctx.beginPath(); ctx.moveTo(x - s * 0.04, 0); ctx.quadraticCurveTo(x, L * 0.5, x, L); ctx.quadraticCurveTo(x, L * 0.5, x + s * 0.04, 0); ctx.fill(); ctx.stroke(); }
+    eye(ctx, -s * 0.12, -s * 0.1 + Math.sin(t * 2) * s * 0.02, s * 0.06, s * 0.07, t, st.phase, { theme, white: true, lookX: Math.sin(t) }); eye(ctx, s * 0.12, -s * 0.1 + Math.sin(t * 2 + 1) * s * 0.02, s * 0.06, s * 0.07, t, st.phase + 1, { theme, white: true, lookX: Math.sin(t) });
+    mouth(ctx, 0, s * 0.05, s * 0.14, 'zigzag', t);
+    ctx.restore();
+  }
+  function drawSirene(ctx, s, t, st, C, theme) {
+    // Charmeuse : sirène assise sur un rocher, queue qui bat, chevelure ondulante, notes qui s'envolent.
+    ctx.save();
+    // rocher
+    ctx.fillStyle = '#334155'; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.04; ctx.beginPath(); ctx.moveTo(-s * 0.4, s * 0.45); ctx.lineTo(-s * 0.3, s * 0.22); ctx.lineTo(s * 0.1, s * 0.18); ctx.lineTo(s * 0.42, s * 0.3); ctx.lineTo(s * 0.4, s * 0.45); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // queue
+    const tw = Math.sin(t * 3 + st.phase) * 0.25;
+    ctx.save(); ctx.translate(s * 0.1, s * 0.2); ctx.rotate(tw);
+    ctx.beginPath(); ctx.moveTo(-s * 0.12, 0); ctx.quadraticCurveTo(s * 0.2, s * 0.05, s * 0.32, -s * 0.1); ctx.quadraticCurveTo(s * 0.42, -s * 0.2, s * 0.44, -s * 0.02); ctx.quadraticCurveTo(s * 0.4, s * 0.1, s * 0.3, s * 0.1); ctx.quadraticCurveTo(s * 0.15, s * 0.18, -s * 0.12, s * 0.12); ctx.closePath(); paint(ctx, { base: '#2dd4bf', light: '#99f6e4', dark: '#0f766e' }, s, theme, 0, 0);
+    ctx.restore();
+    // buste
+    ctx.beginPath(); ctx.ellipse(-s * 0.08, 0, s * 0.17, s * 0.22, 0.2, 0, TAU); paint(ctx, C, s, theme, 0, 0);
+    // chevelure (ambre, ondulante)
+    ctx.fillStyle = theme === 'default' ? '#f59e0b' : C.dark; ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.03;
+    ctx.beginPath(); ctx.moveTo(-s * 0.26, -s * 0.3); ctx.quadraticCurveTo(-s * 0.1, -s * 0.5, s * 0.1, -s * 0.36); ctx.quadraticCurveTo(s * 0.08, -s * 0.1, s * 0.02 + Math.sin(t * 2) * s * 0.03, s * 0.1); ctx.quadraticCurveTo(-s * 0.1, 0, -s * 0.2 + Math.sin(t * 2 + 1) * s * 0.03, s * 0.12); ctx.quadraticCurveTo(-s * 0.3, -s * 0.1, -s * 0.26, -s * 0.3); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // tête
+    ctx.beginPath(); ctx.arc(-s * 0.08, -s * 0.26, s * 0.15, 0, TAU); paint(ctx, C, s, theme, -s * 0.08, -s * 0.26);
+    eye(ctx, -s * 0.13, -s * 0.28, s * 0.04, s * 0.055, t, st.phase, { theme }); eye(ctx, -s * 0.02, -s * 0.28, s * 0.04, s * 0.055, t, st.phase + 1, { theme });
+    mouth(ctx, -s * 0.08, -s * 0.17, s * 0.1, 'o', t);
+    // notes
+    ctx.fillStyle = '#f0abfc'; ctx.font = `${Math.round(s * 0.18)}px "Chakra Petch", sans-serif`; ctx.textAlign = 'center';
+    for (let i = 0; i < 3; i += 1) { const k = (t * 0.7 + i * 0.33 + st.phase) % 1; ctx.globalAlpha = 1 - k; ctx.fillText(i % 2 ? '♪' : '♫', s * 0.1 + Math.sin(k * 6 + i) * s * 0.1, -s * 0.4 - k * s * 0.4); }
+    ctx.restore();
+  }
+  function drawKraken(ctx, s, t, st, C, theme) {
+    // Colosse : grosse tête de poulpe, tentacules qui rament, regard mauvais.
+    const run = st.moving ? 1 : 0, ph = t * (run ? 5 : 1.5) + st.phase;
+    ctx.save();
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.04;
+    for (let i = 0; i < 6; i += 1) {
+      const x0 = (i - 2.5) * s * 0.14, w = Math.sin(ph + i * 1.1) * s * 0.12;
+      ctx.fillStyle = i % 2 ? C.base : C.dark; ctx.beginPath(); ctx.moveTo(x0 - s * 0.06, s * 0.15); ctx.quadraticCurveTo(x0 + w, s * 0.4, x0 + w * 1.4, s * 0.55); ctx.quadraticCurveTo(x0 + w * 0.6, s * 0.42, x0 + s * 0.06, s * 0.15); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = C.light; for (let k = 0; k < 2; k += 1) { ctx.beginPath(); ctx.arc(x0 + w * (0.4 + k * 0.4), s * (0.3 + k * 0.12), s * 0.02, 0, TAU); ctx.fill(); }
+    }
+    ctx.beginPath(); ctx.moveTo(-s * 0.4, s * 0.2); ctx.quadraticCurveTo(-s * 0.46, -s * 0.4, 0, -s * 0.5); ctx.quadraticCurveTo(s * 0.46, -s * 0.4, s * 0.4, s * 0.2); ctx.quadraticCurveTo(0, s * 0.3, -s * 0.4, s * 0.2); ctx.closePath(); paint(ctx, C, s, theme, 0, -s * 0.1);
+    shine(ctx, -s * 0.16, -s * 0.3, s * 0.09, s * 0.05, 0.35);
+    eye(ctx, -s * 0.15, -s * 0.05, s * 0.09, s * 0.1, t, st.phase, { theme, white: true, pupil: '#facc15', angry: true }); eye(ctx, s * 0.15, -s * 0.05, s * 0.09, s * 0.1, t, st.phase + 1, { theme, white: true, pupil: '#facc15', angry: true, angrySide: -1 });
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = s * 0.035; ctx.beginPath(); ctx.moveTo(-s * 0.12, s * 0.14); ctx.quadraticCurveTo(0, s * 0.08, s * 0.12, s * 0.14); ctx.stroke();
+    ctx.restore();
+  }
+
+  const DRAWERS = { 1: drawZip, 2: drawGromp, 3: drawKrak, 4: drawRiko, 5: drawBlok, 6: drawMojo, 7: drawZephir, 8: drawPik, 9: drawBulle, 10: drawZazou, 11: drawBoum, 12: drawRafale, 13: drawTiktak, 14: drawFantome, 15: drawGlu, 16: drawSirene, 17: drawKraken };
 
   const Creatures = {
     NAMES, ROLES,

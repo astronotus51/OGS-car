@@ -18,7 +18,8 @@
     let myKey = 'bottom'; // clé de joueur ('bottom', 'top1'…) : mana, capacités et unités posées me sont propres ; `me` reste le camp
     let players = []; // tous les joueurs de la partie : { key, side, profile }
     let deck = [1, 2, 3, 4, 5, 6, 7]; // mon équipe : créature par case de coût (slot 1..7 = touches A…U)
-    const slotToOg = (slot) => deck[slot - 1] || slot;
+    let oppDeck = [1, 2, 3, 4, 5, 6, 7]; // équipe du premier adversaire (le bannissement de la draft porte sur elle)
+    const slotToOg = (slot) => (phase === 'draft' ? oppDeck[slot - 1] : deck[slot - 1]) || slot;
     let snaps = []; // { recv, s }
     let clockOffset = null; // temps serveur - performance.now() (s)
     let latest = null;
@@ -35,6 +36,8 @@
       const g = Sim.geometry(msg.cols || Sim.COLS); COLS = g.COLS; FIELD = g.FIELD; renderer.setGeometry(COLS);
       players = msg.players || [{ key: me, side: me, profile: msg.me }, { key: opp, side: opp, profile: msg.opponent }];
       deck = (msg.me && msg.me.deck) ? OGSCatalog.DECK_COSTS.map(c => Number(msg.me.deck[c]) || OGSCatalog.DEFAULT_DECK[c]) : [1, 2, 3, 4, 5, 6, 7];
+      const firstOpp = players.find(p => p.side === opp);
+      oppDeck = (firstOpp && firstOpp.profile && firstOpp.profile.deck) ? OGSCatalog.DECK_COSTS.map(c => Number(firstOpp.profile.deck[c]) || OGSCatalog.DEFAULT_DECK[c]) : [1, 2, 3, 4, 5, 6, 7];
       snaps = []; clockOffset = null; latest = null; pending = []; selection = null; result = null;
       phase = msg.phase === 'draft' ? 'draft' : (msg.countdown > 0 ? 'countdown' : 'playing'); countdown = msg.countdown || 0; goTimer = 0;
       mapId = msg.map || 'lagoon'; features = msg.features || {}; bans = msg.bans || { top: [], bottom: [] }; draftTimer = msg.draftSeconds || 0; myBan = null; oppBan = null; survival = msg.survival || null;
@@ -87,6 +90,9 @@
           else if (ev.type === 'ability' && !ev.passive) A.sfx(ev.ogId === 5 ? 'freeze' : 'ability');
           else if (ev.type === 'evolve') A.sfx('evolve');
           else if (ev.type === 'heal') A.sfx('heal');
+          else if (ev.type === 'blast') A.sfx('blast');
+          else if (ev.type === 'gust') A.sfx('gust');
+          else if (ev.type === 'charm') A.sfx('charm');
           else if (ev.type === 'overtime') { A.sfx('overtime'); A.setScene('overtime'); }
         }
         if (ev.type === 'overtime') ui.toast('MORT SUBITE : mana ×3, premier dégât = défaite', 'warn');
@@ -106,6 +112,7 @@
     function onWave(msg) { renderer.onEvent({ type: 'wave', wave: msg.wave, count: msg.count }, performance.now() / 1000); ui.toast(`Vague ${msg.wave} : ${msg.count} ennemis !`, 'warn'); if (window.OGSAudio) OGSAudio.sfx('wave'); }
     function useAbility(ogId) {
       if (!features.abilities) return ui.toast('Capacités désactivées dans cette partie', 'warn');
+      if (!Sim.ABILITIES[ogId]) return ui.toast(`${OGSCatalog.OG_NAMES[ogId] || 'Cette créature'} n’a pas de capacité active`, 'warn');
       if (phase !== 'playing' && phase !== 'go') return;
       const cd = latest && latest.abilities[myKey] && latest.abilities[myKey][ogId];
       if (cd) return ui.toast(`${Sim.ABILITIES[ogId].name} : recharge ${Math.ceil(cd)} s`, 'warn');
@@ -291,7 +298,7 @@
       if (phase === 'go') { goTimer -= dt; if (goTimer <= 0) phase = 'playing'; }
       pending = pending.filter(p => now - p.t < 0.6);
       const state = interpolated(now) || { t: 0, hp: { top: RULES.healthMax, bottom: RULES.healthMax }, mana: { top: 0, bottom: 0 }, entities: [], projectiles: [], orbs: [], hazard: null };
-      view.me = me; view.myKey = myKey; view.players = players; view.deck = deck; view.opponents = players.filter(p => p.side === opp).map(p => p.profile); view.teammates = players.filter(p => p.side === me && p.key !== myKey).map(p => p.profile); view.time = now - startTime; view.state = state; view.phase = phase; view.countdown = countdown; view.goTimer = goTimer; view.result = result;
+      view.me = me; view.myKey = myKey; view.players = players; view.deck = deck; view.oppDeck = oppDeck; view.opponents = players.filter(p => p.side === opp).map(p => p.profile); view.teammates = players.filter(p => p.side === me && p.key !== myKey).map(p => p.profile); view.time = now - startTime; view.state = state; view.phase = phase; view.countdown = countdown; view.goTimer = goTimer; view.result = result;
       view.selection = selection; view.cursor = (selection || mouseInField) ? cursor : null; view.availableCells = availableCells(); view.pending = pending;
       view.equipped = equipped; view.opponent = profiles.opp; view.meProfile = profiles.me; view.presence = presence;
       view.timeLeft = duration ? Math.max(0, duration - (latest ? latest.t : 0)) : Infinity; view.elapsed = latest ? latest.t : 0; view.mode = mode; view.latency = net.latency;

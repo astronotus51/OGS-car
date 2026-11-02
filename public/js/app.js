@@ -555,19 +555,56 @@
   });
   function refreshLobbyHints() { try { $('capsuleTileHint').textContent = profile.capsules ? `${profile.capsules} à ouvrir !` : 'une par victoire'; } catch (e) { /* ignore */ } }
 
-  // ----- Route des trophées -----
+  // ----- Route des trophées : un sentier sinueux dans les abysses, des médaillons, ton avatar qui avance -----
+  const roadCanvases = [];
+  function drawRoadCanvases() { if (current !== 'road') return; const t = performance.now() / 1000; for (const c of roadCanvases) { const ctx = c.canvas.getContext('2d'); ctx.clearRect(0, 0, c.canvas.width, c.canvas.height); Creatures.draw(ctx, c.ogId, `og${c.ogId}_default`, c.canvas.width / 2, c.canvas.height / 2 + 4, c.size, t, { moving: false, phase: c.ogId }, { alpha: c.alpha }); } }
+  setInterval(drawRoadCanvases, 1000 / 30);
   async function openRoad() {
     show('road');
     try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
     const best = profile.bestTrophies || 0, claimed = profile.road || [];
-    $('roadProgress').textContent = `Record : ${best} 🏆`;
-    $('roadList').innerHTML = Catalog.TROPHY_ROAD.map(r => { const reached = best >= r.trophies, done = claimed.includes(r.trophies); const icon = r.reward.type === 'creature' ? '🃏' : r.reward.type === 'capsule' ? '🫧' : r.reward.type === 'skin' ? '🎨' : '🪙'; return `<li class="road-step ${reached ? 'reached' : ''} ${done ? 'done' : ''} kind-${r.reward.type}"><span class="road-t">${r.trophies} 🏆</span><span class="road-ico">${icon}</span><span class="road-label">${esc(Catalog.roadLabel(r.reward))}</span>${done ? '<span class="road-ok">✔</span>' : reached ? `<button class="btn small gold" data-claim="${r.trophies}">Réclamer</button>` : '<span class="road-lock">🔒</span>'}</li>`; }).join('');
+    const steps = Catalog.TROPHY_ROAD;
+    $('roadProgress').textContent = `Record : ${best} 🏆 · ${claimed.length}/${steps.length} récompenses prises`;
+    const STEP = 118, W = $('roadWrap').clientWidth || 800, PAD = 70;
+    const xAt = (i) => W * (0.5 + 0.3 * Math.sin(i * 0.9)); // sentier sinueux
+    const yAt = (i) => PAD + i * STEP;
+    const pts = steps.map((_, i) => ({ x: xAt(i), y: yAt(i) }));
+    const total = PAD * 2 + (steps.length - 1) * STEP + 140;
+    $('roadWrap').style.height = `${total}px`;
+    // Sentier (courbe lisse passant par chaque médaillon) + portion « parcourue » en teal.
+    const svg = $('roadSvg'); svg.setAttribute('viewBox', `0 0 ${W} ${total}`); svg.setAttribute('width', W); svg.setAttribute('height', total);
+    const d = pts.map((p, i) => i === 0 ? `M ${p.x} ${p.y - 60}` : `C ${pts[i - 1].x} ${pts[i - 1].y + STEP * 0.55}, ${p.x} ${p.y - STEP * 0.55}, ${p.x} ${p.y}`).join(' ');
+    const reachedN = steps.filter(r => r.trophies <= best).length;
+    const dDone = pts.slice(0, Math.max(1, reachedN)).map((p, i) => i === 0 ? `M ${p.x} ${p.y - 60}` : `C ${pts[i - 1].x} ${pts[i - 1].y + STEP * 0.55}, ${p.x} ${p.y - STEP * 0.55}, ${p.x} ${p.y}`).join(' ');
+    svg.innerHTML = `<path d="${d}" class="road-path"/><path d="${d}" class="road-path dashed"/>${reachedN ? `<path d="${dDone}" class="road-path done"/>` : ''}`;
+    // Bannières de ligue aux changements de rang.
+    const banners = Catalog.RANKS.filter(r => r.min > 0 && r.min <= steps[steps.length - 1].trophies).map(r => { const idx = steps.findIndex(s => s.trophies >= r.min); return `<div class="road-banner" style="top:${yAt(idx) - STEP * 0.62}px;--rc:${r.color}"><span>${esc(r.name)}</span></div>`; }).join('');
+    roadCanvases.length = 0;
+    const nodes = steps.map((r, i) => {
+      const reached = best >= r.trophies, done = claimed.includes(r.trophies), rw = r.reward;
+      const kind = rw.type, side = pts[i].x < W / 2 ? 'left' : 'right';
+      const icon = kind === 'creature' ? `<canvas width="120" height="120"></canvas>` : `<span class="road-emoji">${kind === 'capsule' ? '🫧' : kind === 'skin' ? '🎨' : '🪙'}</span>`;
+      const label = Catalog.roadLabel(rw);
+      const action = done ? '<span class="road-stamp">PRIS</span>' : reached ? `<button class="btn small gold" data-claim="${r.trophies}">Réclamer</button>` : '<span class="road-lock">🔒</span>';
+      return `<div class="road-node kind-${kind} ${reached ? 'reached' : ''} ${done ? 'done' : ''} ${side}" style="left:${pts[i].x}px;top:${pts[i].y}px" data-i="${i}">
+        <div class="road-medal">${icon}</div>
+        <div class="road-info"><span class="road-t">${r.trophies} 🏆</span><b>${esc(label)}</b>${action}</div></div>`;
+    }).join('');
+    // Marqueur du joueur : entre le dernier palier atteint et le suivant.
+    let markerY = PAD - 60, markerX = pts[0].x;
+    if (reachedN > 0) { const a = pts[reachedN - 1], b = pts[reachedN] || { x: a.x, y: a.y + STEP }; const from = steps[reachedN - 1].trophies, to = steps[reachedN] ? steps[reachedN].trophies : from + 50; const k = Math.max(0, Math.min(1, (best - from) / (to - from))); markerX = a.x + (b.x - a.x) * k; markerY = a.y + (b.y - a.y) * k; }
+    else { const k = Math.min(1, best / steps[0].trophies); markerY = PAD - 60 + (pts[0].y - (PAD - 60)) * k; }
+    const marker = `<div class="road-you" style="left:${markerX}px;top:${markerY}px"><div class="avatar" id="roadAvatar"><span>${profile.level}</span></div><small>toi · ${best} 🏆</small></div>`;
+    $('roadList').innerHTML = banners + nodes + marker;
+    renderAvatar($('roadAvatar'), profile, profile.level);
+    $('roadList').querySelectorAll('.road-node.kind-creature').forEach(n => { const i = Number(n.dataset.i); const id = steps[i].reward.id; roadCanvases.push({ canvas: n.querySelector('canvas'), ogId: id, size: 80, alpha: n.classList.contains('reached') ? 1 : 0.45 }); });
     $('roadList').querySelectorAll('[data-claim]').forEach(b => b.addEventListener('click', async () => {
       if (isLocked()) return goUpgrade();
       try { const d = await Net.api('/api/road/claim', { trophies: Number(b.dataset.claim) }); profile = d.profile; const g = d.got; toast(g.type === 'coins' ? `+${g.count} pièces` : g.type === 'capsule' ? `+${g.count} capsule(s)` : g.type === 'creature' ? `${g.name} rejoint ta collection !` : `Skin ${g.name} débloqué !`, 'good'); Audio.sfx('coin'); openRoad(); }
       catch (e) { toast(e.message, 'bad'); }
     }));
-    const next = Catalog.TROPHY_ROAD.find(r => r.trophies > best); if (next) setTimeout(() => { const el = $('roadList').querySelector(`[data-claim]`) || [...$('roadList').children].find(li => li.classList.contains('reached') === false); if (el) el.scrollIntoView({ block: 'center' }); }, 50);
+    drawRoadCanvases();
+    setTimeout(() => { const you = $('roadAvatar'); if (you) you.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 60);
   }
 
   // ----- Profil -----
@@ -653,7 +690,9 @@
     const locked = isLocked();
     $('skinsLocked').classList.toggle('hidden', !locked); $('skinTabs').classList.toggle('hidden', locked); $('skinGrid').classList.toggle('hidden', locked);
     if (locked) { renderGoogleButton($('googleSkinsBtn'), 'link'); return; }
-    $('skinTabs').innerHTML = [1, 2, 3, 4, 5, 6, 7].map(og => `<button class="og-tab ${og === skinTab ? 'active' : ''}" data-og="${og}">${Catalog.OG_NAMES[og]} <small>· ${Catalog.OG_ROLES[og]}</small></button>`).join('');
+    const ownedOgs = Catalog.CREATURES.filter(c => (profile.collection || {})[c.id]).map(c => c.id);
+    if (!ownedOgs.includes(skinTab)) skinTab = ownedOgs[0] || 1;
+    $('skinTabs').innerHTML = ownedOgs.map(og => `<button class="og-tab ${og === skinTab ? 'active' : ''}" data-og="${og}">${Catalog.OG_NAMES[og]}</button>`).join('');
     $('skinTabs').querySelectorAll('.og-tab').forEach(b => b.addEventListener('click', () => { skinTab = Number(b.dataset.og); openSkins(); }));
     const owned = new Set(profile.skins);
     let deal = null; try { deal = (await Net.api('/api/deal')).deal; } catch (e) { /* ignore */ }
@@ -711,6 +750,16 @@
       [5, 'Mur statique, 3 PV. Renvoie les Runners et les Éponges, les tiens compris (ils ne le traversent plus : laisse des allées à tes alliés). Un ennemi qui rebondit dessus lui fait perdre 1 PV.'],
       [6, 'Statique, 3 PV. +50 % de régénération de mana tant qu’il est en vie (cumulable). Cible préférée des Éponges et Ailées.'],
       [7, 'Vole tout droit au-dessus de tout. Tire sur les Runners, Tourelles, Chargeurs et Ailées à 1 case. 5 dégâts à la base. 2 PV.'],
+      [8, 'Runner lent à 2 PV : il encaisse un premier choc (Gromp, tourelle, Riko…) et continue. 1 dégât à la base.'],
+      [9, 'Flotte lentement au-dessus de tout, 1 PV, aucun dégât : si elle atteint la base adverse, ta base récupère 1 PV.'],
+      [10, 'Moustique volant très rapide, 1 PV : ignore les unités au sol et les murs. 1 dégât à la base. Abattu par Krak et Zéphir.'],
+      [11, 'Mine invisible pour l’adversaire, 1 PV : explose au premier contact d’une unité ennemie au sol, 2 dégâts dans la case autour.'],
+      [12, 'Tourelle à vent, 2 PV : toutes les 2 s, repousse d’une case les ennemis au sol dans les 2 cases devant elle. Détruite par Riko.'],
+      [13, 'Marche lentement, 3 PV, explose à l’arrivée (4 dégâts) ou à sa mort (1 dégât autour). Frappe tout ennemi au sol qu’il touche.'],
+      [14, 'Invisible tant qu’il est dans ton camp, traverse murs et unités au sol. 2 PV, 2 dégâts. Seuls les projectiles et Riko l’atteignent.'],
+      [15, 'Flaque, 3 PV, qui ne bloque pas : les ennemis au sol qui la traversent sont ralentis de moitié.'],
+      [16, 'Toutes les 8 s, charme l’ennemi au sol le plus proche (2 cases) : il change de camp et repart frapper son ancien maître. 2 PV.'],
+      [17, 'Colosse lent, 6 PV, 3 dégâts : écrase les murs (−1 PV pour lui) et tue toute unité au sol qu’il touche (−1 PV par choc).'],
     ];
     $('rulesPage').innerHTML = `
       <h3>But</h3><p>Chaque joueur a <b>30 PV</b>. Pose des Ogs sur ta moitié pour atteindre la base adverse. En classée, après <b>3 minutes</b>, celui qui a le plus de PV gagne. En entraînement et en amical, tu choisis la durée (2, 3, 5 min ou illimitée : seul un KO termine la partie).</p>
@@ -720,7 +769,7 @@
       ${lines.map(([id, txt]) => `<div class="og-line"><canvas width="112" height="112" data-og="${id}"></canvas><div><b>${esc(Catalog.OG_NAMES[id])}</b> <span style="color:var(--muted)">· ${esc(Catalog.OG_ROLES[id])} · ${og[id].cost} mana</span><br><i style="color:#94a3b8">${esc(Catalog.OG_LORE[id])}</i><br>${txt}</div></div>`).join('')}
       
       <h3>Capacités actives (Maj + touche, ou ⚡ sur le slot)</h3><p>10 mana, 20 s de recharge, il faut au moins une créature de ce type en jeu.</p>
-      ${[1, 2, 3, 4, 5, 6, 7].map(id => `<p><b>${esc(Catalog.OG_NAMES[id])} – ${esc(Sim.ABILITIES[id].name)}</b> : ${esc(Sim.ABILITIES[id].desc)}</p>`).join('')}
+      ${[1, 2, 3, 4, 5, 6, 7].map(id => `<p><b>${esc(Catalog.OG_NAMES[id])} – ${esc(Sim.ABILITIES[id].name)}</b> : ${esc(Sim.ABILITIES[id].desc)}</p>`).join('')}<p class="muted">Les 10 nouvelles créatures n’ont pas de capacité active : leur pouvoir est passif.</p>
       <h3>Collection, équipe, capsules</h3><p>Chaque créature a un <b>coût</b> (10 à 70 mana) et une <b>rareté</b>. Ton <b>équipe</b> contient une créature par coût : ce sont les 7 cases de ta barre en partie (touches A Z E R T Y U). Les nouvelles créatures se gagnent dans les <b>capsules</b> (une par victoire classée, duo ou trio, 5 en stock maximum ; tirage par rareté avec garanties) et sur la <b>route des trophées</b> (paliers de ton record). Les exemplaires en double donnent des étoiles à la carte.</p>
       <h3>Modes</h3><p><b>Classée 1v1</b> : trophées et ligues. <b>Duo 2v2</b> et <b>Trio 3v3</b> : classés aussi, sur une arène de 13 ou 17 colonnes ; chaque joueur a sa propre mana, les PV de la base sont partagés par l’équipe, les capacités profitent à toute l’équipe, et l’abandon n’est effectif que si tous les coéquipiers abandonnent. S’il manque des joueurs après quelques secondes, des bots complètent les équipes (trophées divisés par 2). <b>Entraînement</b> et <b>Amical</b> existent aussi en 2v2 / 3v3 (format dans les options : en amical, l’hôte peut lancer avec des bots aux places vides).</p>
       <h3>Options de partie</h3>
@@ -741,9 +790,9 @@
     sctx.clearRect(0, 0, w, h);
     const slot = w / 7;
     for (let i = 0; i < 7; i += 1) {
-      const og = i + 1, x = slot * i + slot / 2, base = h * 0.62;
+      const og = (profile.deck && profile.deck[Catalog.DECK_COSTS[i]]) || i + 1, x = slot * i + slot / 2, base = h * 0.62;
       sctx.fillStyle = 'rgba(0,0,0,0.25)'; sctx.beginPath(); sctx.ellipse(x, base + 66, 50, 14, 0, 0, Math.PI * 2); sctx.fill();
-      Creatures.draw(sctx, og, profile.equipped[og], x, base, 140, t, { moving: true, vx: 1, phase: i }, {});
+      Creatures.draw(sctx, og, profile.equipped[og] || `og${og}_default`, x, base, 140, t, { moving: true, vx: 1, phase: i }, {});
       sctx.fillStyle = '#e2e8f0'; sctx.font = 'bold 22px "Chakra Petch", sans-serif'; sctx.textAlign = 'center';
       sctx.fillText(`${Catalog.OG_NAMES[og]}`, x, h - 40); sctx.fillStyle = '#94a3b8'; sctx.font = '18px "Chakra Petch", sans-serif'; sctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${Sim.OGS[og].cost} mana`, x, h - 14);
     }

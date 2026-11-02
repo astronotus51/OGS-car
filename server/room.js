@@ -93,7 +93,7 @@ class Room {
       this.send(p, this.startMessage(p));
     }
     // Les bots bannissent au hasard.
-    if (this.phase === 'draft') for (const p of this.players) if (p.bot) p.ban = 1 + Math.floor(Math.random() * 7);
+    if (this.phase === 'draft') for (const p of this.players) if (p.bot) { const opp = this.players.find(x => x.side !== p.side); const d = opp && opp.profile && opp.profile.deck ? Object.values(opp.profile.deck).map(Number) : [1, 2, 3, 4, 5, 6, 7]; p.ban = d[Math.floor(Math.random() * d.length)] || 1; }
     this.last = Date.now();
     this.timer = setInterval(() => this.loop(), 1000 / TICK_RATE);
   }
@@ -137,7 +137,7 @@ class Room {
       case 'ban': {
         if (this.phase !== 'draft') return;
         const og = msg.og | 0;
-        if (og >= 1 && og <= 7) { p.ban = og; this.broadcast({ t: 'draft_pick', side: p.side, og: og }); }
+        if (Sim.OGS[og]) { p.ban = og; this.broadcast({ t: 'draft_pick', side: p.side, og: og }); }
         break;
       }
       case 'place': {

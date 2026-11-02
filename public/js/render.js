@@ -89,6 +89,10 @@
           break;
         }
         case 'shot': { const a = animOf(ev.id); a.shot = now; break; }
+        case 'blast': { burst(ev.x, ev.y, '#fb923c', 26, { speed: 420, life: 0.6, size: 14, grav: 200 }); burst(ev.x, ev.y, '#fff7ed', 10, { speed: 200, life: 0.4, size: 7 }); ring(ev.x, ev.y, '#fb923c', ev.radius * 1.3, 0.45); shake = Math.max(shake, 12); break; }
+        case 'gust': { for (let i = 0; i < 10; i += 1) particles.push({ x: ev.x + (Math.random() - 0.5) * 120, y: ev.y, vx: (Math.random() - 0.5) * 60, vy: ev.dir * (400 + Math.random() * 300), life: 0, max: 0.5, color: 'rgba(219,234,254,0.8)', size: 5, grav: 0 }); const a = animOf(ev.id); a.shot = now; break; }
+        case 'charm': { floater(ev.x, ev.y, '♥', '#f0abfc', 64); ring(ev.x, ev.y, '#f0abfc', 140, 0.5); burst(ev.x, ev.y, '#f0abfc', 14, { speed: 200, life: 0.6, size: 8 }); break; }
+        case 'heal': { const edgeY = ev.target === 'top' ? 0 : FIELD.h; floater(ev.x, edgeY + (ev.target === 'top' ? 90 : -90), `+${ev.amount}`, '#86efac', 70); burst(ev.x, edgeY, '#4ade80', 16, { speed: 240, life: 0.6, size: 9 }); break; }
         case 'bounce': { const a = animOf(ev.id); a.bounce = now; if (ev.flip) { floater(ev.x, ev.y, '↩', '#fde68a', 56); ring(ev.x, ev.y, '#93c5fd', 100, 0.3); } break; }
         case 'base': {
           const target = ev.target;
@@ -299,6 +303,7 @@
       const lvlScale = 1 + 0.1 * (lvl - 1);
       if (e.boosted) { ctx.save(); ctx.strokeStyle = 'rgba(254,240,138,0.8)'; ctx.lineWidth = 4; for (let i = 0; i < 3; i += 1) { const off = ((t * 4 + i * 0.33) % 1) * size * 0.5; ctx.beginPath(); ctx.moveTo(x - size * 0.5 + i * size * 0.5, y + size * 0.3 + off); ctx.lineTo(x - size * 0.5 + i * size * 0.5, y + size * 0.3 + off + 18); ctx.stroke(); } ctx.restore(); }
       Creatures.draw(ctx, e.ogId, skin, x + dx, y, size * lvlScale, t, state, { rot: lean, scaleX: sx, scaleY: sy, flash });
+      if (e.slowed) { ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = '#84cc16'; ctx.beginPath(); ctx.ellipse(x, y + size * 0.4, size * 0.45, size * 0.14, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
       if (e.frozen) { ctx.save(); ctx.globalAlpha = 0.55; ctx.fillStyle = '#bae6fd'; ctx.strokeStyle = '#7dd3fc'; ctx.lineWidth = 4; roundRect(x - size * 0.42, y - size * 0.46, size * 0.84, size * 0.9, 14); ctx.fill(); ctx.stroke(); ctx.globalAlpha = 0.9; ctx.fillStyle = '#fff'; ctx.font = 'bold 30px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('❄', x, y + 10); ctx.restore(); }
       if (lvl > 1) { ctx.save(); ctx.fillStyle = '#fde68a'; ctx.strokeStyle = '#0b1021'; ctx.lineWidth = 3; for (let i = 0; i < lvl - 1; i += 1) { const sx2 = x - (lvl - 2) * 12 + i * 24, sy2 = y - size * 0.6; ctx.beginPath(); for (let k = 0; k < 10; k += 1) { const rr2 = k % 2 ? 5 : 11, a = -Math.PI / 2 + k * Math.PI / 5; ctx.lineTo(sx2 + Math.cos(a) * rr2, sy2 + Math.sin(a) * rr2); } ctx.closePath(); ctx.fill(); ctx.stroke(); } ctx.restore(); }
 
@@ -407,7 +412,7 @@
         // Touche + coût.
         ctx.globalAlpha = 1;
         // Capacité active : badge ⚡ en haut à droite avec recharge.
-        if (view.features && view.features.abilities && !banned) {
+        if (view.features && view.features.abilities && !banned && Sim.ABILITIES[ogId]) {
           const cd = S.abilities && S.abilities[view.myKey] ? S.abilities[view.myKey][ogId] : 0;
           const bx2 = cx + slotSize / 2 - 30, by2 = cy - slotSize / 2 + 30 + lift;
           ctx.fillStyle = cd ? 'rgba(15,23,42,0.85)' : '#fde047'; ctx.beginPath(); ctx.arc(bx2, by2, 26, 0, Math.PI * 2); ctx.fill();
@@ -550,7 +555,7 @@
         ctx.fillText(view.draft.oppBan ? `L’adversaire a choisi son bannissement` : 'L’adversaire réfléchit…', W / 2, FIELD_Y + 280);
         ctx.font = 'bold 120px Bungee, sans-serif'; ctx.fillStyle = '#fde68a'; ctx.strokeText(String(Math.ceil(view.draft.timer)), W / 2, FIELD_Y + FIELD.h / 2 + 120); ctx.fillText(String(Math.ceil(view.draft.timer)), W / 2, FIELD_Y + FIELD.h / 2 + 120);
         // Les 7 créatures en ligne.
-        for (let i = 0; i < 7; i += 1) { const og = i + 1, x = W / 8 * (i + 1), y = FIELD_Y + FIELD.h * 0.72; Creatures.draw(ctx, og, (view.equipped[view.myKey] || {})[og], x, y, 120, view.time, { moving: false, phase: i }, { alpha: view.draft.myBan === og ? 0.3 : 1 }); if (view.draft.myBan === og) { ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(x - 50, y - 50); ctx.lineTo(x + 50, y + 50); ctx.moveTo(x + 50, y - 50); ctx.lineTo(x - 50, y + 50); ctx.stroke(); } ctx.fillStyle = '#fff'; ctx.font = 'bold 24px "Chakra Petch", sans-serif'; ctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${OGSCatalog.OG_NAMES[og]}`, x, y + 95); }
+        for (let i = 0; i < 7; i += 1) { const og = (view.oppDeck && view.oppDeck[i]) || i + 1, x = W / 8 * (i + 1), y = FIELD_Y + FIELD.h * 0.72; Creatures.draw(ctx, og, (view.equipped[view.myKey] || {})[og], x, y, 120, view.time, { moving: false, phase: i }, { alpha: view.draft.myBan === og ? 0.3 : 1 }); if (view.draft.myBan === og) { ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(x - 50, y - 50); ctx.lineTo(x + 50, y + 50); ctx.moveTo(x + 50, y - 50); ctx.lineTo(x - 50, y + 50); ctx.stroke(); } ctx.fillStyle = '#fff'; ctx.font = 'bold 24px "Chakra Petch", sans-serif'; ctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${OGSCatalog.OG_NAMES[og]}`, x, y + 95); }
         ctx.restore();
       } else if (view.phase === 'over' && view.result) {
         ctx.save(); ctx.fillStyle = 'rgba(5,8,20,0.5)'; ctx.fillRect(0, FIELD_Y, W, FIELD.h);
@@ -583,6 +588,7 @@
       const midY = FIELD.h / 2;
       for (const e of view.state.entities) {
         if (fog && e.player !== me && ((me === 'top' && e.y >= midY) || (me === 'bottom' && e.y < midY))) continue;
+        if (e.hiddenFromEnemy && e.player !== me) continue; // Boum, Fantôme chez lui : invisibles pour l'adversaire
         (OGS[e.ogId].air ? air : ground).push(e);
       }
       if (fog) { ctx.save(); ctx.fillStyle = 'rgba(5,8,20,0.55)'; ctx.fillRect(0, FIELD_Y, W, FIELD.h / 2); ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = 'bold 30px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('BROUILLARD DE GUERRE', W / 2, FIELD_Y + FIELD.h / 4); ctx.restore(); }

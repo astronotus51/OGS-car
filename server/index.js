@@ -374,14 +374,14 @@ app.post('/api/deck', authMiddleware, wrap(async (req, res) => {
 }));
 // Ouvre une capsule : cartes (créatures) par rareté avec garanties, pièces, parfois un skin.
 app.post('/api/capsule/open', authMiddleware, accountOnly, wrap(async (req, res) => {
-  if ((req.user.capsules || 0) < 1) return res.status(400).json({ error: 'Aucune capsule à ouvrir' });
+  if ((req.user.capsules || 0) < 1 && !isAdmin(req.user)) return res.status(400).json({ error: 'Aucune capsule à ouvrir' });
   const collection = collectionOf(req.user);
   const owned = ownedSkins(req.user);
   const rng = () => crypto.randomInt(0, 1 << 30) / (1 << 30);
   const result = Catalog.openCapsule(rng, collection, owned, req.user.pity || {});
   const col = Object.assign({}, req.user.collection || {});
   for (const card of result.cards) { card.isNew = !collection[card.id] && !col[card.id]; col[card.id] = (col[card.id] || collection[card.id] || 0) + card.copies; card.total = col[card.id]; }
-  const patch = { capsules: (req.user.capsules || 0) - 1, collection: col, coins: (req.user.coins || 0) + result.coins, pity: result.pity };
+  const patch = { capsules: Math.max(0, (req.user.capsules || 0) - (isAdmin(req.user) ? 0 : 1)), collection: col, coins: (req.user.coins || 0) + result.coins, pity: result.pity };
   if (result.skin) patch.skins = [...owned, result.skin];
   const user = await db.updateUser(req.user.id, patch);
   res.json({ profile: refreshLiveProfile(user), opened: result });
