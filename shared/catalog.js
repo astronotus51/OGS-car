@@ -21,6 +21,97 @@
     7: 'Dragonnet rondouillard qui vole au-dessus de tout et crache des boules de feu.',
   };
 
+  // ----- Collection de créatures (façon Clash Royale) -----
+  // Les 7 de base sont acquises. Les suivantes arrivent par capsules et route des trophées ; `playable:false` tant que
+  // leur comportement n'est pas dans la simulation (elles se collectionnent déjà, elles seront jouables à leur sortie).
+  const RARITIES = {
+    commune: { name: 'Commune', color: '#8fb7c9', weight: 70, copiesPerStar: 2 },
+    rare: { name: 'Rare', color: '#22e3c8', weight: 22, copiesPerStar: 2 },
+    epique: { name: 'Épique', color: '#c084fc', weight: 7, copiesPerStar: 1 },
+    legendaire: { name: 'Légendaire', color: '#ffc14d', weight: 1, copiesPerStar: 1 },
+  };
+  const CREATURES = [
+    { id: 1, name: 'Zip', role: 'Runner', cost: 10, rarity: 'commune', base: true, playable: true, power: 'Fonce tout droit vers la base ennemie. Rebondit sur les murs.' },
+    { id: 2, name: 'Gromp', role: 'Défenseur', cost: 20, rarity: 'commune', base: true, playable: true, power: 'Patrouille sa ligne et croque les Runners adverses.' },
+    { id: 3, name: 'Krak', role: 'Tourelle', cost: 30, rarity: 'rare', base: true, playable: true, power: 'Tire sur tout ennemi dans un carré de 2 cases autour de lui, dans ton camp.' },
+    { id: 4, name: 'Riko', role: 'Étoile rebondissante', cost: 40, rarity: 'rare', base: true, playable: true, power: 'Avance en diagonale, détruit tourelles et chargeurs, rebondit sur les murs.' },
+    { id: 5, name: 'Blok', role: 'Mur', cost: 50, rarity: 'commune', base: true, playable: true, power: 'Bloque et renvoie les créatures qui avancent.' },
+    { id: 6, name: 'Mojo', role: 'Chargeur de mana', cost: 60, rarity: 'rare', base: true, playable: true, power: '+50 % de régénération de mana pour toute ton équipe.' },
+    { id: 7, name: 'Zéphir', role: 'Dragonnet volant', cost: 70, rarity: 'epique', base: true, playable: true, power: 'Vole au-dessus de tout, tire à 1 case, 5 dégâts à la base.' },
+    // --- 10 nouveaux types (pouvoirs inédits), jouables à la prochaine mise à jour ---
+    { id: 8, name: 'Pik', role: 'Hérisson à ressort', cost: 10, rarity: 'commune', playable: false, power: 'Runner lent mais à 2 PV : il encaisse un coup et continue.' },
+    { id: 9, name: 'Bulle', role: 'Bulle de soin', cost: 10, rarity: 'rare', playable: false, power: 'Flotte lentement au-dessus de tout. Si elle atteint la base ennemie, ta base récupère 1 PV.' },
+    { id: 10, name: 'Zazou', role: 'Moustique', cost: 20, rarity: 'commune', playable: false, power: 'Minuscule volant très rapide, 1 PV : ignore les unités au sol, 1 dégât à la base.' },
+    { id: 11, name: 'Boum', role: 'Mine', cost: 30, rarity: 'rare', playable: false, power: 'Statique et discret : explose au premier contact ennemi, 2 dégâts dans la case autour.' },
+    { id: 12, name: 'Rafale', role: 'Ventilo', cost: 30, rarity: 'epique', playable: false, power: 'Tourelle qui souffle : repousse d’une case les ennemis au sol devant elle, toutes les 2 s.' },
+    { id: 13, name: 'Tiktak', role: 'Bombe à retardement', cost: 40, rarity: 'rare', playable: false, power: 'Marche lentement, 3 PV. Explose à l’arrivée (4 dégâts) ou à sa mort (1 dégât autour).' },
+    { id: 14, name: 'Fantôme', role: 'Spectre', cost: 40, rarity: 'epique', playable: false, power: 'Invisible tant qu’il est dans ton camp, traverse les murs. 2 PV, 2 dégâts.' },
+    { id: 15, name: 'Glu', role: 'Flaque gluante', cost: 50, rarity: 'commune', playable: false, power: 'Zone collante : les ennemis au sol qui la traversent sont ralentis de moitié.' },
+    { id: 16, name: 'Sirène', role: 'Charmeuse', cost: 60, rarity: 'legendaire', playable: false, power: 'Toutes les 8 s, charme l’ennemi au sol le plus proche (2 cases) : il change de camp.' },
+    { id: 17, name: 'Kraken', role: 'Colosse', cost: 70, rarity: 'legendaire', playable: false, power: 'Lent, 6 PV, 3 dégâts. Écrase les murs en passant (−1 PV pour lui).' },
+  ];
+  const CREATURE_BY_ID = Object.fromEntries(CREATURES.map(c => [c.id, c]));
+  const DECK_COSTS = [10, 20, 30, 40, 50, 60, 70];
+  const DEFAULT_DECK = Object.fromEntries(DECK_COSTS.map(cost => [cost, CREATURES.find(c => c.base && c.cost === cost).id]));
+  const BASE_COLLECTION = Object.fromEntries(CREATURES.filter(c => c.base).map(c => [c.id, 1]));
+  // Étoiles d'une carte selon ses exemplaires (cosmétique) : 1 étoile à l'obtention, puis +1 tous les copiesPerStar×n.
+  function cardStars(creature, copies) { const per = RARITIES[creature.rarity].copiesPerStar; let s = 1, need = per; let c = (copies || 0) - 1; while (c >= need && s < 5) { c -= need; need += per; s += 1; } return s; }
+  function nextStarCopies(creature, copies) { const per = RARITIES[creature.rarity].copiesPerStar; let s = 1, need = per; let c = (copies || 0) - 1; while (c >= need && s < 5) { c -= need; need += per; s += 1; } return s >= 5 ? null : { have: c, need }; }
+
+  // ----- Capsules (butin de victoire, tirage par rareté avec garanties) -----
+  const CAPSULE = { max: 5, pityEpic: 12, pityLegendary: 40, skinChance: 0.3 };
+  function rollRarity(rng, pity) {
+    if (pity.legendary >= CAPSULE.pityLegendary) return 'legendaire';
+    if (pity.epic >= CAPSULE.pityEpic) return 'epique';
+    const total = Object.values(RARITIES).reduce((n, r) => n + r.weight, 0);
+    let x = rng() * total;
+    for (const [key, r] of Object.entries(RARITIES)) { x -= r.weight; if (x < 0) return key; }
+    return 'commune';
+  }
+  // rng : fonction () => [0,1). Retourne { cards: [{ id, rarity, copies }], coins, skin?: id }
+  function openCapsule(rng, collection, ownedSkins, pity) {
+    const cards = [];
+    const n = 2 + (rng() < 0.3 ? 1 : 0);
+    const p = Object.assign({ epic: 0, legendary: 0 }, pity || {});
+    for (let i = 0; i < n; i += 1) {
+      const rarity = rollRarity(rng, p);
+      const pool = CREATURES.filter(c => c.rarity === rarity && !c.base) ;
+      const fallback = CREATURES.filter(c => c.rarity === rarity);
+      const pick = (pool.length ? pool : fallback)[Math.floor(rng() * (pool.length ? pool : fallback).length)];
+      const copies = rarity === 'commune' ? 1 + Math.floor(rng() * 3) : rarity === 'rare' ? 1 + Math.floor(rng() * 2) : 1;
+      cards.push({ id: pick.id, rarity, copies, isNew: !collection[pick.id] });
+      if (rarity === 'epique' || rarity === 'legendaire') p.epic = 0; else p.epic += 1;
+      if (rarity === 'legendaire') p.legendary = 0; else p.legendary += 1;
+    }
+    const coins = 20 + Math.floor(rng() * 41);
+    let skin = null;
+    if (rng() < CAPSULE.skinChance) {
+      const candidates = SKINS.filter(s => !s.hidden && s.unlock.type !== 'default' && !ownedSkins.includes(s.id));
+      if (candidates.length) skin = candidates[Math.floor(rng() * candidates.length)].id;
+    }
+    return { cards, coins, skin, pity: p };
+  }
+
+  // ----- Route des trophées (paliers de meilleurs trophées, récompenses à réclamer) -----
+  const TROPHY_ROAD = [];
+  (function buildRoad() {
+    const creatureAt = { 50: 8, 150: 10, 300: 15, 450: 11, 600: 9, 800: 12, 1000: 13, 1250: 14, 1500: 16, 2200: 17 };
+    for (let t = 50; t <= 2500; t += 50) {
+      let reward;
+      if (creatureAt[t]) reward = { type: 'creature', id: creatureAt[t] };
+      else if (t % 250 === 0) reward = { type: 'capsule', count: t >= 1000 ? 2 : 1 };
+      else if (t % 200 === 0) reward = { type: 'skin', pick: 'random' };
+      else reward = { type: 'coins', count: 40 + Math.floor(t / 50) * 10 };
+      TROPHY_ROAD.push({ trophies: t, reward });
+    }
+  })();
+  function roadLabel(r) {
+    if (r.type === 'creature') return `Créature : ${CREATURE_BY_ID[r.id].name}`;
+    if (r.type === 'capsule') return r.count > 1 ? `${r.count} capsules` : '1 capsule';
+    if (r.type === 'skin') return 'Skin surprise';
+    return `${r.count} pièces`;
+  }
+
   // Thèmes de skins : nom affiché par créature + déblocage.
   const HALLOWEEN_NAMES = { 1: 'Zip Citrouille', 2: 'Gromp Vampire', 3: 'Krak Sorcière', 4: 'Riko Momie', 5: 'Blok Frankenstein', 6: 'Mojo Zombie', 7: 'Zéphir Chauve-souris' };
   const THEMES = [
@@ -174,5 +265,6 @@
     return { skinId: skin.id, price: Math.ceil(skin.unlock.value / 2), week: weekKey(d) };
   }
 
-  return { OG_NAMES, OG_ROLES, OG_LORE, THEMES, MAPS, AVATAR_PRESETS, SKINS, SKIN_BY_ID, DEFAULT_EQUIP, RANKS, rankFor, nextRank, xpForLevel, levelFromXp, matchRewards, canUnlock, QUEST_TEMPLATES, dailyQuests, questTemplate, advanceQuests, dayKey, weeklyDeal };
+  return { OG_NAMES, OG_ROLES, OG_LORE, THEMES, MAPS, AVATAR_PRESETS, SKINS, SKIN_BY_ID, DEFAULT_EQUIP, RANKS,
+    RARITIES, CREATURES, CREATURE_BY_ID, DECK_COSTS, DEFAULT_DECK, BASE_COLLECTION, cardStars, nextStarCopies, CAPSULE, openCapsule, TROPHY_ROAD, roadLabel, rankFor, nextRank, xpForLevel, levelFromXp, matchRewards, canUnlock, QUEST_TEMPLATES, dailyQuests, questTemplate, advanceQuests, dayKey, weeklyDeal };
 });

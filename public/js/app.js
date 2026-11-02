@@ -12,26 +12,41 @@
 
   // ----- Fond animé (menus) -----
   const bg = $('bg'), bctx = bg.getContext('2d');
+  // Fond « abysses » : nuit marine, rais de lumière qui descendent, plancton et bulles qui montent.
+  const BUBBLES = Array.from({ length: 46 }, (_, i) => ({ x: Math.random(), y: Math.random(), r: 1.5 + Math.random() * 5, v: 0.012 + Math.random() * 0.03, w: Math.random() * 6.28, big: i % 9 === 0 }));
+  const PLANKTON = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), p: Math.random() * 6.28 }));
   function drawBg(ts) {
     const w = bg.width = window.innerWidth, h = bg.height = window.innerHeight;
-    const g = bctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#0f1b3d'); g.addColorStop(1, '#1d4ed8');
-    bctx.fillStyle = g; bctx.fillRect(0, 0, w, h);
     const t = ts / 1000;
-    bctx.lineCap = 'round'; bctx.lineWidth = 18;
-    for (let i = 0; i < 14; i += 1) {
-      const yBase = (h / 13) * i;
-      bctx.strokeStyle = i % 2 ? 'rgba(147,197,253,0.10)' : 'rgba(59,130,246,0.14)';
-      bctx.beginPath();
-      for (let x = 0; x <= w; x += 28) { const y = yBase + Math.sin(x / 140 + t * 1.2 + i * 0.6) * 10; if (x === 0) bctx.moveTo(x, y); else bctx.lineTo(x, y); }
-      bctx.stroke();
+    const g = bctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#071a33'); g.addColorStop(0.45, '#04101f'); g.addColorStop(1, '#02070f');
+    bctx.fillStyle = g; bctx.fillRect(0, 0, w, h);
+    // Rais de lumière (god rays) depuis la surface.
+    bctx.save(); bctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 7; i += 1) {
+      const x0 = w * (0.1 + i * 0.14) + Math.sin(t * 0.15 + i) * 60, sway = Math.sin(t * 0.22 + i * 1.7) * 120;
+      const rg = bctx.createLinearGradient(x0, 0, x0 + sway, h); rg.addColorStop(0, `rgba(34,227,200,${0.07 + 0.03 * Math.sin(t * 0.5 + i)})`); rg.addColorStop(0.7, 'rgba(34,227,200,0.012)'); rg.addColorStop(1, 'rgba(34,227,200,0)');
+      bctx.fillStyle = rg; bctx.beginPath(); bctx.moveTo(x0 - 22, 0); bctx.lineTo(x0 + 22, 0); bctx.lineTo(x0 + sway + 150, h); bctx.lineTo(x0 + sway - 150, h); bctx.closePath(); bctx.fill();
     }
+    bctx.restore();
+    // Plancton.
+    for (const p of PLANKTON) { const a = 0.25 + 0.25 * Math.sin(t * 1.3 + p.p); bctx.fillStyle = `rgba(143,183,201,${a})`; bctx.fillRect(p.x * w + Math.sin(t * 0.3 + p.p) * 8, (p.y * h + t * 6 * (0.3 + (p.p % 1))) % h, 1.5, 1.5); }
+    // Bulles.
+    for (const b of BUBBLES) {
+      b.y -= b.v * 0.016; if (b.y < -0.05) { b.y = 1.05; b.x = Math.random(); }
+      const x = b.x * w + Math.sin(t * 1.2 + b.w) * 6 * (b.big ? 2 : 1), y = b.y * h, r = b.r * (b.big ? 2.4 : 1);
+      bctx.strokeStyle = 'rgba(34,227,200,0.35)'; bctx.lineWidth = 1; bctx.beginPath(); bctx.arc(x, y, r, 0, Math.PI * 2); bctx.stroke();
+      bctx.fillStyle = 'rgba(239,230,207,0.5)'; bctx.beginPath(); bctx.arc(x - r * 0.35, y - r * 0.35, r * 0.22, 0, Math.PI * 2); bctx.fill();
+    }
+    // Vignette.
+    const v = bctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.75); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.55)');
+    bctx.fillStyle = v; bctx.fillRect(0, 0, w, h);
     if (current !== 'game') requestAnimationFrame(drawBg);
     else setTimeout(() => requestAnimationFrame(drawBg), 500);
   }
   requestAnimationFrame(drawBg);
 
   // ----- Écrans -----
-  const SCREENS = ['auth', 'lobby', 'queue', 'game', 'result', 'profile', 'skins', 'leaderboard', 'rules', 'avatar'];
+  const SCREENS = ['auth', 'lobby', 'queue', 'game', 'result', 'profile', 'skins', 'leaderboard', 'rules', 'avatar', 'collection', 'capsules', 'road'];
   function show(name) {
     current = name;
     if (window.OGSAudio && name !== 'game' && name !== 'result') OGSAudio.setScene('menu');
@@ -42,6 +57,9 @@
     const target = btn.dataset.screen;
     if (target === 'profile') openProfile();
     else if (target === 'skins') openSkins();
+    else if (target === 'collection') openCollection();
+    else if (target === 'capsules') openCapsules();
+    else if (target === 'road') openRoad();
     else if (target === 'leaderboard') openLeaderboard();
     else if (target === 'rules') { renderRules(); show('rules'); }
     else show(target);
@@ -252,6 +270,12 @@
     $('lobbyXp').style.width = `${Math.round(profile.xpInto / profile.xpNeed * 100)}%`;
     $('lobbyXpText').textContent = `Niv. ${profile.level} · ${profile.xpInto}/${profile.xpNeed} XP`;
     $('btnDaily').classList.toggle('hidden', !profile.dailyAvailable || isLocked());
+    const ownedN = Object.keys(profile.collection || {}).length;
+    $('collectionTileHint').textContent = `${ownedN}/${Catalog.CREATURES.length} créatures`;
+    $('capsuleTileHint').textContent = profile.capsules ? `${profile.capsules} à ouvrir !` : 'une par victoire';
+    const claimable = Catalog.TROPHY_ROAD.filter(r => r.trophies <= (profile.bestTrophies || 0) && !(profile.road || []).includes(r.trophies)).length;
+    $('roadTileHint').textContent = claimable ? `${claimable} récompense(s) !` : `${profile.bestTrophies || 0} 🏆`;
+    $('capsuleTileHint').parentElement.classList.toggle('pulse', !!profile.capsules); $('roadTileHint').parentElement.classList.toggle('pulse', !!claimable);
     $('guestBanner').classList.toggle('hidden', !isLocked());
     const next = profile.nextRank;
     $('lobbyLeague').innerHTML = `<span style="color:${profile.rankColor}">${profile.rank}</span><small>${next ? `${next.min - profile.trophies} trophées avant ${next.name}` : 'Ligue maximale !'}${profile.leaderboardRank ? ` · #${profile.leaderboardRank} mondial` : ''}</small>`;
@@ -417,6 +441,7 @@
     $('resXpFill').style.width = `${Math.round(profile.xpInto / profile.xpNeed * 100)}%`;
     $('resXpText').textContent = `Niveau ${profile.level} · ${profile.xpInto}/${profile.xpNeed} XP`;
     const extra = [];
+    if (r.capsule) extra.push('🫧 +1 capsule à ouvrir !');
     if (msg.levelUp) extra.push(`⬆ Niveau ${msg.levelUp} !`);
     if (r.streakBonus) extra.push(`🔥 Série de victoires : +${r.streakBonus} XP`);
     if (msg.unlocked && msg.unlocked.length) extra.push(`🎁 Débloqué : ${msg.unlocked.map(id => Catalog.SKIN_BY_ID[id] ? Catalog.SKIN_BY_ID[id].name : id).join(', ')}`);
@@ -435,6 +460,115 @@
     else if (lastMatchKind && lastMatchKind.t === 'survival') $('btnSurvival').click();
     else { const team = (lastMatchKind && lastMatchKind.team) || 1; lastMatchKind = { t: 'queue', team }; Net.send({ t: 'queue', team }); openQueue(team > 1 ? `Recherche de ${team * 2 - 1} joueurs…` : 'Recherche d’un adversaire…', 'queue'); }
   });
+
+  // ----- Collection & équipe (façon Clash Royale) -----
+  let rarityFilter = 'all';
+  const collectionCanvases = []; // { canvas, ogId, skin, size }
+  function drawCollectionCanvases() {
+    if (current !== 'collection') return;
+    const t = performance.now() / 1000;
+    for (const c of collectionCanvases) { const ctx = c.canvas.getContext('2d'); ctx.clearRect(0, 0, c.canvas.width, c.canvas.height); Creatures.draw(ctx, c.ogId, c.skin, c.canvas.width / 2, c.canvas.height / 2 + 6, c.size, t, { moving: false, phase: c.ogId }, { alpha: c.alpha }); }
+  }
+  setInterval(drawCollectionCanvases, 1000 / 30);
+  function starsHtml(n) { return '★'.repeat(n) + '<span class="dim">' + '★'.repeat(5 - n) + '</span>'; }
+  async function openCollection() {
+    show('collection');
+    try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
+    collectionCanvases.length = 0;
+    const col = profile.collection || {}, deck = profile.deck || Catalog.DEFAULT_DECK;
+    $('collectionCount').textContent = `${Object.keys(col).length} / ${Catalog.CREATURES.length}`;
+    $('capsuleCount2').textContent = profile.capsules || 0;
+    // Équipe : 7 cases par coût
+    $('deckStrip').innerHTML = Catalog.DECK_COSTS.map((cost, i) => { const c = Catalog.CREATURE_BY_ID[deck[cost]]; return `<button class="deck-slot" data-cost="${cost}"><canvas width="120" height="120"></canvas><span class="deck-key">${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]}</span><span class="deck-cost">${cost}</span><b>${esc(c.name)}</b></button>`; }).join('');
+    $('deckStrip').querySelectorAll('.deck-slot').forEach(b => { const cost = Number(b.dataset.cost), id = deck[cost]; collectionCanvases.push({ canvas: b.querySelector('canvas'), ogId: id, skin: profile.equipped[id] || `og${id}_default`, size: 78, alpha: 1 }); b.addEventListener('click', () => openCreature(id, cost)); });
+    // Grille
+    const list = Catalog.CREATURES.filter(c => rarityFilter === 'all' || c.rarity === rarityFilter);
+    $('creatureGrid').innerHTML = list.map(c => { const owned = !!col[c.id], R = Catalog.RARITIES[c.rarity], inDeck = deck[c.cost] === c.id; return `<button class="ccard rarity-${c.rarity} ${owned ? '' : 'locked'} ${inDeck ? 'in-deck' : ''}" data-id="${c.id}" style="--rc:${R.color}">
+      <span class="ccard-cost">${c.cost}</span>${inDeck ? '<span class="ccard-deck">ÉQUIPE</span>' : ''}${!c.playable ? '<span class="ccard-soon">BIENTÔT</span>' : ''}
+      <canvas width="150" height="150"></canvas>
+      <b>${esc(c.name)}</b><small>${R.name}</small>
+      <span class="ccard-stars">${owned ? starsHtml(Catalog.cardStars(c, col[c.id])) : '<span class="dim">verrouillée</span>'}</span></button>`; }).join('');
+    $('creatureGrid').querySelectorAll('.ccard').forEach(b => { const id = Number(b.dataset.id); collectionCanvases.push({ canvas: b.querySelector('canvas'), ogId: id, skin: profile.equipped[id] || `og${id}_default`, size: 96, alpha: col[id] ? 1 : 0.35 }); b.addEventListener('click', () => openCreature(id)); });
+    $('rarityTabs').querySelectorAll('.rtab').forEach(t => t.classList.toggle('active', t.dataset.rarity === rarityFilter));
+    drawCollectionCanvases();
+  }
+  $('rarityTabs').addEventListener('click', (ev) => { const t = ev.target.closest('.rtab'); if (!t) return; rarityFilter = t.dataset.rarity; openCollection(); });
+  $('btnCapsulesFromCollection').addEventListener('click', openCapsules);
+  let detailCanvas = null;
+  function openCreature(id, pickForCost) {
+    const c = Catalog.CREATURE_BY_ID[id], col = profile.collection || {}, R = Catalog.RARITIES[c.rarity], deck = profile.deck || Catalog.DEFAULT_DECK;
+    const owned = !!col[c.id];
+    $('creatureName').innerHTML = `${esc(c.name)} <span class="rarity-pill" style="--rc:${R.color}">${R.name}</span>`;
+    $('creatureMeta').innerHTML = `${esc(c.role)} · <b>${c.cost}</b> mana${c.playable ? '' : ' · <span class="soon-txt">jouable bientôt</span>'}`;
+    $('creaturePower').textContent = c.power;
+    const ns = owned ? Catalog.nextStarCopies(c, col[c.id]) : null;
+    $('creatureStars').innerHTML = owned ? `${starsHtml(Catalog.cardStars(c, col[c.id]))} <small>${col[c.id]} exemplaire(s)${ns ? ` · prochaine étoile : ${ns.have}/${ns.need}` : ' · niveau max'}</small>` : '<small>Pas encore dans ta collection : capsules ou route des trophées.</small>';
+    const inDeck = deck[c.cost] === c.id;
+    let actions = '';
+    if (owned && c.playable && !inDeck) actions += `<button class="btn primary" id="btnPutInDeck">Mettre dans l’équipe (case ${c.cost})</button>`;
+    if (inDeck) actions += '<span class="info">Dans ton équipe</span>';
+    if (pickForCost) { // choix pour une case : lister les alternatives possédées du même coût
+      const alts = Catalog.CREATURES.filter(x => x.cost === pickForCost && col[x.id] && x.playable && x.id !== c.id);
+      actions += alts.length ? `<div class="alt-row"><span class="muted">Remplacer par :</span>${alts.map(a => `<button class="btn small" data-alt="${a.id}">${esc(a.name)}</button>`).join('')}</div>` : '<span class="muted">Aucune autre créature à ce coût dans ta collection.</span>';
+    }
+    $('creatureActions').innerHTML = actions;
+    const put = $('btnPutInDeck'); if (put) put.addEventListener('click', () => setDeckSlot(c.cost, c.id));
+    $('creatureActions').querySelectorAll('[data-alt]').forEach(b => b.addEventListener('click', () => setDeckSlot(pickForCost, Number(b.dataset.alt))));
+    detailCanvas = { canvas: $('creatureCanvas'), ogId: c.id, skin: profile.equipped[c.id] || `og${c.id}_default`, size: 150, alpha: owned ? 1 : 0.5 };
+    const i = collectionCanvases.findIndex(x => x.canvas === $('creatureCanvas')); if (i >= 0) collectionCanvases.splice(i, 1); collectionCanvases.push(detailCanvas);
+    openModal('creatureModal');
+  }
+  async function setDeckSlot(cost, id) {
+    const deck = Object.assign({}, profile.deck || Catalog.DEFAULT_DECK, { [cost]: id });
+    try { profile = (await Net.api('/api/deck', { deck })).profile; toast(`${Catalog.CREATURE_BY_ID[id].name} rejoint ton équipe`, 'good'); Audio.sfx('coin'); closeModal('creatureModal'); openCollection(); }
+    catch (e) { toast(e.message, 'bad'); }
+  }
+
+  // ----- Capsules -----
+  async function openCapsules() {
+    show('capsules');
+    try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
+    $('capsuleCount').textContent = profile.capsules || 0;
+    $('btnOpenCapsule').disabled = !(profile.capsules > 0) || isLocked();
+    $('btnOpenCapsule').textContent = isLocked() ? '🔒 Réservé aux comptes' : profile.capsules > 0 ? 'Ouvrir une capsule' : 'Gagne une partie classée pour en obtenir';
+    $('capsulePity').textContent = `Garanties : une Épique au plus tard toutes les ${Catalog.CAPSULE.pityEpic} cartes, une Légendaire toutes les ${Catalog.CAPSULE.pityLegendary}.`;
+    $('capsuleResult').classList.add('hidden'); $('capsuleVisual').classList.remove('opening');
+  }
+  $('btnOpenCapsule').addEventListener('click', async () => {
+    if (isLocked()) return goUpgrade();
+    $('btnOpenCapsule').disabled = true; $('capsuleVisual').classList.add('opening'); Audio.sfx('match');
+    try {
+      const d = await Net.api('/api/capsule/open', {});
+      await new Promise(r => setTimeout(r, 900));
+      profile = d.profile; const o = d.opened;
+      $('capsuleCount').textContent = profile.capsules;
+      const cards = o.cards.map(card => { const c = Catalog.CREATURE_BY_ID[card.id], R = Catalog.RARITIES[card.rarity]; return `<div class="loot rarity-${card.rarity}" style="--rc:${R.color}"><canvas width="140" height="140" data-og="${card.id}"></canvas><b>${esc(c.name)}</b><small>${R.name} · ×${card.copies}${card.isNew ? ' · <span class="new">NOUVEAU !</span>' : ''}</small></div>`; });
+      const skin = o.skin ? `<div class="loot skin"><canvas width="140" height="140" data-og="${Catalog.SKIN_BY_ID[o.skin].ogId}" data-skin="${o.skin}"></canvas><b>${esc(Catalog.SKIN_BY_ID[o.skin].name)}</b><small>Skin débloqué !</small></div>` : '';
+      $('capsuleResult').innerHTML = `<div class="loot-row">${cards.join('')}${skin}<div class="loot coins"><span class="coin big"></span><b>+${o.coins}</b><small>pièces</small></div></div><div class="row"><button class="btn primary" id="btnCapsuleAgain">${profile.capsules > 0 ? 'Encore une !' : 'Voir ma collection'}</button></div>`;
+      $('capsuleResult').classList.remove('hidden'); Audio.sfx('win');
+      const t0 = performance.now();
+      const anim = () => { if (current !== 'capsules') return; const t = (performance.now() - t0) / 1000; $('capsuleResult').querySelectorAll('canvas[data-og]').forEach((cv, i) => { const ctx = cv.getContext('2d'); ctx.clearRect(0, 0, 140, 140); const k = Math.min(1, Math.max(0, (t - i * 0.25) * 2)); Creatures.draw(ctx, Number(cv.dataset.og), cv.dataset.skin || profile.equipped[cv.dataset.og] || `og${cv.dataset.og}_default`, 70, 76, 90 * (0.5 + 0.5 * k), t, { moving: false }, { alpha: k }); }); requestAnimationFrame(anim); };
+      requestAnimationFrame(anim);
+      $('btnCapsuleAgain').addEventListener('click', () => profile.capsules > 0 ? openCapsules() : openCollection());
+      refreshLobbyHints();
+    } catch (e) { toast(e.message, 'bad'); $('btnOpenCapsule').disabled = false; $('capsuleVisual').classList.remove('opening'); }
+  });
+  function refreshLobbyHints() { try { $('capsuleTileHint').textContent = profile.capsules ? `${profile.capsules} à ouvrir !` : 'une par victoire'; } catch (e) { /* ignore */ } }
+
+  // ----- Route des trophées -----
+  async function openRoad() {
+    show('road');
+    try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
+    const best = profile.bestTrophies || 0, claimed = profile.road || [];
+    $('roadProgress').textContent = `Record : ${best} 🏆`;
+    $('roadList').innerHTML = Catalog.TROPHY_ROAD.map(r => { const reached = best >= r.trophies, done = claimed.includes(r.trophies); const icon = r.reward.type === 'creature' ? '🃏' : r.reward.type === 'capsule' ? '🫧' : r.reward.type === 'skin' ? '🎨' : '🪙'; return `<li class="road-step ${reached ? 'reached' : ''} ${done ? 'done' : ''} kind-${r.reward.type}"><span class="road-t">${r.trophies} 🏆</span><span class="road-ico">${icon}</span><span class="road-label">${esc(Catalog.roadLabel(r.reward))}</span>${done ? '<span class="road-ok">✔</span>' : reached ? `<button class="btn small gold" data-claim="${r.trophies}">Réclamer</button>` : '<span class="road-lock">🔒</span>'}</li>`; }).join('');
+    $('roadList').querySelectorAll('[data-claim]').forEach(b => b.addEventListener('click', async () => {
+      if (isLocked()) return goUpgrade();
+      try { const d = await Net.api('/api/road/claim', { trophies: Number(b.dataset.claim) }); profile = d.profile; const g = d.got; toast(g.type === 'coins' ? `+${g.count} pièces` : g.type === 'capsule' ? `+${g.count} capsule(s)` : g.type === 'creature' ? `${g.name} rejoint ta collection !` : `Skin ${g.name} débloqué !`, 'good'); Audio.sfx('coin'); openRoad(); }
+      catch (e) { toast(e.message, 'bad'); }
+    }));
+    const next = Catalog.TROPHY_ROAD.find(r => r.trophies > best); if (next) setTimeout(() => { const el = $('roadList').querySelector(`[data-claim]`) || [...$('roadList').children].find(li => li.classList.contains('reached') === false); if (el) el.scrollIntoView({ block: 'center' }); }, 50);
+  }
 
   // ----- Profil -----
   async function openProfile() {
@@ -587,6 +721,7 @@
       
       <h3>Capacités actives (Maj + touche, ou ⚡ sur le slot)</h3><p>10 mana, 20 s de recharge, il faut au moins une créature de ce type en jeu.</p>
       ${[1, 2, 3, 4, 5, 6, 7].map(id => `<p><b>${esc(Catalog.OG_NAMES[id])} – ${esc(Sim.ABILITIES[id].name)}</b> : ${esc(Sim.ABILITIES[id].desc)}</p>`).join('')}
+      <h3>Collection, équipe, capsules</h3><p>Chaque créature a un <b>coût</b> (10 à 70 mana) et une <b>rareté</b>. Ton <b>équipe</b> contient une créature par coût : ce sont les 7 cases de ta barre en partie (touches A Z E R T Y U). Les nouvelles créatures se gagnent dans les <b>capsules</b> (une par victoire classée, duo ou trio, 5 en stock maximum ; tirage par rareté avec garanties) et sur la <b>route des trophées</b> (paliers de ton record). Les exemplaires en double donnent des étoiles à la carte.</p>
       <h3>Modes</h3><p><b>Classée 1v1</b> : trophées et ligues. <b>Duo 2v2</b> et <b>Trio 3v3</b> : classés aussi, sur une arène de 13 ou 17 colonnes ; chaque joueur a sa propre mana, les PV de la base sont partagés par l’équipe, les capacités profitent à toute l’équipe, et l’abandon n’est effectif que si tous les coéquipiers abandonnent. S’il manque des joueurs après quelques secondes, des bots complètent les équipes (trophées divisés par 2). <b>Entraînement</b> et <b>Amical</b> existent aussi en 2v2 / 3v3 (format dans les options : en amical, l’hôte peut lancer avec des bots aux places vides).</p>
       <h3>Options de partie</h3>
       ${Features.matchFeatures().map(f => `<p><b>${esc(f.label)}</b>${f.ranked ? ' (actif en classée)' : ''} : ${esc(f.desc)}</p>`).join('')}
@@ -609,8 +744,8 @@
       const og = i + 1, x = slot * i + slot / 2, base = h * 0.62;
       sctx.fillStyle = 'rgba(0,0,0,0.25)'; sctx.beginPath(); sctx.ellipse(x, base + 66, 50, 14, 0, 0, Math.PI * 2); sctx.fill();
       Creatures.draw(sctx, og, profile.equipped[og], x, base, 140, t, { moving: true, vx: 1, phase: i }, {});
-      sctx.fillStyle = '#e2e8f0'; sctx.font = 'bold 22px Fredoka, sans-serif'; sctx.textAlign = 'center';
-      sctx.fillText(`${Catalog.OG_NAMES[og]}`, x, h - 40); sctx.fillStyle = '#94a3b8'; sctx.font = '18px Fredoka, sans-serif'; sctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${Sim.OGS[og].cost} mana`, x, h - 14);
+      sctx.fillStyle = '#e2e8f0'; sctx.font = 'bold 22px "Chakra Petch", sans-serif'; sctx.textAlign = 'center';
+      sctx.fillText(`${Catalog.OG_NAMES[og]}`, x, h - 40); sctx.fillStyle = '#94a3b8'; sctx.font = '18px "Chakra Petch", sans-serif'; sctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${Sim.OGS[og].cost} mana`, x, h - 14);
     }
   }
   requestAnimationFrame(drawShowcase);

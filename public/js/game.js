@@ -9,7 +9,7 @@
   const INTERP_DELAY = 0.12; // s de retard de rendu : les snapshots arrivent à 15 Hz, on en garde ~2 d'avance
   const MAX_EXTRAP = 0.1; // s d'extrapolation max quand un snapshot est en retard (réseau qui hoquette)
   const KEY_TO_OG = { a: 1, q: 1, z: 2, w: 2, e: 3, r: 4, t: 5, y: 6, u: 7 };
-  const REJECT_TEXT = { mana: 'Pas assez de mana', occupied: 'Case occupée', back: 'Cet Og se pose uniquement sur la ligne du fond', hazard: 'Scorpion noir : placement bloqué', side: 'Pas de ton côté', countdown: 'Attends le départ', over: 'Partie terminée', cell: 'Case invalide', banned: 'Créature bannie par ton adversaire' };
+  const REJECT_TEXT = { deck: 'Cette créature n’est pas dans ton équipe', mana: 'Pas assez de mana', occupied: 'Case occupée', back: 'Cet Og se pose uniquement sur la ligne du fond', hazard: 'Scorpion noir : placement bloqué', side: 'Pas de ton côté', countdown: 'Attends le départ', over: 'Partie terminée', cell: 'Case invalide', banned: 'Créature bannie par ton adversaire' };
   const ABILITY_TEXT = { cooldown: 'Capacité en recharge', mana: 'Pas assez de mana (10)', none: 'Aucune créature de ce type en jeu', disabled: 'Capacités désactivées dans cette partie' };
 
   function createGame(canvas, renderer, net, ui) {
@@ -17,6 +17,8 @@
     let me = 'bottom', opp = 'top';
     let myKey = 'bottom'; // clé de joueur ('bottom', 'top1'…) : mana, capacités et unités posées me sont propres ; `me` reste le camp
     let players = []; // tous les joueurs de la partie : { key, side, profile }
+    let deck = [1, 2, 3, 4, 5, 6, 7]; // mon équipe : créature par case de coût (slot 1..7 = touches A…U)
+    const slotToOg = (slot) => deck[slot - 1] || slot;
     let snaps = []; // { recv, s }
     let clockOffset = null; // temps serveur - performance.now() (s)
     let latest = null;
@@ -32,6 +34,7 @@
       me = msg.side; opp = Sim.other(me); myKey = msg.key || me;
       const g = Sim.geometry(msg.cols || Sim.COLS); COLS = g.COLS; FIELD = g.FIELD; renderer.setGeometry(COLS);
       players = msg.players || [{ key: me, side: me, profile: msg.me }, { key: opp, side: opp, profile: msg.opponent }];
+      deck = (msg.me && msg.me.deck) ? OGSCatalog.DECK_COSTS.map(c => Number(msg.me.deck[c]) || OGSCatalog.DEFAULT_DECK[c]) : [1, 2, 3, 4, 5, 6, 7];
       snaps = []; clockOffset = null; latest = null; pending = []; selection = null; result = null;
       phase = msg.phase === 'draft' ? 'draft' : (msg.countdown > 0 ? 'countdown' : 'playing'); countdown = msg.countdown || 0; goTimer = 0;
       mapId = msg.map || 'lagoon'; features = msg.features || {}; bans = msg.bans || { top: [], bottom: [] }; draftTimer = msg.draftSeconds || 0; myBan = null; oppBan = null; survival = msg.survival || null;
@@ -222,8 +225,8 @@
       const key = ev.key.toLowerCase();
       let handled = true;
       const ogKey = /^Digit[1-7]$/.test(ev.code) ? Number(ev.code.slice(5)) : (KEY_TO_OG[key] && !ev.ctrlKey && !ev.metaKey ? KEY_TO_OG[key] : 0);
-      if (ogKey && ev.shiftKey) useAbility(ogKey);
-      else if (ogKey) select(ogKey);
+      if (ogKey && ev.shiftKey) useAbility(slotToOg(ogKey));
+      else if (ogKey) select(slotToOg(ogKey));
       else if (key === 'arrowleft') moveCursor(-1, 0);
       else if (key === 'arrowright') moveCursor(1, 0);
       else if (key === 'arrowup') moveCursor(0, 1);
@@ -258,7 +261,7 @@
       if (p.y > renderer.H - renderer.BAND + renderer.BEACH) {
         const slot = Math.min(7, Math.max(1, Math.floor(p.x / (renderer.W / 7)) + 1));
         const slotW = renderer.W / 7, inSlotX = p.x - (slot - 1) * slotW;
-        if (features.abilities && phase !== 'draft' && inSlotX > slotW * 0.66 && p.y < renderer.H - renderer.BAND + renderer.BEACH + 80) useAbility(slot); else select(slot);
+        if (features.abilities && phase !== 'draft' && inSlotX > slotW * 0.66 && p.y < renderer.H - renderer.BAND + renderer.BEACH + 80) useAbility(slotToOg(slot)); else select(slotToOg(slot));
         return;
       }
       if (!cell) return;
@@ -288,7 +291,7 @@
       if (phase === 'go') { goTimer -= dt; if (goTimer <= 0) phase = 'playing'; }
       pending = pending.filter(p => now - p.t < 0.6);
       const state = interpolated(now) || { t: 0, hp: { top: RULES.healthMax, bottom: RULES.healthMax }, mana: { top: 0, bottom: 0 }, entities: [], projectiles: [], orbs: [], hazard: null };
-      view.me = me; view.myKey = myKey; view.players = players; view.opponents = players.filter(p => p.side === opp).map(p => p.profile); view.teammates = players.filter(p => p.side === me && p.key !== myKey).map(p => p.profile); view.time = now - startTime; view.state = state; view.phase = phase; view.countdown = countdown; view.goTimer = goTimer; view.result = result;
+      view.me = me; view.myKey = myKey; view.players = players; view.deck = deck; view.opponents = players.filter(p => p.side === opp).map(p => p.profile); view.teammates = players.filter(p => p.side === me && p.key !== myKey).map(p => p.profile); view.time = now - startTime; view.state = state; view.phase = phase; view.countdown = countdown; view.goTimer = goTimer; view.result = result;
       view.selection = selection; view.cursor = (selection || mouseInField) ? cursor : null; view.availableCells = availableCells(); view.pending = pending;
       view.equipped = equipped; view.opponent = profiles.opp; view.meProfile = profiles.me; view.presence = presence;
       view.timeLeft = duration ? Math.max(0, duration - (latest ? latest.t : 0)) : Infinity; view.elapsed = latest ? latest.t : 0; view.mode = mode; view.latency = net.latency;

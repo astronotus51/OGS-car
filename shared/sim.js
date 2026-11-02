@@ -191,6 +191,7 @@
     function availableCells(player, ogId) {
       const og = OGS[ogId];
       if (!og || isBanned(player, ogId)) return [];
+      if (opts.decks && opts.decks[player] && !opts.decks[player].includes(ogId)) return [];
       const cells = [];
       const side = sideOf(player);
       const backRow = side === 'top' ? 0 : ROWS - 1; // ligne du fond, la plus loin de l'adversaire
@@ -217,6 +218,7 @@
       const backRow = side === 'top' ? 0 : ROWS - 1;
       if (og.backOnly && row !== backRow) return { ok: false, reason: 'back' };
       if (isBanned(player, ogId)) return { ok: false, reason: 'banned' };
+      if (opts.decks && opts.decks[player] && !opts.decks[player].includes(ogId)) return { ok: false, reason: 'deck' }; // pas dans son équipe
       const target = cellOccupied(col, row) ? evolvable(player, ogId, col, row) : null;
       if (cellOccupied(col, row) && !target) return { ok: false, reason: 'occupied' };
       if (S.mana[player] < og.cost) return { ok: false, reason: 'mana' };

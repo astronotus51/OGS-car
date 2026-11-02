@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const USER_COLUMNS = `id, username, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily, survival_best, quests, avatar, session_version, transfer_code, transfer_expires, is_admin, is_modo, google_sub, email`;
+const USER_COLUMNS = `id, username, trophies, best_trophies, xp, coins, wins, losses, draws, streak, equipped, skins, created_at, last_daily, survival_best, quests, avatar, session_version, transfer_code, transfer_expires, is_admin, is_modo, google_sub, email, deck, collection, capsules, pity, road`;
 
 function defaultUser(username, extra) {
   return Object.assign({
@@ -14,6 +14,7 @@ function defaultUser(username, extra) {
     trophies: 0, best_trophies: 0, xp: 0, coins: 50, wins: 0, losses: 0, draws: 0, streak: 0,
     equipped: {}, skins: [], created_at: new Date().toISOString(), last_daily: null, survival_best: 0, quests: {},
     avatar: null, session_version: 0, transfer_code: null, transfer_expires: null, is_admin: false, is_modo: false, google_sub: null, email: null,
+    deck: {}, collection: {}, capsules: 0, pity: {}, road: [],
   }, extra || {});
 }
 

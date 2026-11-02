@@ -73,7 +73,9 @@ class Room {
     const bans = { top: [], bottom: [] };
     // Le bannissement choisi par un joueur s'applique à son adversaire.
     for (const p of this.players) if (p.ban && !bans[Sim.other(p.side)].includes(p.ban)) bans[Sim.other(p.side)].push(p.ban);
-    this.game = Sim.createGame({ seed: this.seed, hazard: false, duration: this.duration, features: this.features, bans, cols: this.cols, players: this.keys });
+    const decks = {};
+    for (const p of this.players) decks[p.key] = p.profile && p.profile.deck ? Catalog.DECK_COSTS.map(c => Number(p.profile.deck[c]) || Catalog.DEFAULT_DECK[c]) : Object.values(Catalog.DEFAULT_DECK);
+    this.game = Sim.createGame({ seed: this.seed, hazard: false, duration: this.duration, features: this.features, bans, cols: this.cols, players: this.keys, decks });
     for (const p of this.players) if (p.bot) p.ai = AI.createAI(this.game, p.key, p.bot);
     if (this.survival) this.waveRng = Sim.createRng(this.seed ^ 0x5151);
   }

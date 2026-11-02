@@ -75,6 +75,14 @@ Mise en place de Google (une fois, ~5 min) :
 - Protections serveur : en-têtes helmet (CSP stricte, pas de framing), limite de requêtes (anti-abus), vérification d'origine sur l'API et le WebSocket, validation des entrées, avatars vérifiés (format, taille ≤ 64 Ko).
 - **HTTPS** : il reste à mettre un domaine + `certbot` (voir le déploiement) pour chiffrer le trafic et marquer le cookie `Secure`.
 
+## Collection, équipe, capsules, route des trophées
+
+Catalogue de créatures dans `shared/catalog.js` (`CREATURES`, raretés, `DECK_COSTS`, `DEFAULT_DECK`) : les 7 de base sont acquises, 10 nouveaux types (Pik, Bulle, Zazou, Boum, Rafale, Tiktak, Fantôme, Glu, Sirène, Kraken) se collectionnent (`playable:false` tant qu'ils ne sont pas dans la simulation). Écran **Collection** : équipe (une créature par coût, envoyée au serveur via `POST /api/deck`, validée dans `Sim.createGame({ decks })`), cartes avec étoiles. **Capsules** : une par victoire classée/duo/trio (5 max), `POST /api/capsule/open` → 2-3 cartes (poids par rareté, garantie épique toutes les 12 cartes, légendaire toutes les 40), pièces, 30 % de chance d'un skin. **Route des trophées** : `TROPHY_ROAD` (paliers de 50 en 50 jusqu'à 2500 : pièces, capsules, skins, créatures), `POST /api/road/claim`. Colonnes `deck, collection, capsules, pity, road`.
+
+## Interface
+
+Direction artistique « abysses gravées » (`public/css/style.css`) : panneaux à coins biseautés (`clip-path`), double filet, typographie Bungee + Chakra Petch, fond canvas avec rais de lumière, plancton et bulles.
+
 ## Modes et équipes
 
 Sélecteur de modes dans l'accueil : **Classée 1v1**, **Duo 2v2**, **Trio 3v3** (classés, arènes de 9 / 13 / 17 colonnes), Entraînement (format 1v1 à 3v3 contre des bots), Survie, Amical (code, format au choix, l'hôte lance avec des bots aux places vides). En équipe : mana individuelle, PV de base partagés, capacités pour toute l'équipe, abandon effectif quand tous les coéquipiers ont abandonné, file d'attente par format avec complément en bots après `BOT_FILL_SECONDS`. Côté code : `Sim.createGame({ cols, players })` avec des clés de joueur (`top`, `top1`, `bottom`…), `Room({ teamSize })`, `Matchmaker.join(client, profile, team)`.

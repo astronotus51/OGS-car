@@ -30,6 +30,12 @@ ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users (google_sub) WHERE google_sub IS NOT NULL;
+-- Collection de créatures, équipe (deck), capsules, garanties de tirage, route des trophées réclamée.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deck JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS collection JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS capsules INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pity JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS road JSONB NOT NULL DEFAULT '[]'::jsonb;
 CREATE UNIQUE INDEX IF NOT EXISTS users_transfer_code ON users (transfer_code) WHERE transfer_code IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower ON users (lower(username));
 CREATE INDEX IF NOT EXISTS users_trophies ON users (trophies DESC, wins DESC);

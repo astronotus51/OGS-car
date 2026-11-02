@@ -6,6 +6,25 @@ function isAdmin(user) { return !!(user && user.is_admin); }
 function isModo(user) { return !!(user && user.is_modo); }
 function allSkinIds() { return Catalog.SKINS.filter(s => !s.hidden).map(s => s.id); }
 
+// Collection : exemplaires par créature (les 7 de base toujours présentes ; admins et modos : tout).
+function collectionOf(user) {
+  const col = Object.assign({}, Catalog.BASE_COLLECTION, user.collection || {});
+  if (isAdmin(user) || isModo(user)) for (const c of Catalog.CREATURES) col[c.id] = Math.max(col[c.id] || 0, 1);
+  return col;
+}
+// Équipe : une créature par coût ; une entrée invalide (non possédée, non jouable, mauvais coût) retombe sur la créature de base.
+function deckOf(user) {
+  const col = collectionOf(user);
+  const deck = {};
+  for (const cost of Catalog.DECK_COSTS) {
+    const id = Number((user.deck || {})[cost]);
+    const c = Catalog.CREATURE_BY_ID[id];
+    deck[cost] = c && c.cost === cost && c.playable && col[c.id] ? c.id : Catalog.DEFAULT_DECK[cost];
+  }
+  return deck;
+}
+function deckList(user) { return Catalog.DECK_COSTS.map(cost => deckOf(user)[cost]); }
+
 function ownedSkins(user) {
   if (isAdmin(user) || isModo(user)) return Catalog.SKINS.filter(s => !s.hidden).map(s => s.id);
   const owned = new Set(Array.isArray(user.skins) ? user.skins : []);
@@ -51,6 +70,10 @@ function publicProfile(user, extra) {
     modo: isModo(user),
     google: !!user.google_sub,
     guest: !user.google_sub,
+    deck: deckOf(user),
+    collection: collectionOf(user),
+    capsules: user.capsules || 0,
+    road: Array.isArray(user.road) ? user.road : [],
     email: user.email || null,
     createdAt: user.created_at,
   }, extra || {});
@@ -103,7 +126,10 @@ function applyResult(user, opponentProfile, result, mode, extra) {
   }
   if (unlocked.length) patch.skins = [...owned];
   patch.quests = Catalog.advanceQuests(questsOf(user), { result, stats: ex.stats || {}, mode });
+  // Capsule de victoire (parties classées, duo, trio) : une par victoire, 5 en stock maximum.
+  rewards.capsule = 0;
+  if (result === 'win' && mode === 'ranked' && (user.capsules || 0) < Catalog.CAPSULE.max) { patch.capsules = (user.capsules || 0) + 1; rewards.capsule = 1; }
   return { patch, rewards, levelUp: after > before ? after : null, unlocked };
 }
 
-module.exports = { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView, isAdmin, isModo, allSkinIds };
+module.exports = { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView, isAdmin, isModo, allSkinIds, collectionOf, deckOf, deckList };

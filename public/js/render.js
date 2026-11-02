@@ -173,7 +173,7 @@
         for (const c of view.availableCells) {
           const r = cellRect(c.col, c.row);
           ctx.fillStyle = c.evolve ? 'rgba(253,224,71,0.18)' : 'rgba(255,255,255,0.08)'; ctx.fillRect(r.x + 4, r.y + 4, r.w - 8, r.h - 8);
-          if (c.evolve) { ctx.fillStyle = '#fde68a'; ctx.font = 'bold 26px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⬆ NIV.', r.x + r.w / 2, r.y + 30); }
+          if (c.evolve) { ctx.fillStyle = '#fde68a'; ctx.font = 'bold 26px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⬆ NIV.', r.x + r.w / 2, r.y + 30); }
           ctx.strokeStyle = c.evolve ? '#fde68a' : OGS[sel].color; ctx.lineWidth = 3; ctx.globalAlpha = 0.7;
           const L = 16;
           ctx.beginPath();
@@ -233,7 +233,7 @@
         ctx.stroke();
         ctx.restore();
         if (mine) {
-          ctx.save(); ctx.font = 'bold 26px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(236,253,245,0.9)'; ctx.globalAlpha = fade;
+          ctx.save(); ctx.font = 'bold 26px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(236,253,245,0.9)'; ctx.globalAlpha = fade;
           ctx.fillText('+10', x, y - RULES.orbRadius - 12); ctx.restore();
         }
       }
@@ -299,7 +299,7 @@
       const lvlScale = 1 + 0.1 * (lvl - 1);
       if (e.boosted) { ctx.save(); ctx.strokeStyle = 'rgba(254,240,138,0.8)'; ctx.lineWidth = 4; for (let i = 0; i < 3; i += 1) { const off = ((t * 4 + i * 0.33) % 1) * size * 0.5; ctx.beginPath(); ctx.moveTo(x - size * 0.5 + i * size * 0.5, y + size * 0.3 + off); ctx.lineTo(x - size * 0.5 + i * size * 0.5, y + size * 0.3 + off + 18); ctx.stroke(); } ctx.restore(); }
       Creatures.draw(ctx, e.ogId, skin, x + dx, y, size * lvlScale, t, state, { rot: lean, scaleX: sx, scaleY: sy, flash });
-      if (e.frozen) { ctx.save(); ctx.globalAlpha = 0.55; ctx.fillStyle = '#bae6fd'; ctx.strokeStyle = '#7dd3fc'; ctx.lineWidth = 4; roundRect(x - size * 0.42, y - size * 0.46, size * 0.84, size * 0.9, 14); ctx.fill(); ctx.stroke(); ctx.globalAlpha = 0.9; ctx.fillStyle = '#fff'; ctx.font = 'bold 30px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('❄', x, y + 10); ctx.restore(); }
+      if (e.frozen) { ctx.save(); ctx.globalAlpha = 0.55; ctx.fillStyle = '#bae6fd'; ctx.strokeStyle = '#7dd3fc'; ctx.lineWidth = 4; roundRect(x - size * 0.42, y - size * 0.46, size * 0.84, size * 0.9, 14); ctx.fill(); ctx.stroke(); ctx.globalAlpha = 0.9; ctx.fillStyle = '#fff'; ctx.font = 'bold 30px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('❄', x, y + 10); ctx.restore(); }
       if (lvl > 1) { ctx.save(); ctx.fillStyle = '#fde68a'; ctx.strokeStyle = '#0b1021'; ctx.lineWidth = 3; for (let i = 0; i < lvl - 1; i += 1) { const sx2 = x - (lvl - 2) * 12 + i * 24, sy2 = y - size * 0.6; ctx.beginPath(); for (let k = 0; k < 10; k += 1) { const rr2 = k % 2 ? 5 : 11, a = -Math.PI / 2 + k * Math.PI / 5; ctx.lineTo(sx2 + Math.cos(a) * rr2, sy2 + Math.sin(a) * rr2); } ctx.closePath(); ctx.fill(); ctx.stroke(); } ctx.restore(); }
 
       // Points de vie.
@@ -360,7 +360,7 @@
       }
       for (const f of floaters) {
         const k = f.t / 1.1;
-        ctx.save(); ctx.globalAlpha = 1 - k * k; ctx.font = `bold ${f.size}px Fredoka, sans-serif`; ctx.textAlign = 'center';
+        ctx.save(); ctx.globalAlpha = 1 - k * k; ctx.font = `bold ${f.size}px "Chakra Petch", sans-serif`; ctx.textAlign = 'center';
         ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.fillStyle = f.color;
         const y = vy(f.y) - k * 90;
         ctx.strokeText(f.text, vx(f.x), y); ctx.fillText(f.text, vx(f.x), y); ctx.restore();
@@ -384,12 +384,12 @@
       ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = '#fff';
       for (let i = 0; i < 6; i += 1) { const x = ((view.time * 120 + i * 300) % (W + 200)) - 100; ctx.fillRect(x, bandY + 10, 30, BAND - BEACH - 20); }
       ctx.restore();
-      ctx.font = 'bold 30px Fredoka, sans-serif'; ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = 'bold 30px "Chakra Petch", sans-serif'; ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.fillText(`${Math.floor(S.mana[view.myKey])} / ${RULES.manaMax}`, W - 14, H - 14);
 
       const slotW = W / 7, slotSize = 190;
       for (let i = 0; i < 7; i += 1) {
-        const ogId = i + 1, og = OGS[ogId];
+        const ogId = (view.deck && view.deck[i]) || i + 1, og = OGS[ogId] || OGS[i + 1];
         const cx = i * slotW + slotW / 2, cy = bandY + (BAND - BEACH) / 2;
         const affordable = S.mana[view.myKey] >= og.cost;
         const selected = view.selection === ogId;
@@ -412,13 +412,13 @@
           const bx2 = cx + slotSize / 2 - 30, by2 = cy - slotSize / 2 + 30 + lift;
           ctx.fillStyle = cd ? 'rgba(15,23,42,0.85)' : '#fde047'; ctx.beginPath(); ctx.arc(bx2, by2, 26, 0, Math.PI * 2); ctx.fill();
           ctx.strokeStyle = '#0b1021'; ctx.lineWidth = 3; ctx.stroke();
-          if (cd) { ctx.strokeStyle = '#fde047'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(bx2, by2, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - cd / Sim.ABILITY_COOLDOWN)); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(Math.ceil(cd)), bx2, by2 + 7); }
+          if (cd) { ctx.strokeStyle = '#fde047'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(bx2, by2, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - cd / Sim.ABILITY_COOLDOWN)); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 20px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(Math.ceil(cd)), bx2, by2 + 7); }
           else { ctx.fillStyle = '#0b1021'; ctx.beginPath(); ctx.moveTo(bx2 + 4, by2 - 16); ctx.lineTo(bx2 - 9, by2 + 3); ctx.lineTo(bx2 - 1, by2 + 3); ctx.lineTo(bx2 - 5, by2 + 16); ctx.lineTo(bx2 + 9, by2 - 3); ctx.lineTo(bx2 + 1, by2 - 3); ctx.closePath(); ctx.fill(); }
         }
         ctx.fillStyle = '#0b1021'; roundRect(cx - slotSize / 2 + 6, cy - slotSize / 2 + 6 + lift, 44, 40, 8); ctx.fill();
-        ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 26px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(KEY_LABELS[i], cx - slotSize / 2 + 28, cy - slotSize / 2 + 35 + lift);
+        ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 26px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.fillText(KEY_LABELS[i], cx - slotSize / 2 + 28, cy - slotSize / 2 + 35 + lift);
         ctx.fillStyle = affordable ? '#14532d' : '#7f1d1d'; roundRect(cx + slotSize / 2 - 70, cy + slotSize / 2 - 46 + lift, 64, 40, 8); ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 26px Fredoka, sans-serif'; ctx.fillText(String(og.cost), cx + slotSize / 2 - 38, cy + slotSize / 2 - 17 + lift);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 26px "Chakra Petch", sans-serif'; ctx.fillText(String(og.cost), cx + slotSize / 2 - 38, cy + slotSize / 2 - 17 + lift);
         ctx.restore();
       }
 
@@ -434,29 +434,29 @@
       const g2 = ctx.createLinearGradient(0, mbY, 0, mbY + mbH); g2.addColorStop(0, '#fca5a5'); g2.addColorStop(1, '#dc2626');
       ctx.fillStyle = g2;
       if (oppRatio > 0.01) { roundRect(16 + (W - 32) * (1 - oppRatio), mbY, (W - 32) * oppRatio, mbH, 10); ctx.fill(); }
-      ctx.font = 'bold 24px Fredoka, sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
+      ctx.font = 'bold 24px "Chakra Petch", sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
       ctx.fillText(`Mana adverse ${Math.floor(oppMana)} / ${RULES.manaMax}${oppKeys.length > 1 ? ' (moyenne)' : ''}`, 30, mbY + 23);
       // Nom de l'adversaire.
       ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
-      ctx.font = 'bold 48px Fredoka, sans-serif';
+      ctx.font = 'bold 48px "Chakra Petch", sans-serif';
       const oppName = view.opponents && view.opponents.length > 1 ? view.opponents.map(o => o.username).join(' & ') : (view.opponent ? view.opponent.username : 'Adversaire');
       ctx.fillText(oppName, W / 2, 86);
-      ctx.font = '28px Fredoka, sans-serif'; ctx.fillStyle = '#fde68a';
+      ctx.font = '28px "Chakra Petch", sans-serif'; ctx.fillStyle = '#fde68a';
       const oppLine = view.opponent ? `🏆 ${view.opponent.trophies}  ·  ${view.opponent.rank || ''}${view.opponent.bot ? '  ·  IA' : ''}` : '';
       ctx.fillText(oppLine, W / 2, 130);
-      if (view.presence && view.presence[opp] === false) { ctx.fillStyle = '#fca5a5'; ctx.font = 'bold 28px Fredoka, sans-serif'; ctx.fillText('Adversaire déconnecté… (forfait dans 20 s)', W / 2, 172); }
+      if (view.presence && view.presence[opp] === false) { ctx.fillStyle = '#fca5a5'; ctx.font = 'bold 28px "Chakra Petch", sans-serif'; ctx.fillText('Adversaire déconnecté… (forfait dans 20 s)', W / 2, 172); }
       // Timer (en haut à gauche) et ping.
       const unlimited = !isFinite(view.timeLeft);
       const left = unlimited ? Math.floor(view.elapsed || 0) : Math.max(0, Math.ceil(view.timeLeft));
       const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; roundRect(24, 24, 230, 120, 18); ctx.fill();
       ctx.fillStyle = !unlimited && left <= 20 && Math.sin(view.time * 8) > 0 ? '#fca5a5' : '#fef3c7';
-      ctx.font = 'bold 54px "Press Start 2P", monospace'; ctx.textAlign = 'center';
+      ctx.font = 'bold 54px Bungee, sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(`${mm}:${ss}`, 139, 112);
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; roundRect(W - 254, 24, 230, 120, 18); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 30px Fredoka, sans-serif';
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 30px "Chakra Petch", sans-serif';
       ctx.fillText(view.mode === 'ranked' ? 'CLASSÉE' : view.mode === 'duo' ? 'DUO 2v2' : view.mode === 'trio' ? 'TRIO 3v3' : view.mode === 'bot' ? 'ENTRAÎNEMENT' : view.mode === 'survival' ? 'SURVIE' : 'AMICALE', W - 139, 74);
-      ctx.font = '26px Fredoka, sans-serif'; ctx.fillStyle = '#cbd5e1';
+      ctx.font = '26px "Chakra Petch", sans-serif'; ctx.fillStyle = '#cbd5e1';
       ctx.fillText(`${Math.round(view.latency || 0)} ms`, W - 139, 118);
 
       // Barres de vie (à droite du terrain) + timer.
@@ -471,7 +471,7 @@
         const fy = b.label === 'MOI' ? b.y + barH - fillH : b.y; // ma barre se vide par le haut, la sienne par le bas
         ctx.fillRect(bx, fy, barW, fillH);
         if (b.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${b.flash * 0.8})`; ctx.fillRect(bx, b.y, barW, barH); }
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 30px Fredoka, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 30px "Chakra Petch", sans-serif'; ctx.textAlign = 'center';
         ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         const ty = b.label === 'MOI' ? b.y + barH + 36 : b.y - 14;
         ctx.strokeText(String(b.hp), bx + barW / 2, ty); ctx.fillText(String(b.hp), bx + barW / 2, ty);
@@ -486,31 +486,31 @@
         for (const [side, yy, color] of [[opp, py, '#fca5a5'], [me, py + 36, '#86efac']]) {
           ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(px, yy, pw, ph, 8); ctx.fill();
           ctx.fillStyle = color; roundRect(px, yy, pw * Math.min(1, (pts[side] || 0) / Sim.KING_TARGET), ph, 8); ctx.fill();
-          ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Fredoka, sans-serif'; ctx.textAlign = 'left'; ctx.fillText(`${side === me ? 'Moi' : 'Adv.'} ${Math.round(pts[side] || 0)} / ${Sim.KING_TARGET}`, px + 10, yy + 19);
+          ctx.fillStyle = '#fff'; ctx.font = 'bold 20px "Chakra Petch", sans-serif'; ctx.textAlign = 'left'; ctx.fillText(`${side === me ? 'Moi' : 'Adv.'} ${Math.round(pts[side] || 0)} / ${Sim.KING_TARGET}`, px + 10, yy + 19);
         }
       }
       // Mort subite.
       if (S.overtime) {
         ctx.save(); ctx.globalAlpha = 0.7 + 0.3 * Math.sin(view.time * 8);
-        ctx.font = 'bold 44px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#fca5a5'; ctx.lineWidth = 8; ctx.strokeStyle = '#0b1021';
+        ctx.font = 'bold 44px Bungee, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fca5a5'; ctx.lineWidth = 8; ctx.strokeStyle = '#0b1021';
         ctx.strokeText('MORT SUBITE', W / 2, FIELD_Y + FIELD.h / 2 - 30); ctx.fillText('MORT SUBITE', W / 2, FIELD_Y + FIELD.h / 2 - 30);
-        ctx.font = '26px Fredoka, sans-serif'; ctx.fillStyle = '#fff'; ctx.lineWidth = 4; ctx.strokeText('mana ×3 · premier dégât = défaite', W / 2, FIELD_Y + FIELD.h / 2 + 16); ctx.fillText('mana ×3 · premier dégât = défaite', W / 2, FIELD_Y + FIELD.h / 2 + 16);
+        ctx.font = '26px "Chakra Petch", sans-serif'; ctx.fillStyle = '#fff'; ctx.lineWidth = 4; ctx.strokeText('mana ×3 · premier dégât = défaite', W / 2, FIELD_Y + FIELD.h / 2 + 16); ctx.fillText('mana ×3 · premier dégât = défaite', W / 2, FIELD_Y + FIELD.h / 2 + 16);
         ctx.restore();
       }
       // Survie : vague et score.
       if (view.survival) {
         ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(W / 2 - 240, FIELD_Y + 14, 480, 64, 14); ctx.fill();
-        ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 30px Fredoka, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 30px "Chakra Petch", sans-serif'; ctx.textAlign = 'center';
         ctx.fillText(`Vague ${view.survival.wave}  ·  Score ${view.survival.score}  ·  prochaine dans ${view.survival.next || 0} s`, W / 2, FIELD_Y + 56);
-        if (waveBanner) { ctx.save(); ctx.globalAlpha = Math.min(1, waveBanner.t); ctx.font = 'bold 80px "Press Start 2P", monospace'; ctx.fillStyle = '#fca5a5'; ctx.lineWidth = 10; ctx.strokeStyle = '#0b1021'; ctx.strokeText(`VAGUE ${waveBanner.wave}`, W / 2, FIELD_Y + FIELD.h * 0.35); ctx.fillText(`VAGUE ${waveBanner.wave}`, W / 2, FIELD_Y + FIELD.h * 0.35); ctx.restore(); }
+        if (waveBanner) { ctx.save(); ctx.globalAlpha = Math.min(1, waveBanner.t); ctx.font = 'bold 80px Bungee, sans-serif'; ctx.fillStyle = '#fca5a5'; ctx.lineWidth = 10; ctx.strokeStyle = '#0b1021'; ctx.strokeText(`VAGUE ${waveBanner.wave}`, W / 2, FIELD_Y + FIELD.h * 0.35); ctx.fillText(`VAGUE ${waveBanner.wave}`, W / 2, FIELD_Y + FIELD.h * 0.35); ctx.restore(); }
       }
       // Alerte scorpion.
       if (hazardWarn > 0 || (S.hazard && S.hazard.phase !== 'dash')) {
         ctx.save(); ctx.globalAlpha = 0.6 + 0.4 * Math.sin(view.time * 12);
-        ctx.font = 'bold 52px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#111827';
+        ctx.font = 'bold 52px Bungee, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#111827';
         ctx.lineWidth = 8; ctx.strokeStyle = '#fde047';
         ctx.strokeText('SCORPION NOIR', W / 2, midY - 200); ctx.fillText('SCORPION NOIR', W / 2, midY - 200);
-        ctx.font = '26px Fredoka, sans-serif'; ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 4;
+        ctx.font = '26px "Chakra Petch", sans-serif'; ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 4;
         ctx.strokeText('Placement bloqué !', W / 2, midY - 150); ctx.fillText('Placement bloqué !', W / 2, midY - 150);
         ctx.restore();
       }
@@ -521,7 +521,7 @@
         const x = mineE ? 200 : W - 200, y = mineE ? H - BAND - 60 - Math.min(1, e.t * 3) * 30 : FIELD_Y + 70 + Math.min(1, e.t * 3) * 30;
         ctx.save(); ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
         ctx.fillStyle = '#fff'; roundRect(x - 90, y - 44, 180, 88, 24); ctx.fill();
-        ctx.fillStyle = '#0b1021'; ctx.font = 'bold 52px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(EMOTE_TEXT[e.id] || e.id, x, y + 18); ctx.restore();
+        ctx.fillStyle = '#0b1021'; ctx.font = 'bold 52px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.fillText(EMOTE_TEXT[e.id] || e.id, x, y + 18); ctx.restore();
       }
     }
 
@@ -532,32 +532,32 @@
         const frac = view.countdown - Math.floor(view.countdown);
         const s = 1 + (1 - frac) * 0.6;
         ctx.translate(W / 2, FIELD_Y + FIELD.h / 2); ctx.scale(s, s);
-        ctx.font = 'bold 220px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#fef3c7'; ctx.lineWidth = 14; ctx.strokeStyle = '#1e293b';
+        ctx.font = 'bold 220px Bungee, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fef3c7'; ctx.lineWidth = 14; ctx.strokeStyle = '#1e293b';
         ctx.strokeText(n > 0 ? String(n) : 'GO', 0, 80); ctx.fillText(n > 0 ? String(n) : 'GO', 0, 80);
         ctx.restore();
-        ctx.font = 'bold 40px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+        ctx.font = 'bold 40px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
         ctx.fillText(`${view.opponent ? view.opponent.username : '?'}  contre  ${view.meProfile ? view.meProfile.username : 'toi'}`, W / 2, FIELD_Y + FIELD.h / 2 + 220);
       } else if (view.phase === 'go' && view.goTimer > 0) {
         ctx.save(); ctx.globalAlpha = Math.min(1, view.goTimer * 2);
-        ctx.font = 'bold 200px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#4ade80'; ctx.lineWidth = 14; ctx.strokeStyle = '#14532d';
+        ctx.font = 'bold 200px Bungee, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#4ade80'; ctx.lineWidth = 14; ctx.strokeStyle = '#14532d';
         ctx.strokeText('GO!', W / 2, FIELD_Y + FIELD.h / 2 + 70); ctx.fillText('GO!', W / 2, FIELD_Y + FIELD.h / 2 + 70); ctx.restore();
       } else if (view.phase === 'draft' && view.draft) {
         ctx.save(); ctx.fillStyle = 'rgba(5,8,20,0.62)'; ctx.fillRect(0, FIELD_Y, W, FIELD.h);
-        ctx.textAlign = 'center'; ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 64px "Press Start 2P", monospace'; ctx.lineWidth = 10; ctx.strokeStyle = '#0b1021';
+        ctx.textAlign = 'center'; ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 64px Bungee, sans-serif'; ctx.lineWidth = 10; ctx.strokeStyle = '#0b1021';
         ctx.strokeText('DRAFT', W / 2, FIELD_Y + 150); ctx.fillText('DRAFT', W / 2, FIELD_Y + 150);
-        ctx.font = '34px Fredoka, sans-serif'; ctx.fillStyle = '#fff';
+        ctx.font = '34px "Chakra Petch", sans-serif'; ctx.fillStyle = '#fff';
         ctx.fillText(view.draft.myBan ? `Tu bannis ${OGSCatalog.OG_NAMES[view.draft.myBan]} pour ton adversaire` : 'Choisis une créature à BANNIR chez ton adversaire (touche ou clic)', W / 2, FIELD_Y + 230);
         ctx.fillText(view.draft.oppBan ? `L’adversaire a choisi son bannissement` : 'L’adversaire réfléchit…', W / 2, FIELD_Y + 280);
-        ctx.font = 'bold 120px "Press Start 2P", monospace'; ctx.fillStyle = '#fde68a'; ctx.strokeText(String(Math.ceil(view.draft.timer)), W / 2, FIELD_Y + FIELD.h / 2 + 120); ctx.fillText(String(Math.ceil(view.draft.timer)), W / 2, FIELD_Y + FIELD.h / 2 + 120);
+        ctx.font = 'bold 120px Bungee, sans-serif'; ctx.fillStyle = '#fde68a'; ctx.strokeText(String(Math.ceil(view.draft.timer)), W / 2, FIELD_Y + FIELD.h / 2 + 120); ctx.fillText(String(Math.ceil(view.draft.timer)), W / 2, FIELD_Y + FIELD.h / 2 + 120);
         // Les 7 créatures en ligne.
-        for (let i = 0; i < 7; i += 1) { const og = i + 1, x = W / 8 * (i + 1), y = FIELD_Y + FIELD.h * 0.72; Creatures.draw(ctx, og, (view.equipped[view.myKey] || {})[og], x, y, 120, view.time, { moving: false, phase: i }, { alpha: view.draft.myBan === og ? 0.3 : 1 }); if (view.draft.myBan === og) { ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(x - 50, y - 50); ctx.lineTo(x + 50, y + 50); ctx.moveTo(x + 50, y - 50); ctx.lineTo(x - 50, y + 50); ctx.stroke(); } ctx.fillStyle = '#fff'; ctx.font = 'bold 24px Fredoka, sans-serif'; ctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${OGSCatalog.OG_NAMES[og]}`, x, y + 95); }
+        for (let i = 0; i < 7; i += 1) { const og = i + 1, x = W / 8 * (i + 1), y = FIELD_Y + FIELD.h * 0.72; Creatures.draw(ctx, og, (view.equipped[view.myKey] || {})[og], x, y, 120, view.time, { moving: false, phase: i }, { alpha: view.draft.myBan === og ? 0.3 : 1 }); if (view.draft.myBan === og) { ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(x - 50, y - 50); ctx.lineTo(x + 50, y + 50); ctx.moveTo(x + 50, y - 50); ctx.lineTo(x - 50, y + 50); ctx.stroke(); } ctx.fillStyle = '#fff'; ctx.font = 'bold 24px "Chakra Petch", sans-serif'; ctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${OGSCatalog.OG_NAMES[og]}`, x, y + 95); }
         ctx.restore();
       } else if (view.phase === 'over' && view.result) {
         ctx.save(); ctx.fillStyle = 'rgba(5,8,20,0.5)'; ctx.fillRect(0, FIELD_Y, W, FIELD.h);
         const txt = view.result === 'win' ? 'VICTOIRE' : view.result === 'loss' ? 'DÉFAITE' : view.result === 'survival' ? 'FIN' : 'ÉGALITÉ';
-        ctx.font = 'bold 120px "Press Start 2P", monospace'; ctx.textAlign = 'center';
+        ctx.font = 'bold 120px Bungee, sans-serif'; ctx.textAlign = 'center';
         ctx.fillStyle = view.result === 'win' ? '#4ade80' : view.result === 'loss' ? '#f87171' : '#fde68a'; ctx.lineWidth = 14; ctx.strokeStyle = '#0b1021';
-        if (view.result === 'survival' && view.survival) { ctx.font = 'bold 40px Fredoka, sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(`Vague ${view.survival.wave} · score ${view.survival.score}`, W / 2, FIELD_Y + FIELD.h / 2 + 120); ctx.font = 'bold 120px "Press Start 2P", monospace'; ctx.fillStyle = '#fde68a'; }
+        if (view.result === 'survival' && view.survival) { ctx.font = 'bold 40px "Chakra Petch", sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(`Vague ${view.survival.wave} · score ${view.survival.score}`, W / 2, FIELD_Y + FIELD.h / 2 + 120); ctx.font = 'bold 120px Bungee, sans-serif'; ctx.fillStyle = '#fde68a'; }
         ctx.strokeText(txt, W / 2, FIELD_Y + FIELD.h / 2 + 40); ctx.fillText(txt, W / 2, FIELD_Y + FIELD.h / 2 + 40); ctx.restore();
       }
     }
@@ -585,7 +585,7 @@
         if (fog && e.player !== me && ((me === 'top' && e.y >= midY) || (me === 'bottom' && e.y < midY))) continue;
         (OGS[e.ogId].air ? air : ground).push(e);
       }
-      if (fog) { ctx.save(); ctx.fillStyle = 'rgba(5,8,20,0.55)'; ctx.fillRect(0, FIELD_Y, W, FIELD.h / 2); ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = 'bold 30px Fredoka, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('BROUILLARD DE GUERRE', W / 2, FIELD_Y + FIELD.h / 4); ctx.restore(); }
+      if (fog) { ctx.save(); ctx.fillStyle = 'rgba(5,8,20,0.55)'; ctx.fillRect(0, FIELD_Y, W, FIELD.h / 2); ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = 'bold 30px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('BROUILLARD DE GUERRE', W / 2, FIELD_Y + FIELD.h / 4); ctx.restore(); }
       ground.sort((a, b) => vy(a.y) - vy(b.y));
       for (const e of ground) drawEntity(e, view, now);
       drawProjectiles(view);

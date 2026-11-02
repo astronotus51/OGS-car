@@ -16,7 +16,7 @@ const Catalog = require('../shared/catalog.js');
 const Sim = require('../shared/sim.js');
 const Features = require('../shared/features.js');
 const { createStore } = require('./db.js');
-const { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView, isAdmin, allSkinIds } = require('./profile.js');
+const { publicProfile, applyResult, ownedSkins, equippedOf, questsOf, questsView, isAdmin, allSkinIds, collectionOf, deckList } = require('./profile.js');
 const { Room } = require('./room.js');
 const { Matchmaker } = require('./matchmaking.js');
 
@@ -353,6 +353,60 @@ app.post('/api/skins/equip', authMiddleware, accountOnly, wrap(async (req, res) 
   const equipped = equippedOf(req.user); equipped[skin.ogId] = skin.id;
   const user = await db.updateUser(req.user.id, { equipped });
   res.json({ profile: refreshLiveProfile(user) });
+}));
+
+// ---------- Collection, équipe, capsules, route des trophées ----------
+// Équipe : { "10": id, "20": id, … } — une créature possédée et jouable par coût.
+app.post('/api/deck', authMiddleware, wrap(async (req, res) => {
+  const col = collectionOf(req.user);
+  const incoming = (req.body && req.body.deck) || {};
+  const deck = {};
+  for (const cost of Catalog.DECK_COSTS) {
+    const id = Number(incoming[cost]);
+    const c = Catalog.CREATURE_BY_ID[id];
+    if (!c || c.cost !== cost) return res.status(400).json({ error: `Case ${cost} : créature invalide` });
+    if (!col[c.id]) return res.status(403).json({ error: `${c.name} n’est pas dans ta collection` });
+    if (!c.playable) return res.status(400).json({ error: `${c.name} n’est pas encore jouable` });
+    deck[cost] = c.id;
+  }
+  const user = await db.updateUser(req.user.id, { deck });
+  res.json({ profile: refreshLiveProfile(user) });
+}));
+// Ouvre une capsule : cartes (créatures) par rareté avec garanties, pièces, parfois un skin.
+app.post('/api/capsule/open', authMiddleware, accountOnly, wrap(async (req, res) => {
+  if ((req.user.capsules || 0) < 1) return res.status(400).json({ error: 'Aucune capsule à ouvrir' });
+  const collection = collectionOf(req.user);
+  const owned = ownedSkins(req.user);
+  const rng = () => crypto.randomInt(0, 1 << 30) / (1 << 30);
+  const result = Catalog.openCapsule(rng, collection, owned, req.user.pity || {});
+  const col = Object.assign({}, req.user.collection || {});
+  for (const card of result.cards) { card.isNew = !collection[card.id] && !col[card.id]; col[card.id] = (col[card.id] || collection[card.id] || 0) + card.copies; card.total = col[card.id]; }
+  const patch = { capsules: (req.user.capsules || 0) - 1, collection: col, coins: (req.user.coins || 0) + result.coins, pity: result.pity };
+  if (result.skin) patch.skins = [...owned, result.skin];
+  const user = await db.updateUser(req.user.id, patch);
+  res.json({ profile: refreshLiveProfile(user), opened: result });
+}));
+// Route des trophées : réclame un palier atteint (meilleurs trophées).
+app.post('/api/road/claim', authMiddleware, accountOnly, wrap(async (req, res) => {
+  const t = Number(req.body && req.body.trophies);
+  const step = Catalog.TROPHY_ROAD.find(r => r.trophies === t);
+  if (!step) return res.status(404).json({ error: 'Palier inconnu' });
+  const claimed = Array.isArray(req.user.road) ? req.user.road : [];
+  if (claimed.includes(t)) return res.status(400).json({ error: 'Déjà réclamé' });
+  if ((req.user.best_trophies || 0) < t) return res.status(403).json({ error: `Il te faut ${t} trophées` });
+  const patch = { road: [...claimed, t] };
+  const r = step.reward; let got = { type: r.type };
+  if (r.type === 'coins') { patch.coins = (req.user.coins || 0) + r.count; got.count = r.count; }
+  else if (r.type === 'capsule') { patch.capsules = Math.min(Catalog.CAPSULE.max + 2, (req.user.capsules || 0) + r.count); got.count = r.count; }
+  else if (r.type === 'creature') { const col = Object.assign({}, req.user.collection || {}); col[r.id] = (col[r.id] || 0) + 1; patch.collection = col; got.id = r.id; got.name = Catalog.CREATURE_BY_ID[r.id].name; }
+  else if (r.type === 'skin') {
+    const owned = ownedSkins(req.user);
+    const candidates = Catalog.SKINS.filter(s => !s.hidden && s.unlock.type !== 'default' && !owned.includes(s.id));
+    if (candidates.length) { const skin = candidates[crypto.randomInt(candidates.length)]; patch.skins = [...owned, skin.id]; got.skin = skin.id; got.name = skin.name; }
+    else { patch.coins = (req.user.coins || 0) + 150; got = { type: 'coins', count: 150 }; }
+  }
+  const user = await db.updateUser(req.user.id, patch);
+  res.json({ profile: refreshLiveProfile(user), got });
 }));
 
 // ---------- Admin ----------

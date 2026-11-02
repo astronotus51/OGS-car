@@ -433,9 +433,16 @@
       const theme = themeOf(skinId, ogId);
       const C = colorsFor(ogId, theme);
       const drawer = DRAWERS[ogId];
-      if (!drawer) return;
       ctx.save();
       ctx.translate(x, y);
+      if (!drawer) { // créature pas encore dessinée (à venir) : silhouette mystère qui respire
+        const r = size * 0.4, b = 1 + Math.sin((t || 0) * 2 + ogId) * 0.04;
+        ctx.scale(b, b); ctx.globalAlpha = (o.alpha !== undefined ? o.alpha : 1) * 0.9;
+        ctx.fillStyle = 'rgba(8,18,38,0.95)'; ctx.beginPath(); ctx.moveTo(0, -r * 1.1); ctx.bezierCurveTo(r * 1.2, -r, r * 1.1, r, 0, r * 1.05); ctx.bezierCurveTo(-r * 1.1, r, -r * 1.2, -r, 0, -r * 1.1); ctx.fill();
+        ctx.strokeStyle = 'rgba(34,227,200,0.7)'; ctx.lineWidth = Math.max(2, size * 0.03); ctx.setLineDash([size * 0.08, size * 0.05]); ctx.stroke();
+        ctx.setLineDash([]); ctx.fillStyle = 'rgba(34,227,200,0.9)'; ctx.font = `bold ${Math.round(size * 0.5)}px Bungee, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('?', 0, size * 0.04);
+        ctx.restore(); return;
+      }
       if (o.rot) ctx.rotate(o.rot);
       ctx.scale(o.scaleX || 1, (o.flipV ? -1 : 1) * (o.scaleY || 1));
       if (o.alpha !== undefined) ctx.globalAlpha = o.alpha;
