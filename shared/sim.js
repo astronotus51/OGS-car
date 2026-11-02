@@ -11,12 +11,19 @@
   'use strict';
 
   // ---------- Constantes de jeu ----------
-  const FIELD = { w: 1536, h: 1488 };
-  const COLS = 9;
+  const DEFAULT_COLS = 9;
   const ROWS_PER_SIDE = 4;
   const ROWS = ROWS_PER_SIDE * 2;
-  const CELL_W = FIELD.w / COLS;
-  const CELL_H = FIELD.h / ROWS;
+  const CELL_W = 1536 / DEFAULT_COLS; // taille de case fixe : une arène plus large = plus de colonnes
+  const FIELD_H = 1488;
+  const CELL_H = FIELD_H / ROWS;
+  // Géométrie d'une arène : 9 colonnes en 1v1, 13 en 2v2, 17 en 3v3.
+  function geometry(cols) { const c = Math.max(5, Math.min(25, cols | 0) || DEFAULT_COLS); return { COLS: c, FIELD: { w: c * CELL_W, h: FIELD_H } }; }
+  const TEAM_COLS = { 1: 9, 2: 13, 3: 17 };
+  // Clés des joueurs pour N par camp : ['top','bottom'] puis 'top1','bottom1', 'top2','bottom2'.
+  function teamKeys(perSide) { const keys = []; for (let i = 0; i < (perSide || 1); i += 1) { keys.push(i ? `top${i}` : 'top'); keys.push(i ? `bottom${i}` : 'bottom'); } return keys; }
+  const FIELD = geometry(DEFAULT_COLS).FIELD; // valeurs par défaut (1v1), utilisées par le client hors partie
+  const COLS = DEFAULT_COLS;
   const RADIUS = Math.min(CELL_W, CELL_H) * 0.46; // hitbox des Ogs
   const SPEED_UNIT = 40;
 
@@ -96,16 +103,19 @@
   }
 
   // ---------- Helpers géométrie ----------
-  function other(player) { return player === 'top' ? 'bottom' : 'top'; }
-  function dirOf(player) { return player === 'top' ? 1 : -1; }
+  // Un « joueur » est identifié par une clé : 'top' / 'bottom' (ou 'top1', 'bottom2'… en équipe) ; son camp est le préfixe.
+  function sideOf(key) { return String(key).indexOf('top') === 0 ? 'top' : 'bottom'; }
+  function other(player) { return sideOf(player) === 'top' ? 'bottom' : 'top'; }
+  function dirOf(player) { return sideOf(player) === 'top' ? 1 : -1; }
   // Vrai si l'ordonnée y est dans la moitié de terrain de ce joueur (la ligne médiane n'appartient à personne).
-  function inOwnHalf(player, y) { return player === 'top' ? y < FIELD.h / 2 : y > FIELD.h / 2; }
+  function inOwnHalf(player, y) { return sideOf(player) === 'top' ? y < FIELD_H / 2 : y > FIELD_H / 2; }
   // Une créature « rebondie » avance à contresens (vers sa propre base). Si elle repasse la frontière dans ce sens,
   // elle change de camp : elle devient une créature ennemie (ciblée par les tourelles, etc.).
   function markBounced(e) { if (e.vy) e.bounced = Math.sign(e.vy) !== dirOf(e.player); }
   function cellCenter(col, row) { return { x: (col + 0.5) * CELL_W, y: (row + 0.5) * CELL_H }; }
-  function cellOf(x, y) {
-    if (x < 0 || x >= FIELD.w || y < 0 || y >= FIELD.h) return null;
+  function cellOf(x, y, cols) {
+    const c = cols || DEFAULT_COLS;
+    if (x < 0 || x >= c * CELL_W || y < 0 || y >= FIELD_H) return null;
     const col = Math.floor(x / CELL_W);
     const row = Math.floor(y / CELL_H);
     return { col, row, side: row < ROWS_PER_SIDE ? 'top' : 'bottom' };
@@ -126,8 +136,11 @@
 
   // ---------- Création d'une partie ----------
   function createGame(options) {
-    const opts = Object.assign({ seed: 1, hazard: false, duration: RULES.matchDuration, features: {}, bans: { top: [], bottom: [] } }, options || {}); // duration 0 = illimité ; hazard désactivé par défaut (le scorpion cassait le gameplay)
+    const opts = Object.assign({ seed: 1, hazard: false, duration: RULES.matchDuration, features: {}, bans: { top: [], bottom: [] }, cols: DEFAULT_COLS, players: ['top', 'bottom'] }, options || {}); // duration 0 = illimité ; hazard désactivé par défaut (le scorpion cassait le gameplay)
     const F = opts.features || {}; // interrupteurs (shared/features.js)
+    const { COLS, FIELD } = geometry(opts.cols); // géométrie de cette partie (masque les valeurs par défaut du module)
+    const PLAYERS = opts.players.slice(); // clés des joueurs (1 à 3 par camp)
+    const teamOf = (side) => PLAYERS.filter(k => sideOf(k) === side);
     const bans = { top: (opts.bans && opts.bans.top) || [], bottom: (opts.bans && opts.bans.bottom) || [] }; // créatures interdites pour chaque joueur
     const rng = createRng(opts.seed);
     const S = {
@@ -136,9 +149,9 @@
       over: false,
       winner: null, // 'top' | 'bottom' | 'draw'
       endReason: null,
-      hp: { top: RULES.healthMax, bottom: RULES.healthMax },
-      mana: { top: F.manaX2 ? 30 : 0, bottom: F.manaX2 ? 30 : 0 },
-      abilities: { top: {}, bottom: {} }, // ogId -> fin de recharge (temps de jeu)
+      hp: { top: RULES.healthMax, bottom: RULES.healthMax }, // PV de base partagés par l'équipe
+      mana: Object.fromEntries(PLAYERS.map(k => [k, F.manaX2 ? 30 : 0])), // mana individuelle, par clé de joueur
+      abilities: Object.fromEntries(PLAYERS.map(k => [k, {}])), // par joueur : ogId -> fin de recharge (temps de jeu)
       overtime: false,
       points: { top: 0, bottom: 0 }, // Roi du centre
       entities: [],
@@ -170,18 +183,19 @@
     // Évolution : l'unité statique (Krak, Blok, Mojo) du même joueur et du même type présente sur la case, si elle peut encore monter de niveau.
     function evolvable(player, ogId, col, row) {
       if (!F.evolution || !EVOLVABLE.has(ogId)) return null;
-      const c = cellCenter(col, row);
-      return S.entities.find(e => e.player === player && e.ogId === ogId && (e.level || 1) < MAX_LEVEL && Math.abs(e.x - c.x) < 1 && Math.abs(e.y - c.y) < 1) || null;
+      const c = cellCenter(col, row), side = sideOf(player);
+      return S.entities.find(e => e.player === side && e.ogId === ogId && (e.level || 1) < MAX_LEVEL && Math.abs(e.x - c.x) < 1 && Math.abs(e.y - c.y) < 1) || null;
     }
-    function isBanned(player, ogId) { return bans[player].includes(ogId); }
+    function isBanned(player, ogId) { return bans[sideOf(player)].includes(ogId); }
 
     function availableCells(player, ogId) {
       const og = OGS[ogId];
       if (!og || isBanned(player, ogId)) return [];
       const cells = [];
-      const backRow = player === 'top' ? 0 : ROWS - 1; // ligne du fond, la plus loin de l'adversaire
+      const side = sideOf(player);
+      const backRow = side === 'top' ? 0 : ROWS - 1; // ligne du fond, la plus loin de l'adversaire
       for (let row = 0; row < ROWS; row += 1) {
-        if (sideOfRow(row) !== player) continue;
+        if (sideOfRow(row) !== side) continue;
         if (og.backOnly && row !== backRow) continue;
         for (let col = 0; col < COLS; col += 1) {
           if (cellOccupied(col, row)) { if (evolvable(player, ogId, col, row)) cells.push({ col, row, evolve: true }); continue; }
@@ -197,8 +211,10 @@
       const og = OGS[ogId];
       if (!og) return { ok: false, reason: 'unknown' };
       if (!Number.isInteger(col) || !Number.isInteger(row) || col < 0 || col >= COLS || row < 0 || row >= ROWS) return { ok: false, reason: 'cell' };
-      if (sideOfRow(row) !== player) return { ok: false, reason: 'side' };
-      const backRow = player === 'top' ? 0 : ROWS - 1;
+      if (!(player in S.mana)) return { ok: false, reason: 'player' };
+      const side = sideOf(player);
+      if (sideOfRow(row) !== side) return { ok: false, reason: 'side' };
+      const backRow = side === 'top' ? 0 : ROWS - 1;
       if (og.backOnly && row !== backRow) return { ok: false, reason: 'back' };
       if (isBanned(player, ogId)) return { ok: false, reason: 'banned' };
       const target = cellOccupied(col, row) ? evolvable(player, ogId, col, row) : null;
@@ -207,8 +223,9 @@
       return { ok: true, evolve: target ? target.id : undefined };
     }
 
-    function spawn(player, ogId, col, row) {
+    function spawn(owner, ogId, col, row) {
       const og = OGS[ogId];
+      const player = sideOf(owner); // camp de l'unité ; owner = clé du joueur qui l'a posée
       const pos = cellCenter(col, row);
       const dir = dirOf(player);
       let vx = 0, vy = 0;
@@ -227,7 +244,7 @@
       }
       const mult = F.fastUnits ? 1.5 : 1;
       const e = {
-        id: S.nextId++, ogId, player, owner: player, x: pos.x, y: pos.y, vx: vx * mult, vy: vy * mult,
+        id: S.nextId++, ogId, player, owner, x: pos.x, y: pos.y, vx: vx * mult, vy: vy * mult,
         hp: og.hp, hpMax: og.hp, cooldown: 0, air: og.air, speed: og.speed * mult, movement: og.movement,
         rot: 0, rotTarget: 0, born: S.time, level: 1, boostUntil: 0, frozenUntil: 0, healTimer: 0,
         bounced: false, visitedEnemy: false, // rebond à contresens / a déjà été dans le camp adverse (changement de camp à la frontière)
@@ -242,20 +259,21 @@
       const check = canPlace(player, ogId, col, row);
       if (!check.ok) return check;
       const og = OGS[ogId];
+      const side = sideOf(player);
       S.mana[player] -= og.cost;
-      S.stats[player].manaSpent += og.cost;
-      S.stats[player].placed += 1;
-      S.stats[player].placedBy[ogId] = (S.stats[player].placedBy[ogId] || 0) + 1;
+      S.stats[side].manaSpent += og.cost;
+      S.stats[side].placed += 1;
+      S.stats[side].placedBy[ogId] = (S.stats[side].placedBy[ogId] || 0) + 1;
       if (check.evolve) {
         const e = S.entities.find(x => x.id === check.evolve);
         e.level = (e.level || 1) + 1;
         e.hpMax += 1; e.hp = e.hpMax;
-        S.stats[player].evolutions += 1;
-        emit('evolve', { player, ogId, id: e.id, x: e.x, y: e.y, level: e.level });
+        S.stats[side].evolutions += 1;
+        emit('evolve', { player: side, owner: player, ogId, id: e.id, x: e.x, y: e.y, level: e.level });
         return { ok: true, id: e.id, evolved: e.level };
       }
       const e = spawn(player, ogId, col, row);
-      emit('place', { player, ogId, id: e.id, x: e.x, y: e.y });
+      emit('place', { player: side, owner: player, ogId, id: e.id, x: e.x, y: e.y });
       return { ok: true, id: e.id };
     }
 
@@ -264,17 +282,19 @@
       if (!F.abilities) return { ok: false, reason: 'disabled' };
       if (S.over) return { ok: false, reason: 'over' };
       if (!ABILITIES[ogId]) return { ok: false, reason: 'unknown' };
+      if (!(player in S.mana)) return { ok: false, reason: 'player' };
       if ((S.abilities[player][ogId] || 0) > S.time) return { ok: false, reason: 'cooldown' };
       if (S.mana[player] < ABILITY_COST) return { ok: false, reason: 'mana' };
-      const mine = S.entities.filter(e => e.player === player && e.ogId === ogId);
+      const mine = S.entities.filter(e => e.player === sideOf(player) && e.ogId === ogId); // toute l'équipe en profite
       if (!mine.length) return { ok: false, reason: 'none' };
       return { ok: true, units: mine };
     }
-    function useAbility(player, ogId) {
-      const check = canUseAbility(player, ogId);
+    function useAbility(owner, ogId) {
+      const check = canUseAbility(owner, ogId);
       if (!check.ok) return check;
-      S.mana[player] -= ABILITY_COST;
-      S.abilities[player][ogId] = S.time + ABILITY_COOLDOWN;
+      const player = sideOf(owner);
+      S.mana[owner] -= ABILITY_COST;
+      S.abilities[owner][ogId] = S.time + ABILITY_COOLDOWN;
       S.stats[player].abilities += 1;
       const units = check.units;
       const near2 = (CELL_W * 1.1) ** 2;
@@ -292,25 +312,26 @@
         case 5: // Mur de glace : gèle les ennemis autour de chaque Blok
           for (const u of units) for (const e of S.entities) { if (e.player === player || e.air) continue; if (dist2(u, e) <= near2) e.frozenUntil = S.time + 2.5; }
           break;
-        case 6: S.mana[player] = Math.min(RULES.manaMax, S.mana[player] + Math.min(30, 15 * units.length)); break; // Burst de mana
+        case 6: S.mana[owner] = Math.min(RULES.manaMax, S.mana[owner] + Math.min(30, 15 * units.length)); break; // Burst de mana
         case 7: // Bombe : chaque Zéphir frappe les unités au sol ennemies sous lui
           for (const u of units) for (const e of S.entities) { if (e.player === player || e.air || dead.has(e.id)) continue; if (dist2(u, e) <= near2) damage(e, 1, player, 'bomb'); }
           break;
         default: break;
       }
-      emit('ability', { player, ogId, units: units.map(u => ({ id: u.id, x: u.x, y: u.y })) });
+      emit('ability', { player, owner, ogId, units: units.map(u => ({ id: u.id, x: u.x, y: u.y })) });
       return { ok: true };
     }
 
     function collectOrb(player, orbId) {
-      if (S.over) return false;
-      const idx = S.orbs.findIndex(o => o.id === orbId && o.player === player);
+      if (S.over || !(player in S.mana)) return false;
+      const side = sideOf(player);
+      const idx = S.orbs.findIndex(o => o.id === orbId && o.player === side);
       if (idx === -1) return false;
       const orb = S.orbs[idx];
       S.orbs.splice(idx, 1);
       S.mana[player] = Math.min(RULES.manaMax, S.mana[player] + RULES.orbMana);
-      S.stats[player].orbs += 1;
-      emit('orb', { player, x: orb.x, y: orb.y, mana: RULES.orbMana });
+      S.stats[side].orbs += 1;
+      emit('orb', { player: side, owner: player, x: orb.x, y: orb.y, mana: RULES.orbMana });
       return true;
     }
 
@@ -339,9 +360,9 @@
     function updateMana(dt) {
       const chargers = { top: 0, bottom: 0 };
       for (const e of S.entities) if (e.ogId === 6) chargers[e.player] += (e.level || 1);
-      for (const p of ['top', 'bottom']) {
-        const regen = RULES.manaRegen * (1 + RULES.chargerBoost * chargers[p]) * (F.manaX2 ? 2 : 1) * (S.overtime ? 3 : 1);
-        S.mana[p] = Math.min(RULES.manaMax, S.mana[p] + regen * dt);
+      for (const k of PLAYERS) {
+        const regen = RULES.manaRegen * (1 + RULES.chargerBoost * chargers[sideOf(k)]) * (F.manaX2 ? 2 : 1) * (S.overtime ? 3 : 1);
+        S.mana[k] = Math.min(RULES.manaMax, S.mana[k] + regen * dt);
       }
     }
 
@@ -737,9 +758,9 @@
         t: Math.round(S.time * 1000) / 1000,
         k: S.tick,
         hp: [S.hp.top, S.hp.bottom],
-        mana: [Math.round(S.mana.top * 10) / 10, Math.round(S.mana.bottom * 10) / 10],
+        mana: Object.fromEntries(PLAYERS.map(k => [k, Math.round(S.mana[k] * 10) / 10])), // par joueur
         e: S.entities.map(e => [e.id, e.ogId, e.player === 'top' ? 0 : 1, Math.round(e.x), Math.round(e.y), Math.round(e.rot * 100) / 100, e.hp, e.hpMax, e.owner === 'top' ? 0 : 1, (e.level || 1) + (e.frozenUntil > S.time ? 10 : 0) + (e.boostUntil > S.time ? 20 : 0)]),
-        ab: [S.abilities.top, S.abilities.bottom].map(m => Object.fromEntries(Object.entries(m).filter(([, until]) => until > S.time).map(([og, until]) => [og, Math.round((until - S.time) * 10) / 10]))),
+        ab: Object.fromEntries(PLAYERS.map(k => [k, Object.fromEntries(Object.entries(S.abilities[k]).filter(([, until]) => until > S.time).map(([og, until]) => [og, Math.round((until - S.time) * 10) / 10]))])),
         pts: F.kingOfCenter ? [Math.round(S.points.top), Math.round(S.points.bottom)] : null,
         ot: S.overtime ? 1 : 0,
         p: S.projectiles.map(p => [p.id, Math.round(p.x), Math.round(p.y), p.player === 'top' ? 0 : 1, p.winged ? 1 : 0]),
@@ -749,12 +770,13 @@
       };
     }
 
-    function setMana(player, value) { S.mana[player] = Math.max(0, Math.min(RULES.manaMax, value)); }
+    function setMana(player, value) { if (player in S.mana) S.mana[player] = Math.max(0, Math.min(RULES.manaMax, value)); }
 
     return {
-      state: S, rng, opts, features: F, bans,
+      state: S, rng, opts, features: F, bans, players: PLAYERS, COLS, FIELD, teamOf,
       step, place, canPlace, availableCells, collectOrb, surrender, drainEvents, snapshot,
       cellOccupied, useAbility, canUseAbility, setMana, isBanned,
+      cellOf: (x, y) => cellOf(x, y, COLS),
     };
   }
 
@@ -764,9 +786,9 @@
     return {
       t: s.t, k: s.k,
       hp: { top: s.hp[0], bottom: s.hp[1] },
-      mana: { top: s.mana[0], bottom: s.mana[1] },
+      mana: Array.isArray(s.mana) ? { top: s.mana[0], bottom: s.mana[1] } : (s.mana || {}),
       entities: s.e.map(a => ({ id: a[0], ogId: a[1], player: P[a[2]], x: a[3], y: a[4], rot: a[5], hp: a[6], hpMax: a[7], owner: P[a[8]], level: (a[9] || 1) % 10, frozen: !!(Math.floor((a[9] || 1) / 10) % 2), boosted: (a[9] || 1) >= 20 })),
-      abilities: s.ab ? { top: s.ab[0], bottom: s.ab[1] } : { top: {}, bottom: {} },
+      abilities: Array.isArray(s.ab) ? { top: s.ab[0], bottom: s.ab[1] } : (s.ab || {}),
       points: s.pts ? { top: s.pts[0], bottom: s.pts[1] } : null,
       overtime: !!s.ot,
       projectiles: s.p.map(a => ({ id: a[0], x: a[1], y: a[2], player: P[a[3]], winged: !!a[4] })),
@@ -778,6 +800,7 @@
 
   return {
     FIELD, COLS, ROWS, ROWS_PER_SIDE, CELL_W, CELL_H, RADIUS, RULES, OGS, OG_IDS, ABILITIES, ABILITY_COST, ABILITY_COOLDOWN, EVOLVABLE, MAX_LEVEL, KING_TARGET,
+    TEAM_COLS, geometry, sideOf, teamKeys,
     createGame, createRng, decodeSnapshot, cellOf, cellCenter, sideOfRow, rowWithinSide, other,
   };
 });

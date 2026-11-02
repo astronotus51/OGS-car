@@ -25,23 +25,34 @@ function waveComposition(n, rng) {
 }
 
 /*
- * players: [{ client, profile, bot: null | 'simple'|'moyen'|'difficile' }, ...] (index 0 = top, 1 = bottom)
- * mode: 'ranked' | 'bot' | 'friendly' | 'survival'
+ * players: [{ client, profile, bot: null | 'simple'|'moyen'|'difficile', side? }, ...]
+ *   - sans `side` : index pair = top, impair = bottom (1v1) ; avec `teamSize` > 1, les joueurs sont répartis par `side` fourni.
+ * mode: 'ranked' | 'duo' | 'trio' | 'bot' | 'friendly' | 'survival'
+ * teamSize: joueurs par camp (1, 2 ou 3) -> arène de 9, 13 ou 17 colonnes
  * features: objet booléen (shared/features.js, resolveOptions)
  */
 class Room {
-  constructor({ players, mode, features = {}, duration = Sim.RULES.matchDuration, botFill = false, map = 'random', onEnd }) {
+  constructor({ players, mode, features = {}, duration = Sim.RULES.matchDuration, botFill = false, map = 'random', teamSize = 1, onEnd }) {
     this.id = nextRoomId++;
     this.map = Catalog.MAPS.some(m => m.id === map) ? map : Catalog.MAPS[Math.floor(Math.random() * Catalog.MAPS.length)].id;
     this.mode = mode;
     this.botFill = botFill;
     this.features = features;
     this.duration = mode === 'survival' ? 0 : duration;
+    this.teamSize = Math.max(1, Math.min(3, teamSize | 0));
+    this.cols = Sim.TEAM_COLS[this.teamSize] || Sim.COLS;
     this.seed = (Math.random() * 0xffffffff) >>> 0;
-    this.players = players.map((p, i) => ({
-      side: SIDES[i], client: p.client || null, profile: p.profile, bot: p.bot || null, director: !!p.director,
-      ai: null, connected: !!p.client, disconnectedAt: null, emoteCooldown: 0, ban: null,
-    }));
+    // Clés de joueur : 'top', 'bottom', puis 'top1', 'bottom1'… (voir Sim.teamKeys).
+    const counters = { top: 0, bottom: 0 };
+    this.players = players.map((p, i) => {
+      const side = p.side || SIDES[i % 2];
+      const n = counters[side]++;
+      return {
+        side, key: n ? `${side}${n}` : side, client: p.client || null, profile: p.profile, bot: p.bot || null, director: !!p.director,
+        ai: null, connected: !!p.client, disconnectedAt: null, emoteCooldown: 0, ban: null, surrendered: false,
+      };
+    });
+    this.keys = this.players.map(p => p.key);
     this.onEnd = onEnd;
     this.game = null;
     this.phase = features.draft ? 'draft' : 'countdown';
@@ -61,9 +72,9 @@ class Room {
   initGame() {
     const bans = { top: [], bottom: [] };
     // Le bannissement choisi par un joueur s'applique à son adversaire.
-    for (const p of this.players) if (p.ban) bans[Sim.other(p.side)].push(p.ban);
-    this.game = Sim.createGame({ seed: this.seed, hazard: false, duration: this.duration, features: this.features, bans });
-    for (const p of this.players) if (p.bot) p.ai = AI.createAI(this.game, p.side, p.bot);
+    for (const p of this.players) if (p.ban && !bans[Sim.other(p.side)].includes(p.ban)) bans[Sim.other(p.side)].push(p.ban);
+    this.game = Sim.createGame({ seed: this.seed, hazard: false, duration: this.duration, features: this.features, bans, cols: this.cols, players: this.keys });
+    for (const p of this.players) if (p.bot) p.ai = AI.createAI(this.game, p.key, p.bot);
     if (this.survival) this.waveRng = Sim.createRng(this.seed ^ 0x5151);
   }
 
@@ -86,13 +97,15 @@ class Room {
   }
 
   startMessage(p) {
-    const opp = this.players.find(x => x !== p);
+    const opp = this.players.find(x => x.side !== p.side);
     return {
-      t: 'match_start', roomId: this.id, mode: this.mode, side: p.side, seed: this.seed, map: this.map,
+      t: 'match_start', roomId: this.id, mode: this.mode, side: p.side, key: p.key, seed: this.seed, map: this.map,
+      cols: this.cols, teamSize: this.teamSize,
+      players: this.players.map(x => ({ key: x.key, side: x.side, profile: publicView(x.profile), bot: !!x.bot || !!x.director })),
       phase: this.phase, draftSeconds: this.phase === 'draft' ? Math.ceil(this.draftTimer) : 0,
       countdown: this.countdown, duration: this.duration, features: this.features,
       bans: this.game ? this.game.bans : { top: [], bottom: [] },
-      me: p.profile, opponent: publicView(opp.profile), opponentIsBot: !!opp.bot || !!opp.director,
+      me: p.profile, opponent: publicView(opp.profile), opponentIsBot: this.players.filter(x => x.side !== p.side).every(x => x.bot || x.director),
       survival: this.survival ? { wave: this.survival.wave, score: this.survival.score } : null,
     };
   }
@@ -127,23 +140,28 @@ class Room {
       }
       case 'place': {
         if (this.phase !== 'playing' || !g) return this.send(p, { t: 'place_rejected', reason: 'countdown', col: msg.col, row: msg.row });
-        const r = g.place(p.side, msg.og | 0, msg.col | 0, msg.row | 0);
+        const r = g.place(p.key, msg.og | 0, msg.col | 0, msg.row | 0);
         if (!r.ok) this.send(p, { t: 'place_rejected', reason: r.reason, og: msg.og, col: msg.col, row: msg.row });
         break;
       }
       case 'ability': {
         if (this.phase !== 'playing' || !g) return;
-        const r = g.useAbility(p.side, msg.og | 0);
+        const r = g.useAbility(p.key, msg.og | 0);
         if (!r.ok) this.send(p, { t: 'ability_rejected', reason: r.reason, og: msg.og });
         break;
       }
       case 'orb':
-        if (this.phase === 'playing' && g) g.collectOrb(p.side, msg.id | 0);
+        if (this.phase === 'playing' && g) g.collectOrb(p.key, msg.id | 0);
         break;
-      case 'surrender':
+      case 'surrender': {
+        // En équipe, l'abandon n'est effectif que lorsque tous les humains du camp ont abandonné (ou sont partis).
+        p.surrendered = true;
+        const left = this.players.filter(x => x.side === p.side && !x.bot && !x.director && !x.surrendered && x.connected);
+        if (left.length) { this.broadcast({ t: 'presence', side: p.side, key: p.key, surrendered: true }); break; }
         if (this.phase === 'playing' && g) g.surrender(p.side);
         else if (this.phase !== 'playing') { this.initGameIfNeeded(); this.game.surrender(p.side); this.phase = 'playing'; }
         break;
+      }
       case 'emote': {
         const now = Date.now();
         if (now < p.emoteCooldown) return;
@@ -186,7 +204,7 @@ class Room {
 
     if (this.phase === 'draft') {
       this.draftTimer -= dt;
-      const allPicked = this.players.every(p => p.ban || p.director);
+      const allPicked = this.players.every(p => p.ban || p.director || p.bot);
       if (this.draftTimer <= 0 || allPicked) {
         this.initGame();
         this.phase = 'countdown';
@@ -200,11 +218,11 @@ class Room {
       return;
     }
 
-    for (const p of this.players) {
-      if (!p.bot && !p.director && !p.connected && p.disconnectedAt && now - p.disconnectedAt > DISCONNECT_GRACE * 1000) {
-        this.game.surrender(p.side);
-        this.game.state.endReason = 'disconnect';
-      }
+    for (const side of SIDES) {
+      const humans = this.players.filter(p => p.side === side && !p.bot && !p.director);
+      if (!humans.length) continue;
+      const gone = humans.every(p => !p.connected && p.disconnectedAt && now - p.disconnectedAt > DISCONNECT_GRACE * 1000);
+      if (gone) { this.game.surrender(side); this.game.state.endReason = 'disconnect'; }
     }
 
     this.acc += dt;

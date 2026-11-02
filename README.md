@@ -75,6 +75,10 @@ Mise en place de Google (une fois, ~5 min) :
 - Protections serveur : en-têtes helmet (CSP stricte, pas de framing), limite de requêtes (anti-abus), vérification d'origine sur l'API et le WebSocket, validation des entrées, avatars vérifiés (format, taille ≤ 64 Ko).
 - **HTTPS** : il reste à mettre un domaine + `certbot` (voir le déploiement) pour chiffrer le trafic et marquer le cookie `Secure`.
 
+## Modes et équipes
+
+Sélecteur de modes dans l'accueil : **Classée 1v1**, **Duo 2v2**, **Trio 3v3** (classés, arènes de 9 / 13 / 17 colonnes), Entraînement (format 1v1 à 3v3 contre des bots), Survie, Amical (code, format au choix, l'hôte lance avec des bots aux places vides). En équipe : mana individuelle, PV de base partagés, capacités pour toute l'équipe, abandon effectif quand tous les coéquipiers ont abandonné, file d'attente par format avec complément en bots après `BOT_FILL_SECONDS`. Côté code : `Sim.createGame({ cols, players })` avec des clés de joueur (`top`, `top1`, `bottom`…), `Room({ teamSize })`, `Matchmaker.join(client, profile, team)`.
+
 ## Arènes
 
 Le décor change à chaque partie : **Lagon**, **Espace** (nébuleuses, planète, étoiles filantes), **Mer de lave** (fissures qui pulsent, bulles), **Cimetière** (lune, brume, chauves-souris), **Ferme** (champs, blé qui ondule, papillons), **Banquise** (aurore boréale, neige) et **Pays des bonbons**. Le serveur tire l'arène au sort ; en entraînement, amical et survie on peut la choisir dans le lobby. Les arènes sont dessinées en vectoriel dans `public/js/maps.js` (fond statique mis en cache + couche animée) ; la liste est dans `Catalog.MAPS`. Pour en ajouter une : une entrée dans les deux.

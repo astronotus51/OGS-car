@@ -102,13 +102,18 @@
         <div class="modal-head"><h2>Choisis ton mode</h2><button class="icon-btn" data-close="modeModal">✕</button></div>
         <div class="mode-grid" id="modeGrid">
           <button class="mode-tile" data-mode="ranked"><span class="mode-ico">⚔️</span><b>Classée 1v1</b><small>Trophées, ligues, adversaire de ton niveau</small></button>
-          <button class="mode-tile" data-mode="duo"><span class="mode-ico">🤝</span><b>Duo 2v2</b><small>Grande arène, à deux contre deux</small><span class="soon">Bientôt</span></button>
-          <button class="mode-tile" data-mode="trio"><span class="mode-ico">👥</span><b>Trio 3v3</b><small>Arène géante, à trois contre trois</small><span class="soon">Bientôt</span></button>
+          <button class="mode-tile" data-mode="duo"><span class="mode-ico">🤝</span><b>Duo 2v2</b><small>Grande arène, à deux contre deux</small></button>
+          <button class="mode-tile" data-mode="trio"><span class="mode-ico">👥</span><b>Trio 3v3</b><small>Arène géante, à trois contre trois</small></button>
           <button class="mode-tile" data-mode="bot"><span class="mode-ico">🤖</span><b>Entraînement</b><small>Contre l’IA, sans enjeu, avec options</small></button>
           <button class="mode-tile" data-mode="survival" id="tileSurvival"><span class="mode-ico">🌊</span><b>Survie</b><small>Seul contre des vagues, bats ton record</small></button>
           <button class="mode-tile" data-mode="friendly"><span class="mode-ico">🎟️</span><b>Amical</b><small>Avec un code, entre amis</small></button>
         </div>
         <div class="mode-options">
+          <div class="mode-opt" data-for="bot friendly">
+            <label class="toggle">Format
+              <select id="teamSelect" class="select"><option value="1" selected>1 contre 1</option><option value="2">2 contre 2 (arène large)</option><option value="3">3 contre 3 (arène géante)</option></select>
+            </label>
+          </div>
           <div class="mode-opt" data-for="bot">
             <label class="toggle">Niveau de l’IA
               <select id="botLevel" class="select"><option value="simple">Simple</option><option value="moyen" selected>Moyen</option><option value="difficile">Difficile</option></select>
@@ -169,7 +174,7 @@
       <div class="queue-title" id="queueTitle">Recherche d’un adversaire…</div>
       <div class="queue-sub" id="queueSub">0 s</div>
       <div class="queue-code hidden" id="queueCode"></div>
-      <button id="btnCancelQueue" class="btn">Annuler</button>
+      <div class="row"><button id="btnFriendlyStart" class="btn primary hidden">Lancer (places vides = bots)</button><button id="btnCancelQueue" class="btn">Annuler</button></div>
     </div>
   </section>
 

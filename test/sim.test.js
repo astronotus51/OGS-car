@@ -151,3 +151,26 @@ function freeAfter(features) {
 const tight = freeAfter({ tightSpacing: true }), loose = freeAfter({ tightSpacing: false });
 assert.ok(tight < loose, `pose rapprochée : case libre après ${tight} ticks (contre ${loose} sans l'option)`);
 console.log(`espacement OK (${tight} vs ${loose} ticks)`);
+
+// Équipes : 2v2 sur 13 colonnes, mana individuelle, PV de base partagés.
+const gt = Sim.createGame({ seed: 31, duration: 0, cols: Sim.TEAM_COLS[2], players: Sim.teamKeys(2) });
+assert.strictEqual(gt.COLS, 13); assert.deepStrictEqual(gt.players, ['top', 'bottom', 'top1', 'bottom1']);
+gt.setMana('bottom1', 70); gt.setMana('bottom', 0);
+assert.ok(gt.place('bottom1', 1, 12, 7).ok, 'le coéquipier pose sur la colonne 12 (arène large)');
+assert.strictEqual(gt.place('bottom', 1, 4, 7).reason, 'mana', 'mana individuelle : le joueur 1 n’a pas celle du joueur 2');
+assert.strictEqual(gt.place('bottom1', 1, 4, 2).reason, 'side', 'pas chez l’adversaire');
+const unit = gt.state.entities[0]; assert.strictEqual(unit.player, 'bottom'); assert.strictEqual(unit.owner, 'bottom1');
+for (let i = 0; i < 30 * 30; i++) gt.step(1 / 30);
+assert.strictEqual(gt.state.hp.top, 29, 'la base adverse (partagée) a pris 1 dégât');
+const snap2 = gt.snapshot(); assert.ok('top1' in snap2.mana && 'bottom1' in snap2.mana, 'snapshot : mana par joueur');
+assert.ok(Sim.decodeSnapshot(snap2).mana.bottom1 >= 0);
+console.log('équipes OK');
+
+// IA en équipe : 3v3 sur 17 colonnes, six bots, pas d'exception et des unités posées par chaque clé.
+const g33 = Sim.createGame({ seed: 77, duration: 60, cols: Sim.TEAM_COLS[3], players: Sim.teamKeys(3) });
+const bots = g33.players.map(k => AI.createAI(g33, k, 'moyen'));
+for (let i = 0; i < 30 * 65 && !g33.state.over; i++) { for (const b of bots) b.update(1 / 30); g33.step(1 / 30); g33.drainEvents(); }
+const owners = new Set(g33.state.entities.map(e => e.owner));
+assert.ok(g33.state.over, '3v3 : la partie se termine');
+assert.ok(g33.state.stats.top.placed > 0 && g33.state.stats.bottom.placed > 0, 'les deux équipes ont posé');
+console.log('IA 3v3 OK (fin :', g33.state.winner, g33.state.endReason, ', propriétaires vus :', [...owners].length, ')');

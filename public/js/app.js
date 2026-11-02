@@ -308,8 +308,8 @@
   // ----- Modes de jeu (façon Brawl : une carte « mode » + un gros bouton JOUER) -----
   const MODES = {
     ranked: { icon: '⚔️', name: 'Classée 1v1', desc: 'Trophées · adversaire de ton niveau', sub: 'Partie classée' },
-    duo: { icon: '🤝', name: 'Duo 2v2', desc: 'Grande arène, à deux contre deux', sub: 'Duo 2v2', soon: true },
-    trio: { icon: '👥', name: 'Trio 3v3', desc: 'Arène géante, à trois contre trois', sub: 'Trio 3v3', soon: true },
+    duo: { icon: '🤝', name: 'Duo 2v2', desc: 'Grande arène (13 colonnes), trophées', sub: 'Duo 2v2 · classée', team: 2 },
+    trio: { icon: '👥', name: 'Trio 3v3', desc: 'Arène géante (17 colonnes), trophées', sub: 'Trio 3v3 · classée', team: 3 },
     bot: { icon: '🤖', name: 'Entraînement', desc: 'Contre l’IA, sans enjeu', sub: 'Contre l’IA' },
     survival: { icon: '🌊', name: 'Survie', desc: 'Vagues · solo · record', sub: 'Survie' },
     friendly: { icon: '🎟️', name: 'Amical', desc: 'Crée une salle, partage le code', sub: 'Créer une salle amicale' },
@@ -343,19 +343,21 @@
     if (selectedMode === 'bot') return $('btnBot').click();
     if (selectedMode === 'survival') return $('btnSurvival').click();
     if (selectedMode === 'friendly') return $('btnFriendlyCreate').click();
-    lastMatchKind = { t: 'queue' }; Net.send({ t: 'queue' }); openQueue('Recherche d’un adversaire…', 'queue');
+    const team = MODES[selectedMode].team || 1;
+    lastMatchKind = { t: 'queue', team }; Net.send({ t: 'queue', team }); openQueue(team > 1 ? `Recherche de ${team * 2 - 1} joueurs…` : 'Recherche d’un adversaire…', 'queue');
   });
-  $('btnBot').addEventListener('click', () => { const difficulty = $('botLevel').value; lastMatchKind = { t: 'bot', difficulty }; Net.send({ t: 'bot', difficulty, duration: Number($('durationSelect').value), options: currentOptions(), map: $('mapSelect').value }); openQueue('Préparation de l’IA…', 'bot'); });
-  $('btnFriendlyCreate').addEventListener('click', () => { Net.send({ t: 'friendly_create', duration: Number($('durationSelect').value), options: currentOptions(), map: $('mapSelect').value }); openQueue('Partie amicale : partage ce code', 'friendly'); });
+  $('btnBot').addEventListener('click', () => { const difficulty = $('botLevel').value; lastMatchKind = { t: 'bot', difficulty }; Net.send({ t: 'bot', difficulty, team: Number($('teamSelect').value) || 1, duration: Number($('durationSelect').value), options: currentOptions(), map: $('mapSelect').value }); openQueue('Préparation de l’IA…', 'bot'); });
+  $('btnFriendlyCreate').addEventListener('click', () => { Net.send({ t: 'friendly_create', team: Number($('teamSelect').value) || 1, duration: Number($('durationSelect').value), options: currentOptions(), map: $('mapSelect').value }); openQueue('Partie amicale : partage ce code', 'friendly'); });
   $('btnFriendlyJoin').addEventListener('click', () => { const code = $('friendlyCode').value.trim().toUpperCase(); if (code.length < 4) return toast('Entre le code à 5 caractères', 'bad'); closeModal('modeModal'); Net.send({ t: 'friendly_join', code }); $('lobbyMsg').textContent = 'Connexion à la salle…'; });
+  $('btnFriendlyStart').addEventListener('click', () => Net.send({ t: 'friendly_start' }));
   $('btnCancelQueue').addEventListener('click', () => { Net.send({ t: queueMode === 'friendly' ? 'friendly_leave' : 'cancel' }); closeQueue(); });
 
   function openQueue(title, mode) {
     queueMode = mode; queueStart = Date.now();
-    $('queueTitle').textContent = title; $('queueSub').textContent = '0 s'; $('queueCode').classList.add('hidden');
+    $('queueTitle').textContent = title; $('queueSub').textContent = '0 s'; delete $('queueSub').dataset.lobby; delete $('queueSub').dataset.server; $('queueCode').classList.add('hidden'); $('btnFriendlyStart').classList.add('hidden');
     show('queue');
     clearInterval(queueTimer);
-    queueTimer = setInterval(() => { const s = Math.floor((Date.now() - queueStart) / 1000); $('queueSub').textContent = mode === 'friendly' ? 'En attente de ton ami…' : `${s} s`; }, 500);
+    queueTimer = setInterval(() => { const s = Math.floor((Date.now() - queueStart) / 1000); if (mode === 'friendly') { if (!$('queueSub').dataset.lobby) $('queueSub').textContent = 'En attente de tes amis…'; } else if (!$('queueSub').dataset.server) $('queueSub').textContent = `${s} s`; }, 500);
   }
   function closeQueue() { clearInterval(queueTimer); queueTimer = null; queueMode = null; show('lobby'); }
 
@@ -365,15 +367,22 @@
   Net.on('profile', (msg) => { const was = profile; profile = msg.profile; if (current === 'lobby') refreshLobby(); if (current === 'profile') openProfile(); if (current === 'skins') openSkins(); if (was && !was.modo && profile.modo) toast('Tu es maintenant MODO : tous les skins débloqués !', 'good'); });
   Net.on('auth_error', () => { Net.disconnect(); Net.setToken(null); show('auth'); $('authError').textContent = 'Session expirée, reconnecte-toi'; });
   Net.on('kicked', (msg) => { Net.disconnect(); profile = null; show('auth'); $('authError').textContent = msg.reason || 'Déconnecté'; });
-  Net.on('queued', (msg) => { if (current === 'queue' && queueMode === 'queue') $('queueSub').textContent = `${msg.wait || 0} s · fenêtre ±${msg.band || 100} 🏆${msg.botFillIn ? ` · bot dans ${msg.botFillIn} s` : ''}`; });
+  Net.on('queued', (msg) => { if (current === 'queue' && queueMode === 'queue') $('queueSub').dataset.server = '1', $('queueSub').textContent = `${msg.wait || 0} s${msg.need > 2 ? ` · ${msg.found || 1}/${msg.need} joueurs` : ''} · fenêtre ±${msg.band || 100} 🏆${msg.botFillIn ? ` · bots dans ${msg.botFillIn} s` : ''}`; });
+  // Salle amicale en équipe : liste des joueurs présents, l'hôte peut lancer avec des bots.
+  Net.on('friendly_lobby', (msg) => {
+    if (current !== 'queue') return;
+    $('queueSub').dataset.lobby = '1'; $('queueSub').innerHTML = `${msg.members.length}/${msg.need} joueurs : ${msg.members.map(m => esc(m.username) + (m.host ? ' (hôte)' : '')).join(', ')}`;
+    $('btnFriendlyStart').classList.toggle('hidden', !(msg.host && msg.need > 2 && msg.members.length >= 1));
+  });
   Net.on('friendly_created', (msg) => { $('queueCode').textContent = msg.code; $('queueCode').classList.remove('hidden'); });
   Net.on('error', (msg) => { $('lobbyMsg').textContent = msg.error; toast(msg.error, 'bad'); });
   Net.on('idle', () => { if (current === 'queue') closeQueue(); });
   Net.on('match_start', (msg) => {
     clearInterval(queueTimer); pendingResult = null;
-    $('hudOppName').textContent = msg.opponent.username;
-    $('hudOppSub').textContent = `🏆 ${msg.opponent.trophies} · ${msg.opponent.rank || ''}${msg.opponentIsBot ? ' · IA' : ''}`;
-    $('hudMeName').textContent = msg.me.username; $('hudMeSub').textContent = `🏆 ${msg.me.trophies} · ${msg.me.rank}`;
+    const opps = (msg.players || []).filter(p => p.side !== msg.side).map(p => p.profile), mates = (msg.players || []).filter(p => p.side === msg.side && p.key !== (msg.key || msg.side)).map(p => p.profile);
+    $('hudOppName').textContent = opps.length > 1 ? opps.map(o => o.username).join(' & ') : msg.opponent.username;
+    $('hudOppSub').textContent = opps.length > 1 ? `🏆 ${Math.round(opps.reduce((n, o) => n + (o.trophies || 0), 0) / opps.length)} · équipe adverse` : `🏆 ${msg.opponent.trophies} · ${msg.opponent.rank || ''}${msg.opponentIsBot ? ' · IA' : ''}`;
+    $('hudMeName').textContent = mates.length ? `${msg.me.username} & ${mates.map(m => m.username).join(' & ')}` : msg.me.username; $('hudMeSub').textContent = mates.length ? `🏆 ${msg.me.trophies} · ton équipe` : `🏆 ${msg.me.trophies} · ${msg.me.rank}`;
     $('hudMeAvatar').innerHTML = '<span></span>'; renderAvatar($('hudMeAvatar'), msg.me, msg.me.level); $('hudOppAvatar').innerHTML = '<span></span>'; renderAvatar($('hudOppAvatar'), msg.opponent, msg.opponent.level || '?');
     Audio.setScene('match'); Audio.sfx('match');
     show('game'); game.start(msg); toast(`Arène : ${(OGSMaps.get(msg.map) || {}).name || msg.map}`, 'ok');
@@ -385,7 +394,7 @@
   Net.on('wave', (msg) => game.onWave(msg));
   Net.on('snap', (msg) => game.onSnap(msg));
   Net.on('place_rejected', (msg) => game.onRejected(msg));
-  Net.on('presence', (msg) => { game.onPresence(msg); if (!msg.connected) toast('Adversaire déconnecté…', 'warn'); });
+  Net.on('presence', (msg) => { game.onPresence(msg); if (msg.surrendered) toast('Un joueur a abandonné', 'warn'); else if (msg.connected === false) toast('Un joueur s’est déconnecté…', 'warn'); });
   Net.on('emote', (msg) => game.onEmote(msg));
   Net.on('match_end', (msg) => { pendingResult = msg; Audio.sfx(msg.result === 'win' ? 'win' : msg.result === 'loss' ? 'loss' : 'draw'); Audio.setScene('result'); setTimeout(() => showResult(msg), 1800); });
   Net.on('disconnected', () => { if (current === 'game') toast('Connexion perdue… reconnexion', 'warn'); if (current === 'queue') closeQueue(); });
@@ -424,7 +433,7 @@
     show('lobby');
     if (lastMatchKind && lastMatchKind.t === 'bot') $('btnBot').click();
     else if (lastMatchKind && lastMatchKind.t === 'survival') $('btnSurvival').click();
-    else { lastMatchKind = { t: 'queue' }; Net.send({ t: 'queue' }); openQueue('Recherche d’un adversaire…', 'queue'); }
+    else { const team = (lastMatchKind && lastMatchKind.team) || 1; lastMatchKind = { t: 'queue', team }; Net.send({ t: 'queue', team }); openQueue(team > 1 ? `Recherche de ${team * 2 - 1} joueurs…` : 'Recherche d’un adversaire…', 'queue'); }
   });
 
   // ----- Profil -----
@@ -578,6 +587,7 @@
       
       <h3>Capacités actives (Maj + touche, ou ⚡ sur le slot)</h3><p>10 mana, 20 s de recharge, il faut au moins une créature de ce type en jeu.</p>
       ${[1, 2, 3, 4, 5, 6, 7].map(id => `<p><b>${esc(Catalog.OG_NAMES[id])} – ${esc(Sim.ABILITIES[id].name)}</b> : ${esc(Sim.ABILITIES[id].desc)}</p>`).join('')}
+      <h3>Modes</h3><p><b>Classée 1v1</b> : trophées et ligues. <b>Duo 2v2</b> et <b>Trio 3v3</b> : classés aussi, sur une arène de 13 ou 17 colonnes ; chaque joueur a sa propre mana, les PV de la base sont partagés par l’équipe, les capacités profitent à toute l’équipe, et l’abandon n’est effectif que si tous les coéquipiers abandonnent. S’il manque des joueurs après quelques secondes, des bots complètent les équipes (trophées divisés par 2). <b>Entraînement</b> et <b>Amical</b> existent aussi en 2v2 / 3v3 (format dans les options : en amical, l’hôte peut lancer avec des bots aux places vides).</p>
       <h3>Options de partie</h3>
       ${Features.matchFeatures().map(f => `<p><b>${esc(f.label)}</b>${f.ranked ? ' (actif en classée)' : ''} : ${esc(f.desc)}</p>`).join('')}
       <p><b>Survie</b> : seul contre des vagues de plus en plus nombreuses, sans limite de temps. Score = éliminations ×10 + vagues ×50 + secondes. XP et pièces selon le score, record sauvegardé, classement dédié.</p>

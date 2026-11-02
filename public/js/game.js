@@ -4,7 +4,8 @@
 (function () {
   'use strict';
   const Sim = window.OGSSim;
-  const { FIELD, COLS, ROWS, ROWS_PER_SIDE, CELL_W, CELL_H, RADIUS, OGS, RULES } = Sim;
+  const { ROWS, ROWS_PER_SIDE, CELL_W, CELL_H, RADIUS, OGS, RULES } = Sim;
+  let FIELD = Sim.FIELD, COLS = Sim.COLS; // géométrie de la partie courante (arène plus large en équipe)
   const INTERP_DELAY = 0.12; // s de retard de rendu : les snapshots arrivent à 15 Hz, on en garde ~2 d'avance
   const MAX_EXTRAP = 0.1; // s d'extrapolation max quand un snapshot est en retard (réseau qui hoquette)
   const KEY_TO_OG = { a: 1, q: 1, z: 2, w: 2, e: 3, r: 4, t: 5, y: 6, u: 7 };
@@ -14,6 +15,8 @@
   function createGame(canvas, renderer, net, ui) {
     let active = false, raf = 0;
     let me = 'bottom', opp = 'top';
+    let myKey = 'bottom'; // clé de joueur ('bottom', 'top1'…) : mana, capacités et unités posées me sont propres ; `me` reste le camp
+    let players = []; // tous les joueurs de la partie : { key, side, profile }
     let snaps = []; // { recv, s }
     let clockOffset = null; // temps serveur - performance.now() (s)
     let latest = null;
@@ -26,14 +29,17 @@
 
     function start(msg) {
       active = true;
-      me = msg.side; opp = Sim.other(me);
+      me = msg.side; opp = Sim.other(me); myKey = msg.key || me;
+      const g = Sim.geometry(msg.cols || Sim.COLS); COLS = g.COLS; FIELD = g.FIELD; renderer.setGeometry(COLS);
+      players = msg.players || [{ key: me, side: me, profile: msg.me }, { key: opp, side: opp, profile: msg.opponent }];
       snaps = []; clockOffset = null; latest = null; pending = []; selection = null; result = null;
       phase = msg.phase === 'draft' ? 'draft' : (msg.countdown > 0 ? 'countdown' : 'playing'); countdown = msg.countdown || 0; goTimer = 0;
       mapId = msg.map || 'lagoon'; features = msg.features || {}; bans = msg.bans || { top: [], bottom: [] }; draftTimer = msg.draftSeconds || 0; myBan = null; oppBan = null; survival = msg.survival || null;
       duration = msg.duration === 0 ? 0 : (msg.duration || RULES.matchDuration); mode = msg.mode || 'ranked';
       profiles = { me: msg.me, opp: msg.opponent };
-      equipped[me] = Object.assign({}, OGSCatalog.DEFAULT_EQUIP, msg.me.equipped || {});
-      equipped[opp] = Object.assign({}, OGSCatalog.DEFAULT_EQUIP, msg.opponent.equipped || {});
+      equipped = {};
+      for (const p of players) equipped[p.key] = Object.assign({}, OGSCatalog.DEFAULT_EQUIP, (p.profile && p.profile.equipped) || {});
+      equipped[me] = equipped[me] || equipped[myKey]; equipped[opp] = equipped[opp] || Object.assign({}, OGSCatalog.DEFAULT_EQUIP);
       presence = { top: true, bottom: true }; mouseInField = false;
       renderer.reset();
       cursor = { col: Math.floor(COLS / 2), row: backRow() };
@@ -74,16 +80,16 @@
           else if (ev.type === 'shot') A.sfx('shot');
           else if (ev.type === 'bounce') A.sfx('bounce');
           else if (ev.type === 'base') A.sfx('base');
-          else if (ev.type === 'orb' && ev.player === me) A.sfx('orb');
+          else if (ev.type === 'orb' && (ev.owner || ev.player) === myKey) A.sfx('orb');
           else if (ev.type === 'ability' && !ev.passive) A.sfx(ev.ogId === 5 ? 'freeze' : 'ability');
           else if (ev.type === 'evolve') A.sfx('evolve');
           else if (ev.type === 'heal') A.sfx('heal');
           else if (ev.type === 'overtime') { A.sfx('overtime'); A.setScene('overtime'); }
         }
         if (ev.type === 'overtime') ui.toast('MORT SUBITE : mana ×3, premier dégât = défaite', 'warn');
-        if (ev.type === 'ability' && ev.player === me && !ev.passive) ui.toast(`${Sim.ABILITIES[ev.ogId].name} !`, 'ok');
+        if (ev.type === 'ability' && (ev.owner || ev.player) === myKey && !ev.passive) ui.toast(`${Sim.ABILITIES[ev.ogId].name} !`, 'ok');
         if (ev.type === 'evolve' && ev.player === me) ui.toast(`${OGSCatalog.OG_NAMES[ev.ogId]} niveau ${ev.level} !`, 'ok');
-        if (ev.type === 'place' && ev.player === me) pending = pending.filter(p => !(Sim.cellOf(ev.x, ev.y).col === p.col && Sim.cellOf(ev.x, ev.y).row === p.row));
+        if (ev.type === 'place' && (ev.owner || ev.player) === myKey) { const c = Sim.cellOf(ev.x, ev.y, COLS); pending = pending.filter(p => !(c && c.col === p.col && c.row === p.row)); }
         if (ev.type === 'end') finish(ev.winner);
         if (ev.type === 'base' && ev.target === me) ui.toast(`-${ev.amount} PV !`, 'bad');
         if (ev.type === 'hazard' && ev.phase === 'approach') ui.toast('Scorpion noir en approche !', 'warn');
@@ -98,14 +104,14 @@
     function useAbility(ogId) {
       if (!features.abilities) return ui.toast('Capacités désactivées dans cette partie', 'warn');
       if (phase !== 'playing' && phase !== 'go') return;
-      const cd = latest && latest.abilities[me] && latest.abilities[me][ogId];
+      const cd = latest && latest.abilities[myKey] && latest.abilities[myKey][ogId];
       if (cd) return ui.toast(`${Sim.ABILITIES[ogId].name} : recharge ${Math.ceil(cd)} s`, 'warn');
       net.send({ t: 'ability', og: ogId });
     }
     function pickBan(ogId) { if (phase !== 'draft' || myBan) return; myBan = ogId; net.send({ t: 'ban', og: ogId }); ui.toast(`Tu bannis ${OGSCatalog.OG_NAMES[ogId]}`, 'ok'); }
     function finish(winner) { phase = 'over'; result = mode === 'survival' ? 'survival' : winner === 'draw' ? 'draw' : winner === me ? 'win' : 'loss'; selection = null; }
     function onRejected(msg) { pending = pending.filter(p => !(p.col === msg.col && p.row === msg.row)); ui.toast(REJECT_TEXT[msg.reason] || 'Placement refusé', 'bad'); if (window.OGSAudio) OGSAudio.sfx('reject'); }
-    function onPresence(msg) { presence[msg.side] = msg.connected; }
+    function onPresence(msg) { if (msg.surrendered) return; presence[msg.side] = msg.connected; }
     function onEmote(msg) { renderer.addEmote(msg.side, msg.id); if (window.OGSAudio) OGSAudio.sfx('emote'); }
 
     // ----- Interpolation -----
@@ -185,7 +191,7 @@
       if (row < r0 || row > r1) return ui.toast('Pas de ton côté', 'bad');
       if (og.backOnly && row !== backRow()) return ui.toast('Cet Og se pose uniquement sur la ligne du fond', 'bad');
       if (cellOccupied(col, row) && !evolvableAt(selection, col, row)) return ui.toast('Case occupée', 'bad');
-      if (latest && latest.mana[me] < og.cost) return ui.toast(`Pas assez de mana (${og.cost})`, 'bad');
+      if (latest && latest.mana[myKey] < og.cost) return ui.toast(`Pas assez de mana (${og.cost})`, 'bad');
       if (latest && latest.hazard) return ui.toast('Scorpion noir : placement bloqué', 'bad');
       net.send({ t: 'place', og: selection, col, row });
       pending.push({ col, row, ogId: selection, t: performance.now() / 1000 });
@@ -232,7 +238,7 @@
       const p = renderer.screenToLogical(ev.clientX, ev.clientY);
       if (p.y < renderer.FIELD_Y || p.y > renderer.FIELD_Y + FIELD.h) return { p, cell: null };
       const w = renderer.logicalToWorld(p);
-      return { p, w, cell: Sim.cellOf(w.x, w.y) };
+      return { p, w, cell: Sim.cellOf(w.x, w.y, COLS) };
     }
     function onPointerMove(ev) {
       if (!active) return;
@@ -282,7 +288,7 @@
       if (phase === 'go') { goTimer -= dt; if (goTimer <= 0) phase = 'playing'; }
       pending = pending.filter(p => now - p.t < 0.6);
       const state = interpolated(now) || { t: 0, hp: { top: RULES.healthMax, bottom: RULES.healthMax }, mana: { top: 0, bottom: 0 }, entities: [], projectiles: [], orbs: [], hazard: null };
-      view.me = me; view.time = now - startTime; view.state = state; view.phase = phase; view.countdown = countdown; view.goTimer = goTimer; view.result = result;
+      view.me = me; view.myKey = myKey; view.players = players; view.opponents = players.filter(p => p.side === opp).map(p => p.profile); view.teammates = players.filter(p => p.side === me && p.key !== myKey).map(p => p.profile); view.time = now - startTime; view.state = state; view.phase = phase; view.countdown = countdown; view.goTimer = goTimer; view.result = result;
       view.selection = selection; view.cursor = (selection || mouseInField) ? cursor : null; view.availableCells = availableCells(); view.pending = pending;
       view.equipped = equipped; view.opponent = profiles.opp; view.meProfile = profiles.me; view.presence = presence;
       view.timeLeft = duration ? Math.max(0, duration - (latest ? latest.t : 0)) : Infinity; view.elapsed = latest ? latest.t : 0; view.mode = mode; view.latency = net.latency;

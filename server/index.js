@@ -438,24 +438,41 @@ function botEquipped(seed) {
   return eq;
 }
 
-async function createMatch(entries, { mode, botFill = false, bot = null, duration = Sim.RULES.matchDuration, features = null, survival = false, map = 'random' }) {
+const BOT_NAMES = { simple: ['Bot Oggy', 'Bot Pipo', 'Bot Lulu', 'Bot Nino', 'Bot Tao', 'Bot Fifi'], moyen: ['Bot Ogma', 'Bot Zorg', 'Bot Mimi', 'Bot Kiko', 'Bot Rolf', 'Bot Suzu'], difficile: ['Bot Ogzilla', 'Bot Krakor', 'Bot Vex', 'Bot Nyx', 'Bot Tyr', 'Bot Ash'] };
+function makeBot(difficulty, trophies, i) {
+  const name = BOT_NAMES[difficulty][i % 6];
+  return { client: null, profile: { id: null, username: name, trophies: Math.max(0, trophies + Math.round((Math.random() - 0.5) * 60)), level: difficulty === 'simple' ? 3 : difficulty === 'moyen' ? 12 : 30, rank: Catalog.rankFor(trophies).name, equipped: botEquipped((Date.now() + i * 97) % 1000), avatar: `preset:og${1 + ((Date.now() + i) % 7)}_default`, bot: true, difficulty }, bot: difficulty };
+}
+
+async function createMatch(entries, { mode, botFill = false, bot = null, duration = Sim.RULES.matchDuration, features = null, survival = false, map = 'random', teamSize = 1 }) {
   // Profils relus en base : skins équipés, avatar et trophées à jour au moment du match.
-  const players = [];
+  const humans = [];
   for (const e of entries) {
     let profile = e.profile;
     if (profile && profile.id) { const fresh = await db.getUserById(profile.id); if (fresh) profile = refreshLiveProfile(fresh); }
-    players.push({ client: e.client, profile, bot: null });
+    humans.push({ client: e.client, profile, bot: null });
   }
-  if (bot) {
-    const trophies = entries[0].profile.trophies;
-    const names = { simple: 'Bot Oggy', moyen: 'Bot Ogma', difficile: 'Bot Ogzilla' };
-    players.push({ client: null, profile: { id: null, username: names[bot], trophies: Math.max(0, trophies + Math.round((Math.random() - 0.5) * 60)), level: bot === 'simple' ? 3 : bot === 'moyen' ? 12 : 30, rank: Catalog.rankFor(trophies).name, equipped: botEquipped(Date.now() % 1000), avatar: `preset:og${1 + (Date.now() % 7)}_default`, bot: true, difficulty: bot }, bot });
+  const players = [];
+  if (survival) {
+    players.push({ client: null, profile: { id: null, username: 'Les Vagues', trophies: 0, level: 0, rank: '', equipped: botEquipped(Date.now() % 1000), avatar: 'preset:og7_halloween', bot: true }, director: true, side: 'top' });
+    players.push(Object.assign(humans[0], { side: 'bottom' })); // le joueur humain est en bas
+  } else {
+    // Répartition : les humains alternent entre les deux camps (équilibre), puis des bots complètent chaque camp.
+    const firstSide = Math.random() < 0.5 ? 'top' : 'bottom';
+    const sides = [firstSide, firstSide === 'top' ? 'bottom' : 'top'];
+    const count = { top: 0, bottom: 0 };
+    humans.forEach((h, i) => { const side = mode === 'bot' ? 'bottom' : sides[i % 2]; count[side] += 1; players.push(Object.assign(h, { side })); });
+    const avg = humans.reduce((n, h) => n + (h.profile.trophies || 0), 0) / Math.max(1, humans.length);
+    let bi = 0;
+    for (const side of ['top', 'bottom']) {
+      while (count[side] < teamSize) {
+        const diff = bot || 'moyen';
+        players.push(Object.assign(makeBot(diff, avg, bi++), { side })); count[side] += 1;
+      }
+    }
   }
-  if (survival) players.push({ client: null, profile: { id: null, username: 'Les Vagues', trophies: 0, level: 0, rank: '', equipped: botEquipped(Date.now() % 1000), avatar: 'preset:og7_halloween', bot: true }, director: true });
-  if (survival) players.reverse(); // le joueur humain est en bas
-  else if (Math.random() < 0.5) players.reverse();
-  const feats = features || Features.resolveOptions(null, mode === 'ranked');
-  const room = new Room({ players, mode, features: feats, duration, botFill, map, onEnd: endMatch });
+  const feats = features || Features.resolveOptions(null, ['ranked', 'duo', 'trio'].includes(mode));
+  const room = new Room({ players, mode, features: feats, duration, botFill, map, teamSize, onEnd: endMatch });
   rooms.add(room);
   for (const p of room.players) if (p.client) { matchmaker.leave(p.client); p.client.room = room; }
   room.start();
@@ -464,12 +481,15 @@ async function createMatch(entries, { mode, botFill = false, bot = null, duratio
 
 async function endMatch(room, result) {
   rooms.delete(room);
-  const [a, b] = room.players;
+  const a = room.players.find(p => p.side === 'top') || room.players[0], b = room.players.find(p => p.side === 'bottom') || room.players[1];
+  const teamName = (side) => room.players.filter(p => p.side === side).map(p => p.profile.username).join(' & ');
   const outcome = {};
-  for (const p of room.players) {
-    const opp = room.players.find(x => x !== p);
-    const res = room.mode === 'survival' ? 'survival' : result.winner === 'draw' ? 'draw' : result.winner === p.side ? 'win' : 'loss';
-    outcome[p.side] = { res, opp };
+  for (const side of ['top', 'bottom']) {
+    const opps = room.players.filter(x => x.side !== side);
+    const res = room.mode === 'survival' ? 'survival' : result.winner === 'draw' ? 'draw' : result.winner === side ? 'win' : 'loss';
+    // Profil « adversaire » synthétique pour les récompenses : moyenne des trophées de l'équipe adverse.
+    const opp = { profile: Object.assign({}, opps[0].profile, { username: teamName(opps[0].side), trophies: Math.round(opps.reduce((n, o) => n + (o.profile.trophies || 0), 0) / opps.length) }) };
+    outcome[side] = { res, opp };
   }
   const deltas = {};
   const payloads = {};
@@ -478,7 +498,7 @@ async function endMatch(room, result) {
     const user = await db.getUserById(p.profile.id);
     if (!user) continue;
     const { res, opp } = outcome[p.side];
-    const rewardMode = room.mode;
+    const rewardMode = room.mode === 'duo' || room.mode === 'trio' ? 'ranked' : room.mode;
     const applied = applyResult(user, opp.profile, res, rewardMode, { stats: result.stats[p.side], survival: result.survival });
     if (room.botFill && applied.rewards.trophies > 0) {
       applied.rewards.trophies = Math.ceil(applied.rewards.trophies / 2);
@@ -491,13 +511,13 @@ async function endMatch(room, result) {
     if (p.client) p.client.profile = profile;
     const live = byUser.get(user.id);
     if (live) live.profile = profile;
-    payloads[p.side] = { t: 'match_end', side: p.side, result: res, winner: result.winner, reason: result.reason, duration: Math.round(result.duration), hp: result.hp, points: result.points, stats: result.stats, rewards: applied.rewards, levelUp: applied.levelUp, unlocked: applied.unlocked, newBest: applied.newBest, survival: result.survival, quests: Features.enabled('quests') ? questsView(updated) : null, profile, opponent: opp.profile };
+    payloads[p.key] = { t: 'match_end', side: p.side, key: p.key, result: res, winner: result.winner, reason: result.reason, duration: Math.round(result.duration), hp: result.hp, points: result.points, stats: result.stats, rewards: applied.rewards, levelUp: applied.levelUp, unlocked: applied.unlocked, newBest: applied.newBest, survival: result.survival, quests: Features.enabled('quests') ? questsView(updated) : null, profile, opponent: opp.profile };
   }
-  for (const p of room.players) if (payloads[p.side]) room.send(p, payloads[p.side]);
+  for (const p of room.players) if (payloads[p.key]) room.send(p, payloads[p.key]);
   try {
     await db.recordMatch({
       mode: room.mode + (room.botFill ? '-botfill' : ''), p1_id: a.profile.id || null, p2_id: b.profile.id || null,
-      p1_name: a.profile.username, p2_name: b.profile.username,
+      p1_name: teamName('top'), p2_name: teamName('bottom'),
       winner: result.winner === 'draw' ? 'draw' : result.winner === a.side ? 'p1' : 'p2',
       reason: result.reason, duration: Math.round(result.duration), p1_delta: deltas[a.side] || 0, p2_delta: deltas[b.side] || 0, stats: result.stats,
     });
@@ -547,11 +567,13 @@ wss.on('connection', (ws, req) => {
 
     switch (msg.t) {
       case 'ping': client.send({ t: 'pong', ts: msg.ts, online: clients.size }); break;
-      case 'queue':
+      case 'queue': {
         if (client.room) return;
         leaveFriendly(client);
-        matchmaker.join(client, client.profile);
+        const team = Math.max(1, Math.min(3, Number(msg.team) || 1)); // 1 = classée 1v1, 2 = duo, 3 = trio
+        matchmaker.join(client, client.profile, team);
         break;
+      }
       case 'cancel':
         matchmaker.leave(client);
         client.send({ t: 'idle' });
@@ -560,7 +582,7 @@ wss.on('connection', (ws, req) => {
         if (client.room) return;
         matchmaker.leave(client); leaveFriendly(client);
         const diff = ['simple', 'moyen', 'difficile'].includes(msg.difficulty) ? msg.difficulty : 'moyen';
-        await createMatch([{ client, profile: client.profile }], { mode: 'bot', bot: diff, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false), map: String(msg.map || 'random') });
+        await createMatch([{ client, profile: client.profile }], { mode: 'bot', bot: diff, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false), map: String(msg.map || 'random'), teamSize: Math.max(1, Math.min(3, Number(msg.team) || 1)) });
         break;
       }
       case 'survival': {
@@ -573,9 +595,11 @@ wss.on('connection', (ws, req) => {
         if (client.room) return;
         matchmaker.leave(client); leaveFriendly(client);
         const code = makeCode();
-        friendly.set(code, { host: client, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false), map: String(msg.map || 'random') });
+        const team = Math.max(1, Math.min(3, Number(msg.team) || 1));
+        friendly.set(code, { code, host: client, members: [client], team, duration: pickDuration(msg.duration), features: Features.resolveOptions(msg.options, false), map: String(msg.map || 'random') });
         client.friendlyCode = code;
-        client.send({ t: 'friendly_created', code });
+        client.send({ t: 'friendly_created', code, team });
+        sendFriendlyLobby(friendly.get(code));
         break;
       }
       case 'friendly_join': {
@@ -583,10 +607,19 @@ wss.on('connection', (ws, req) => {
         const code = String(msg.code || '').toUpperCase().trim();
         const entry = friendly.get(code);
         if (!entry || !entry.host.alive) return client.send({ t: 'error', error: 'Code introuvable' });
-        if (entry.host === client) return client.send({ t: 'error', error: 'C’est ta propre salle' });
+        if (entry.members.includes(client)) return client.send({ t: 'error', error: 'Tu es déjà dans cette salle' });
         matchmaker.leave(client); leaveFriendly(client);
-        friendly.delete(code); entry.host.friendlyCode = null;
-        await createMatch([{ client: entry.host, profile: entry.host.profile }, { client, profile: client.profile }], { mode: 'friendly', duration: entry.duration, features: entry.features, map: entry.map });
+        entry.members = entry.members.filter(m => m.alive);
+        if (entry.members.length >= entry.team * 2) return client.send({ t: 'error', error: 'Salle pleine' });
+        entry.members.push(client); client.friendlyCode = code;
+        if (entry.members.length === entry.team * 2) await startFriendly(entry);
+        else sendFriendlyLobby(entry);
+        break;
+      }
+      case 'friendly_start': { // l'hôte lance la partie, les places vides sont prises par des bots
+        const entry = client.friendlyCode && friendly.get(client.friendlyCode);
+        if (!entry || entry.host !== client) return;
+        await startFriendly(entry);
         break;
       }
       case 'friendly_leave': leaveFriendly(client); client.send({ t: 'idle' }); break;
@@ -608,8 +641,29 @@ wss.on('connection', (ws, req) => {
   ws.on('error', () => {});
 });
 
+function sendFriendlyLobby(entry) {
+  const members = entry.members.filter(m => m.alive).map(m => ({ username: m.profile.username, host: m === entry.host }));
+  for (const m of entry.members) if (m.alive) m.send({ t: 'friendly_lobby', code: entry.code, team: entry.team, members, need: entry.team * 2, host: m === entry.host });
+}
+async function startFriendly(entry) {
+  friendly.delete(entry.code);
+  const members = entry.members.filter(m => m.alive);
+  for (const m of members) m.friendlyCode = null;
+  if (members.length < 2 && entry.team === 1) return members.forEach(m => m.send({ t: 'error', error: 'Il faut un adversaire' }));
+  await createMatch(members.map(m => ({ client: m, profile: m.profile })), { mode: 'friendly', duration: entry.duration, features: entry.features, map: entry.map, teamSize: entry.team, bot: members.length < entry.team * 2 ? 'moyen' : null });
+}
 function leaveFriendly(client) {
-  if (client.friendlyCode) { friendly.delete(client.friendlyCode); client.friendlyCode = null; }
+  if (!client.friendlyCode) return;
+  const entry = friendly.get(client.friendlyCode);
+  client.friendlyCode = null;
+  if (!entry) return;
+  if (entry.host === client) { // l'hôte part : la salle ferme
+    friendly.delete(entry.code);
+    for (const m of entry.members) if (m !== client && m.alive) { m.friendlyCode = null; m.send({ t: 'error', error: 'L’hôte a fermé la salle' }); m.send({ t: 'idle' }); }
+  } else {
+    entry.members = entry.members.filter(m => m !== client);
+    sendFriendlyLobby(entry);
+  }
 }
 
 // Heartbeat WS.

@@ -5,8 +5,10 @@
 (function () {
   'use strict';
   const Sim = window.OGSSim;
-  const { FIELD, COLS, ROWS, CELL_W, CELL_H, RADIUS, OGS, RULES } = Sim;
-  const W = 1536, H = 2048, BAND = 280, BEACH = 26;
+  const { ROWS, CELL_W, CELL_H, RADIUS, OGS, RULES } = Sim;
+  // Géométrie de l'arène courante (9 colonnes en 1v1, 13 en 2v2, 17 en 3v3) : mise à jour par setGeometry().
+  let FIELD = Sim.FIELD, COLS = Sim.COLS, W = Sim.FIELD.w;
+  const H = 2048, BAND = 280, BEACH = 26;
   const FIELD_Y = BAND;
   const KEY_LABELS = ['A', 'Z', 'E', 'R', 'T', 'Y', 'U'];
   let MAX_DPR = 2; // baissé automatiquement si la machine n'arrive pas à suivre (qualité adaptative)
@@ -22,14 +24,22 @@
     let waterCache = null;
     let slowFrames = 0, perfFrames = 0; // qualité adaptative
 
+    function setGeometry(cols) {
+      const g = Sim.geometry(cols || Sim.COLS);
+      if (g.COLS === COLS) return;
+      COLS = g.COLS; FIELD = g.FIELD; W = FIELD.w; waterCache = null; resize();
+    }
     function resize() {
       const ratio = W / H;
-      const maxW = window.innerWidth, maxH = window.innerHeight;
+      // On réserve la place des panneaux latéraux (HUD DOM) pour que l'arène, surtout élargie en équipe, ne passe pas dessous.
+      let reserve = 0;
+      document.querySelectorAll('#screen-game .game-side').forEach(s => { if (getComputedStyle(s).display !== 'none') reserve += s.offsetWidth + 12; });
+      const maxW = Math.max(320, window.innerWidth - reserve), maxH = window.innerHeight;
       cssW = maxW; cssH = cssW / ratio;
       if (cssH > maxH) { cssH = maxH; cssW = cssH * ratio; }
       const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
       canvas.style.width = `${cssW}px`; canvas.style.height = `${cssH}px`;
-      canvas.style.left = `${(maxW - cssW) / 2}px`; canvas.style.top = `${(maxH - cssH) / 2}px`;
+      canvas.style.left = `${reserve / 2 + (maxW - cssW) / 2}px`; canvas.style.top = `${(maxH - cssH) / 2}px`;
       canvas.width = Math.round(W * (cssW / W) * dpr); canvas.height = Math.round(H * (cssH / H) * dpr);
       scale = canvas.width / W;
       waterCache = null;
@@ -198,12 +208,12 @@
         ctx.restore();
         if (sel && ok) {
           // Fantôme de l'Og sélectionné.
-          Creatures.draw(ctx, sel, view.equipped[me][sel], r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.8, view.time, { moving: false }, { alpha: 0.45 + 0.1 * Math.sin(view.time * 6) });
+          Creatures.draw(ctx, sel, (view.equipped[view.myKey] || {})[sel], r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.8, view.time, { moving: false }, { alpha: 0.45 + 0.1 * Math.sin(view.time * 6) });
         }
       }
       for (const p of view.pending) {
         const r = cellRect(p.col, p.row);
-        Creatures.draw(ctx, p.ogId, view.equipped[me][p.ogId], r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.85, view.time, { moving: false }, { alpha: 0.6 });
+        Creatures.draw(ctx, p.ogId, (view.equipped[view.myKey] || {})[p.ogId], r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.85, view.time, { moving: false }, { alpha: 0.6 });
       }
     }
 
@@ -367,7 +377,7 @@
       const bandY = H - BAND + BEACH;
       const hudColor = (window.OGSMaps && view.map && OGSMaps.get(view.map).hud) || '#0f172a';
       ctx.fillStyle = hudColor; ctx.fillRect(0, bandY, W, BAND - BEACH);
-      const manaRatio = Math.max(0, Math.min(1, S.mana[me] / RULES.manaMax));
+      const manaRatio = Math.max(0, Math.min(1, S.mana[view.myKey] / RULES.manaMax));
       const g = ctx.createLinearGradient(0, bandY, 0, H); g.addColorStop(0, '#86efac'); g.addColorStop(1, '#10b981');
       ctx.fillStyle = g; ctx.fillRect(0, bandY + 10, W * manaRatio, BAND - BEACH - 20);
       // Reflets sur la barre de mana.
@@ -375,13 +385,13 @@
       for (let i = 0; i < 6; i += 1) { const x = ((view.time * 120 + i * 300) % (W + 200)) - 100; ctx.fillRect(x, bandY + 10, 30, BAND - BEACH - 20); }
       ctx.restore();
       ctx.font = 'bold 30px Fredoka, sans-serif'; ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.fillText(`${Math.floor(S.mana[me])} / ${RULES.manaMax}`, W - 14, H - 14);
+      ctx.fillText(`${Math.floor(S.mana[view.myKey])} / ${RULES.manaMax}`, W - 14, H - 14);
 
       const slotW = W / 7, slotSize = 190;
       for (let i = 0; i < 7; i += 1) {
         const ogId = i + 1, og = OGS[ogId];
         const cx = i * slotW + slotW / 2, cy = bandY + (BAND - BEACH) / 2;
-        const affordable = S.mana[me] >= og.cost;
+        const affordable = S.mana[view.myKey] >= og.cost;
         const selected = view.selection === ogId;
         const lift = selected ? -10 : 0;
         ctx.save();
@@ -390,15 +400,15 @@
         roundRect(cx - slotSize / 2, cy - slotSize / 2 + lift, slotSize, slotSize, 18); ctx.fill();
         ctx.lineWidth = selected ? 7 : 4; ctx.strokeStyle = selected ? '#fde047' : '#ffffff'; ctx.stroke();
         // Remplissage progressif (mana manquante) en bas du slot.
-        if (!affordable) { ctx.fillStyle = 'rgba(15,23,42,0.45)'; const k = 1 - S.mana[me] / og.cost; roundRect(cx - slotSize / 2, cy - slotSize / 2 + lift, slotSize, slotSize * k, 18); ctx.fill(); }
+        if (!affordable) { ctx.fillStyle = 'rgba(15,23,42,0.45)'; const k = 1 - S.mana[view.myKey] / og.cost; roundRect(cx - slotSize / 2, cy - slotSize / 2 + lift, slotSize, slotSize * k, 18); ctx.fill(); }
         const banned = (view.bans && view.bans[me] || []).includes(ogId);
-        Creatures.draw(ctx, ogId, view.equipped[me][ogId], cx, cy + lift + 6, slotSize * 0.7, view.time, { moving: selected, vx: 1, phase: i }, { scaleX: selected ? 1.06 : 1, scaleY: selected ? 1.06 : 1, alpha: banned ? 0.35 : 1 });
+        Creatures.draw(ctx, ogId, (view.equipped[view.myKey] || {})[ogId], cx, cy + lift + 6, slotSize * 0.7, view.time, { moving: selected, vx: 1, phase: i }, { scaleX: selected ? 1.06 : 1, scaleY: selected ? 1.06 : 1, alpha: banned ? 0.35 : 1 });
         if (banned) { ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx - 50, cy - 50 + lift); ctx.lineTo(cx + 50, cy + 50 + lift); ctx.moveTo(cx + 50, cy - 50 + lift); ctx.lineTo(cx - 50, cy + 50 + lift); ctx.stroke(); }
         // Touche + coût.
         ctx.globalAlpha = 1;
         // Capacité active : badge ⚡ en haut à droite avec recharge.
         if (view.features && view.features.abilities && !banned) {
-          const cd = S.abilities && S.abilities[me] ? S.abilities[me][ogId] : 0;
+          const cd = S.abilities && S.abilities[view.myKey] ? S.abilities[view.myKey][ogId] : 0;
           const bx2 = cx + slotSize / 2 - 30, by2 = cy - slotSize / 2 + 30 + lift;
           ctx.fillStyle = cd ? 'rgba(15,23,42,0.85)' : '#fde047'; ctx.beginPath(); ctx.arc(bx2, by2, 26, 0, Math.PI * 2); ctx.fill();
           ctx.strokeStyle = '#0b1021'; ctx.lineWidth = 3; ctx.stroke();
@@ -416,18 +426,20 @@
       const topH = BAND - BEACH;
       ctx.fillStyle = hudColor; ctx.fillRect(0, 0, W, topH);
       // Mana adverse : barre fine en bas de la bande, se remplit depuis la droite.
-      const oppRatio = Math.max(0, Math.min(1, S.mana[opp] / RULES.manaMax));
+      const oppKeys = Object.keys(S.mana || {}).filter(k => Sim.sideOf(k) === opp);
+      const oppMana = oppKeys.length ? oppKeys.reduce((n, k) => n + S.mana[k], 0) / oppKeys.length : 0;
+      const oppRatio = Math.max(0, Math.min(1, oppMana / RULES.manaMax));
       const mbY = topH - 52, mbH = 30;
       ctx.fillStyle = 'rgba(255,255,255,0.08)'; roundRect(16, mbY, W - 32, mbH, 10); ctx.fill();
       const g2 = ctx.createLinearGradient(0, mbY, 0, mbY + mbH); g2.addColorStop(0, '#fca5a5'); g2.addColorStop(1, '#dc2626');
       ctx.fillStyle = g2;
       if (oppRatio > 0.01) { roundRect(16 + (W - 32) * (1 - oppRatio), mbY, (W - 32) * oppRatio, mbH, 10); ctx.fill(); }
       ctx.font = 'bold 24px Fredoka, sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
-      ctx.fillText(`Mana adverse ${Math.floor(S.mana[opp])} / ${RULES.manaMax}`, 30, mbY + 23);
+      ctx.fillText(`Mana adverse ${Math.floor(oppMana)} / ${RULES.manaMax}${oppKeys.length > 1 ? ' (moyenne)' : ''}`, 30, mbY + 23);
       // Nom de l'adversaire.
       ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
       ctx.font = 'bold 48px Fredoka, sans-serif';
-      const oppName = view.opponent ? view.opponent.username : 'Adversaire';
+      const oppName = view.opponents && view.opponents.length > 1 ? view.opponents.map(o => o.username).join(' & ') : (view.opponent ? view.opponent.username : 'Adversaire');
       ctx.fillText(oppName, W / 2, 86);
       ctx.font = '28px Fredoka, sans-serif'; ctx.fillStyle = '#fde68a';
       const oppLine = view.opponent ? `🏆 ${view.opponent.trophies}  ·  ${view.opponent.rank || ''}${view.opponent.bot ? '  ·  IA' : ''}` : '';
@@ -443,7 +455,7 @@
       ctx.fillText(`${mm}:${ss}`, 139, 112);
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; roundRect(W - 254, 24, 230, 120, 18); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 30px Fredoka, sans-serif';
-      ctx.fillText(view.mode === 'ranked' ? 'CLASSÉE' : view.mode === 'bot' ? 'ENTRAÎNEMENT' : view.mode === 'survival' ? 'SURVIE' : 'AMICALE', W - 139, 74);
+      ctx.fillText(view.mode === 'ranked' ? 'CLASSÉE' : view.mode === 'duo' ? 'DUO 2v2' : view.mode === 'trio' ? 'TRIO 3v3' : view.mode === 'bot' ? 'ENTRAÎNEMENT' : view.mode === 'survival' ? 'SURVIE' : 'AMICALE', W - 139, 74);
       ctx.font = '26px Fredoka, sans-serif'; ctx.fillStyle = '#cbd5e1';
       ctx.fillText(`${Math.round(view.latency || 0)} ms`, W - 139, 118);
 
@@ -538,7 +550,7 @@
         ctx.fillText(view.draft.oppBan ? `L’adversaire a choisi son bannissement` : 'L’adversaire réfléchit…', W / 2, FIELD_Y + 280);
         ctx.font = 'bold 120px "Press Start 2P", monospace'; ctx.fillStyle = '#fde68a'; ctx.strokeText(String(Math.ceil(view.draft.timer)), W / 2, FIELD_Y + FIELD.h / 2 + 120); ctx.fillText(String(Math.ceil(view.draft.timer)), W / 2, FIELD_Y + FIELD.h / 2 + 120);
         // Les 7 créatures en ligne.
-        for (let i = 0; i < 7; i += 1) { const og = i + 1, x = W / 8 * (i + 1), y = FIELD_Y + FIELD.h * 0.72; Creatures.draw(ctx, og, view.equipped[me][og], x, y, 120, view.time, { moving: false, phase: i }, { alpha: view.draft.myBan === og ? 0.3 : 1 }); if (view.draft.myBan === og) { ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(x - 50, y - 50); ctx.lineTo(x + 50, y + 50); ctx.moveTo(x + 50, y - 50); ctx.lineTo(x - 50, y + 50); ctx.stroke(); } ctx.fillStyle = '#fff'; ctx.font = 'bold 24px Fredoka, sans-serif'; ctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${OGSCatalog.OG_NAMES[og]}`, x, y + 95); }
+        for (let i = 0; i < 7; i += 1) { const og = i + 1, x = W / 8 * (i + 1), y = FIELD_Y + FIELD.h * 0.72; Creatures.draw(ctx, og, (view.equipped[view.myKey] || {})[og], x, y, 120, view.time, { moving: false, phase: i }, { alpha: view.draft.myBan === og ? 0.3 : 1 }); if (view.draft.myBan === og) { ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(x - 50, y - 50); ctx.lineTo(x + 50, y + 50); ctx.moveTo(x + 50, y - 50); ctx.lineTo(x - 50, y + 50); ctx.stroke(); } ctx.fillStyle = '#fff'; ctx.font = 'bold 24px Fredoka, sans-serif'; ctx.fillText(`${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]} · ${OGSCatalog.OG_NAMES[og]}`, x, y + 95); }
         ctx.restore();
       } else if (view.phase === 'over' && view.result) {
         ctx.save(); ctx.fillStyle = 'rgba(5,8,20,0.5)'; ctx.fillRect(0, FIELD_Y, W, FIELD.h);
@@ -589,7 +601,7 @@
 
     resize();
     window.addEventListener('resize', resize);
-    return { render, resize, onEvent, addEmote, reset, screenToLogical, logicalToWorld, cellRect, W, H, FIELD_Y, BAND, BEACH, get me() { return me; } };
+    return { render, resize, setGeometry, onEvent, addEmote, reset, screenToLogical, logicalToWorld, cellRect, get W() { return W; }, H, FIELD_Y, BAND, BEACH, get me() { return me; } };
   }
 
   window.OGSRender = { createRenderer, W, H, FIELD_Y, BAND, BEACH };
