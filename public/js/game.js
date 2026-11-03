@@ -147,7 +147,7 @@
         const p = prev.get(e.id);
         if (!p) return Object.assign({ vx: 0, vy: 0 }, e);
         const vx = dtSim > 0 ? (e.x - p.x) / dtSim : 0, vy = dtSim > 0 ? (e.y - p.y) / dtSim : 0;
-        return { id: e.id, ogId: e.ogId, player: e.player, owner: e.owner, hp: e.hp, hpMax: e.hpMax, level: e.level, frozen: e.frozen, boosted: e.boosted, x: p.x + (e.x - p.x) * k, y: p.y + (e.y - p.y) * k, rot: lerpAngle(p.rot, e.rot, k), vx, vy };
+        return { id: e.id, ogId: e.ogId, player: e.player, owner: e.owner, hp: e.hp, hpMax: e.hpMax, level: e.level, frozen: e.frozen, boosted: e.boosted, slowed: e.slowed, hiddenFromEnemy: e.hiddenFromEnemy, life: e.life, x: p.x + (e.x - p.x) * k, y: p.y + (e.y - p.y) * k, rot: lerpAngle(p.rot, e.rot, k), vx, vy };
       });
       const prevP = new Map(A.projectiles.map(p => [p.id, p]));
       const projectiles = B.projectiles.map(p => { const q = prevP.get(p.id); return q ? Object.assign({}, p, { x: q.x + (p.x - q.x) * k, y: q.y + (p.y - q.y) * k }) : p; });

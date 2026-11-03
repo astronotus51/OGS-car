@@ -307,6 +307,14 @@
       if (e.frozen) { ctx.save(); ctx.globalAlpha = 0.55; ctx.fillStyle = '#bae6fd'; ctx.strokeStyle = '#7dd3fc'; ctx.lineWidth = 4; roundRect(x - size * 0.42, y - size * 0.46, size * 0.84, size * 0.9, 14); ctx.fill(); ctx.stroke(); ctx.globalAlpha = 0.9; ctx.fillStyle = '#fff'; ctx.font = 'bold 30px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('❄', x, y + 10); ctx.restore(); }
       if (lvl > 1) { ctx.save(); ctx.fillStyle = '#fde68a'; ctx.strokeStyle = '#0b1021'; ctx.lineWidth = 3; for (let i = 0; i < lvl - 1; i += 1) { const sx2 = x - (lvl - 2) * 12 + i * 24, sy2 = y - size * 0.6; ctx.beginPath(); for (let k = 0; k < 10; k += 1) { const rr2 = k % 2 ? 5 : 11, a = -Math.PI / 2 + k * Math.PI / 5; ctx.lineTo(sx2 + Math.cos(a) * rr2, sy2 + Math.sin(a) * rr2); } ctx.closePath(); ctx.fill(); ctx.stroke(); } ctx.restore(); }
 
+      // Durée de vie restante des structures (anneau qui se vide ; clignote sur la fin).
+      if (e.life !== null && e.life !== undefined && e.life < 1) {
+        const r = size * 0.62, ending = e.life < 0.2 && Math.floor(t * 4) % 2 === 0;
+        ctx.save(); ctx.lineWidth = 5; ctx.lineCap = 'round';
+        ctx.strokeStyle = 'rgba(15,23,42,0.45)'; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = ending ? '#f87171' : enemy ? 'rgba(252,165,165,0.9)' : 'rgba(253,230,138,0.95)';
+        ctx.beginPath(); ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * e.life); ctx.stroke(); ctx.restore();
+      }
       // Points de vie.
       if (e.hpMax > 1) {
         const pipW = 18, gap = 6, total = e.hpMax * pipW + (e.hpMax - 1) * gap;

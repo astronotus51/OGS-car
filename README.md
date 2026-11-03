@@ -112,7 +112,7 @@ Chaque joueur se voit **toujours en bas** de l'écran (le monde est retourné po
 
 ### Modes
 
-- **JOUER** – partie classée : file d'attente par trophées (fenêtre qui s'élargit avec l'attente). Au bout de `BOT_FILL_SECONDS` (15 s par défaut) sans adversaire, un bot de niveau adapté complète la partie (gain de trophées divisé par 2).
+- **JOUER** – partie classée : file d'attente par trophées (fenêtre qui s'élargit avec l'attente). Au bout de `BOT_FILL_SECONDS` (15 s par défaut) sans adversaire, un bot de niveau adapté complète la partie (gain de trophées divisé par 2). Les bots jouent avec **toutes les créatures** : chacun tire une équipe (une créature par coût) parmi les 17, et plus il est fort, plus il sort des nouvelles.
 - **Entraînement vs IA** – XP et pièces réduits, pas de trophées. Durée au choix (2/3/5 min ou illimitée).
 - **Partie amicale** – un code à 5 caractères à partager, pas de trophées. Durée au choix.
 
@@ -133,6 +133,7 @@ Tout est piloté par `shared/features.js` : un interrupteur `enabled` par foncti
 | --- | --- | --- |
 | `abilities` | Capacités actives : Maj + touche ou ⚡ sur le slot (10 mana, 20 s). Zip Sprint, Gromp Rage, Krak Tir triple, Riko Rebond fou, Blok Mur de glace (gel), Mojo Burst de mana, Zéphir Bombe | oui |
 | `evolution` | Reposer Krak / Blok / Mojo sur lui-même : niveau 2 puis 3 (+1 PV, Krak tire plus vite, Mojo régénère plus) | oui |
+| `lifetime` | Structures éphémères : Krak, Rafale, Boum (60 s), Sirène (50 s), Blok, Glu (45 s), Mojo (90 s) disparaissent au bout de leur durée de vie (anneau qui se vide) ; l'évolution la relance | oui |
 | `overtime` | Mort subite en cas d'égalité au temps : mana ×3, premier dégât = défaite | oui |
 | `powerPatches` | Gromp renvoie Riko (−1 PV) au lieu de mourir avec ; Mojo soigne +1 PV ses voisins toutes les 5 s ; Zéphir bombarde (−1 PV) chaque Blok ennemi qu'il survole | oui |
 | `draft` | 12 s avant la partie : chacun bannit une créature chez l'adversaire | non |
@@ -142,7 +143,7 @@ Tout est piloté par `shared/features.js` : un interrupteur `enabled` par foncti
 | `quests` | 3 quêtes du jour (pièces à récupérer dans le lobby) | – |
 | `shopDeals` | Un skin payant à −50 % par semaine | – |
 
-Non fait, volontairement : le 2v2 (il faudrait 4 clients par salle et une file d'attente séparée) et le passe de saison.
+Non fait, volontairement : le passe de saison.
 
 ## Les créatures
 
@@ -177,7 +178,21 @@ Les règles du jeu d'origine sont conservées (`legacy/README.md`, `legacy/BALAN
 - Zip, Riko et Zéphir se posent **uniquement sur la ligne du fond** (la plus éloignée de l'adversaire) ; Gromp, Krak, Blok et Mojo n'importe où sur sa moitié ;
 - classée : 3 min ; entraînement et amical : 2, 3, 5 min ou illimité (KO seulement).
 
-Tout est réglable dans `RULES` et `OGS` en tête de `shared/sim.js` (le serveur et le client utilisent le même fichier).
+Tout est réglable dans `RULES` et `OGS` en tête de `shared/sim.js` (le serveur et le client utilisent le même fichier). Les valeurs actuelles et la façon dont elles ont été mesurées sont dans `BALANCE.md`.
+
+## IA et arène d'auto-affrontement
+
+`shared/ai.js` est l'IA v2 (bots classés, entraînement, places vides en amical, 2v2/3v3) : elle lit le terrain par couloirs, évalue chaque coup possible (créature × colonne) par la valeur attendue face à la défense adverse visible (tourelles, Gromp, murs, Rafale, Glu, Sirène), économise pour un coup cher quand il vaut nettement mieux, défend selon le type de la menace, mémorise les couloirs que l'adversaire utilise, et ne triche pas (mines et fantômes cachés ignorés). Trois niveaux : simple / moyen / difficile (réaction, réflexes de contre, choix du couloir, orbes, capacités). `shared/ai-legacy.js` garde l'ancienne IA pour comparaison.
+
+```bash
+node scripts/ai-arena.js --games 200 --a difficile --b moyen        # niveaux l'un contre l'autre (camps alternés)
+node scripts/ai-arena.js --games 200 --a difficile --b difficile --legacy b --variety 0   # v2 contre l'ancienne IA
+node scripts/ai-arena.js --games 600 --a difficile --b difficile --balance   # bilan par créature (équipes au hasard)
+node scripts/ai-arena.js --games 100 --deckA 1,2,3,4,5,6,7 --deckB 1,2,12,4,5,6,7 --fates   # deux équipes fixes, de quoi meurt chacun
+node scripts/ai-arena.js --games 100 --set orangeCooldown=2.5 --set og10.hp=3   # essai d'équilibrage sans toucher au code
+```
+
+Résultats (nov. 2026) : v2 bat l'ancienne IA 86 % – 11 % ; difficile > moyen (58 %) > simple (70 %), difficile contre simple 75 %.
 
 ## Architecture réseau
 

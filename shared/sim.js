@@ -43,10 +43,20 @@
     hazardRadius: 36,
     hazardPause: 5,
     hazardDamage: 0, // BALANCE.md : 0 dégât en sortie (README historique : 7)
-    orangeCooldown: 1.5,
+    orangeCooldown: 2.2, // Krak : un tir toutes les 2,2 s (1,5 s avant l'équilibrage : il gagnait 98 % des parties où un seul camp l'avait)
     wingedCooldown: 0.8,
     orangeRange: 2, // Krak : 2 cases tout autour (carré 5×5), uniquement dans son propre camp
     rikoWallDamage: 1,
+    grompDamage: 1, // Gromp : dégâts par contact sur un runner (un Pik, 2 PV, survit au premier)
+    mineDamage: 2, // Boum : dégâts de l'explosion
+    mineRadiusCells: 1.5, // Boum : rayon de l'explosion
+    mineRearm: 4, // Boum : secondes avant de pouvoir ré-exploser
+    mineTriggerCells: 1.1,
+    gluRadiusCells: 1.5, // Glu : rayon de la flaque
+    gluFactor: 0.4, // Glu : vitesse des unités au sol englués (×0,4) // Boum : distance (en cases) à laquelle un ennemi la déclenche // Gromp : dégâts par contact sur un runner (tue aussi un Pik)
+    gustEvery: 1.5, // Rafale : secondes entre deux souffles (et durée pendant laquelle une unité soufflée ne peut pas l'être à nouveau)
+    gustPush: 0.75, // Rafale : recul en cases (les brutes : 2/3 de cette valeur)
+    gustRangeCells: 3, // Rafale : portée devant elle
     tightSpacingFactor: 0.35, // option « pose rapprochée » : rayon de blocage d'une case réduit (0.35 × rayon) => on repose bien plus vite derrière une créature // PV perdus par un Blok à chaque rebond d'un Riko dessus (0 = le mur est indestructible pour Riko)
     wingedRangeCells: 1,
     projectileSpeed: 700,
@@ -57,24 +67,24 @@
   };
 
   const OGS = {
-    1: { id: 1, key: 'runner', name: 'Zip', color: '#fbbf24', cost: 10, speed: SPEED_UNIT * 3, movement: 'straight', hp: 1, baseDamage: 1, backOnly: true, air: false }, // se pose uniquement sur la ligne du fond (la plus loin de l'adversaire)
+    1: { id: 1, key: 'runner', name: 'Zip', color: '#fbbf24', cost: 10, speed: SPEED_UNIT * 3.5, movement: 'straight', hp: 1, baseDamage: 1, backOnly: true, air: false }, // se pose uniquement sur la ligne du fond (la plus loin de l'adversaire)
     2: { id: 2, key: 'defenseur', name: 'Gromp', color: '#a78bfa', cost: 20, speed: SPEED_UNIT * 3, movement: 'horizontal', hp: 1, baseDamage: 0, backOnly: false, air: false },
-    3: { id: 3, key: 'tourelle', name: 'Krak', color: '#fb923c', cost: 30, speed: 0, movement: 'static', hp: 2, baseDamage: 0, backOnly: false, air: false },
-    4: { id: 4, key: 'eponge', name: 'Riko', color: '#ef4444', cost: 40, speed: SPEED_UNIT * 4, movement: 'diagBounce', hp: 3, baseDamage: 2, backOnly: true, air: false },
-    5: { id: 5, key: 'mur', name: 'Blok', color: '#3b82f6', cost: 50, speed: 0, movement: 'static', hp: 3, baseDamage: 0, backOnly: false, air: false },
-    6: { id: 6, key: 'chargeur', name: 'Mojo', color: '#22c55e', cost: 60, speed: 0, movement: 'static', hp: 3, baseDamage: 0, backOnly: false, air: false },
-    7: { id: 7, key: 'ailee', name: 'Zéphir', color: '#f97316', cost: 70, speed: SPEED_UNIT * 1.8, movement: 'airStraight', hp: 2, baseDamage: 5, backOnly: true, air: true },
+    3: { id: 3, key: 'tourelle', name: 'Krak', color: '#fb923c', cost: 30, speed: 0, movement: 'static', hp: 2, baseDamage: 0, backOnly: false, air: false, lifetime: 60 },
+    4: { id: 4, key: 'eponge', name: 'Riko', color: '#ef4444', cost: 40, speed: SPEED_UNIT * 4, movement: 'diagBounce', hp: 5, baseDamage: 3, backOnly: true, air: false },
+    5: { id: 5, key: 'mur', name: 'Blok', color: '#3b82f6', cost: 50, speed: 0, movement: 'static', hp: 5, baseDamage: 0, backOnly: false, air: false, lifetime: 45 },
+    6: { id: 6, key: 'chargeur', name: 'Mojo', color: '#22c55e', cost: 60, speed: 0, movement: 'static', hp: 3, baseDamage: 0, backOnly: false, air: false, lifetime: 90 },
+    7: { id: 7, key: 'ailee', name: 'Zéphir', color: '#f97316', cost: 70, speed: SPEED_UNIT * 2.2, movement: 'airStraight', hp: 6, baseDamage: 6, backOnly: true, air: true },
     // --- 10 nouveaux types (voir shared/catalog.js pour la collection) ---
-    8: { id: 8, key: 'pik', name: 'Pik', color: '#d9b36b', cost: 10, speed: SPEED_UNIT * 1.8, movement: 'straight', hp: 2, baseDamage: 1, backOnly: true, air: false }, // runner lent à 2 PV
-    9: { id: 9, key: 'bulle', name: 'Bulle', color: '#7dd3fc', cost: 10, speed: SPEED_UNIT * 1.2, movement: 'airStraight', hp: 1, baseDamage: 0, backOnly: true, air: true, heals: 1 }, // soigne ta base en arrivant
-    10: { id: 10, key: 'zazou', name: 'Zazou', color: '#a3e635', cost: 20, speed: SPEED_UNIT * 4.2, movement: 'airStraight', hp: 1, baseDamage: 1, backOnly: true, air: true }, // moustique
-    11: { id: 11, key: 'boum', name: 'Boum', color: '#475569', cost: 30, speed: 0, movement: 'static', hp: 1, baseDamage: 0, backOnly: false, air: false, hiddenFromEnemy: true, mine: true },
-    12: { id: 12, key: 'rafale', name: 'Rafale', color: '#93c5fd', cost: 30, speed: 0, movement: 'static', hp: 2, baseDamage: 0, backOnly: false, air: false, fan: true },
-    13: { id: 13, key: 'tiktak', name: 'Tiktak', color: '#1f2937', cost: 40, speed: SPEED_UNIT * 1.2, movement: 'straight', hp: 3, baseDamage: 4, backOnly: true, air: false, brute: true, blastOnDeath: 1 },
-    14: { id: 14, key: 'fantome', name: 'Fantôme', color: '#e2e8f0', cost: 40, speed: SPEED_UNIT * 2.5, movement: 'straight', hp: 2, baseDamage: 2, backOnly: true, air: false, ghost: true },
-    15: { id: 15, key: 'glu', name: 'Glu', color: '#84cc16', cost: 50, speed: 0, movement: 'static', hp: 3, baseDamage: 0, backOnly: false, air: false, walkable: true, slowZone: true },
-    16: { id: 16, key: 'sirene', name: 'Sirène', color: '#f0abfc', cost: 60, speed: 0, movement: 'static', hp: 2, baseDamage: 0, backOnly: false, air: false, charmer: true },
-    17: { id: 17, key: 'kraken', name: 'Kraken', color: '#7c3aed', cost: 70, speed: SPEED_UNIT * 0.9, movement: 'straight', hp: 6, baseDamage: 3, backOnly: true, air: false, brute: true, crushesWalls: true },
+    8: { id: 8, key: 'pik', name: 'Pik', color: '#d9b36b', cost: 10, speed: SPEED_UNIT * 2.1, movement: 'straight', hp: 2, baseDamage: 1, backOnly: true, air: false }, // runner lent à 2 PV
+    9: { id: 9, key: 'bulle', name: 'Bulle', color: '#7dd3fc', cost: 10, speed: SPEED_UNIT * 2.2, movement: 'airStraight', hp: 2, baseDamage: 0, backOnly: true, air: true, heals: 1 }, // soigne ta base de 1 en arrivant
+    10: { id: 10, key: 'zazou', name: 'Zazou', color: '#a3e635', cost: 20, speed: SPEED_UNIT * 5.5, movement: 'airStraight', hp: 2, baseDamage: 2, backOnly: true, air: true }, // moustique : 2 dégâts, 2 PV, ultra rapide
+    11: { id: 11, key: 'boum', name: 'Boum', color: '#475569', cost: 30, speed: 0, movement: 'static', hp: 2, baseDamage: 0, backOnly: false, air: false, hiddenFromEnemy: true, mine: true, lifetime: 60 }, // 3 PV = 3 charges
+    12: { id: 12, key: 'rafale', name: 'Rafale', color: '#93c5fd', cost: 30, speed: 0, movement: 'static', hp: 2, baseDamage: 0, backOnly: false, air: false, fan: true, lifetime: 60 },
+    13: { id: 13, key: 'tiktak', name: 'Tiktak', color: '#1f2937', cost: 40, speed: SPEED_UNIT * 1.5, movement: 'straight', hp: 4, baseDamage: 4, backOnly: true, air: false, brute: true, blastOnDeath: 1 },
+    14: { id: 14, key: 'fantome', name: 'Fantôme', color: '#e2e8f0', cost: 40, speed: SPEED_UNIT * 2.5, movement: 'straight', hp: 4, baseDamage: 3, backOnly: true, air: false, ghost: true },
+    15: { id: 15, key: 'glu', name: 'Glu', color: '#84cc16', cost: 50, speed: 0, movement: 'static', hp: 3, baseDamage: 0, backOnly: false, air: false, walkable: true, slowZone: true, lifetime: 45 },
+    16: { id: 16, key: 'sirene', name: 'Sirène', color: '#f0abfc', cost: 60, speed: 0, movement: 'static', hp: 2, baseDamage: 0, backOnly: false, air: false, charmer: true, lifetime: 50 },
+    17: { id: 17, key: 'kraken', name: 'Kraken', color: '#7c3aed', cost: 70, speed: SPEED_UNIT * 1.3, movement: 'straight', hp: 8, baseDamage: 5, backOnly: true, air: false, brute: true, crushesWalls: true },
   };
   const OG_IDS = Object.keys(OGS).map(Number);
   // Familles de comportement (les nouvelles créatures s'y rattachent pour réutiliser les collisions de base).
@@ -268,6 +278,7 @@
         rot: 0, rotTarget: 0, born: S.time, level: 1, boostUntil: 0, frozenUntil: 0, healTimer: 0,
         bounced: false, visitedEnemy: false, // rebond à contresens / a déjà été dans le camp adverse (changement de camp à la frontière)
         hitUntil: 0, slowUntil: 0, special: 0, // invulnérabilité après choc, ralenti par une Glu, minuteur des pouvoirs (Rafale, Sirène)
+        expires: F.lifetime !== false && og.lifetime ? S.time + og.lifetime : Infinity, // structures éphémères (option « lifetime »)
       };
       if (ogId === 3 || ogId === 7) { e.rot = e.rotTarget = player === 'top' ? Math.PI / 2 : -Math.PI / 2; }
       if (ogId === 2) { e.rot = vx >= 0 ? Math.PI : 0; }
@@ -288,6 +299,7 @@
         const e = S.entities.find(x => x.id === check.evolve);
         e.level = (e.level || 1) + 1;
         e.hpMax += 1; e.hp = e.hpMax;
+        if (e.expires !== Infinity) e.expires = S.time + (og.lifetime || 0); // l'évolution relance la durée de vie
         S.stats[side].evolutions += 1;
         emit('evolve', { player: side, owner: player, ogId, id: e.id, x: e.x, y: e.y, level: e.level });
         return { ok: true, id: e.id, evolved: e.level };
@@ -463,7 +475,7 @@
     function moveEntities(dt) {
       for (const e of S.entities) {
         if (e.frozenUntil > S.time) continue; // gelé par un Mur de glace
-        const k = (e.boostUntil > S.time ? 2 : 1) * (e.slowUntil > S.time ? 0.5 : 1); // capacité active (sprint / rage) / englué
+        const k = (e.boostUntil > S.time ? 2 : 1) * (e.slowUntil > S.time ? RULES.gluFactor : 1); // capacité active (sprint / rage) / englué
         switch (e.movement) {
           case 'straight':
           case 'airStraight':
@@ -509,9 +521,9 @@
     }
 
     // ---------- Comportements des 10 nouvelles créatures ----------
-    function blast(center, radius, amount, by, cause) {
+    function blast(center, radius, amount, by, cause, hitsAir) {
       const r2 = radius * radius;
-      for (const e of S.entities) { if (e.player === center.player || dead.has(e.id) || e.air) continue; if (dist2(center, e) <= r2) damage(e, amount, by, cause); }
+      for (const e of S.entities) { if (e.player === center.player || dead.has(e.id) || (e.air && !hitsAir)) continue; if (dist2(center, e) <= r2) damage(e, amount, by, cause); }
       emit('blast', { x: center.x, y: center.y, radius, player: center.player });
     }
     function newCreatures(minDist, minD2) {
@@ -536,15 +548,19 @@
       }
       // Fantôme : traverse murs et unités au sol ; seuls les projectiles et Riko l'atteignent.
       for (const f of byOg(14)) for (const r of byOg(4)) { if (r.player === f.player || dead.has(f.id) || dead.has(r.id)) continue; if (dist2(f, r) <= minD2) { if (hit(f, r.player, 'red')) damage(r, 1, f.player, 'ghost'); } }
-      // Mines (Boum) : explosent au premier contact ennemi au sol (2 dégâts dans la case autour).
+      // Mines (Boum) : sautent au passage d'un ennemi (sol ou air) : 3 dégâts dans 1,5 case autour, volants compris ; 3 charges (ses PV), réarmement 4 s.
       for (const m of byOg(11)) {
         if (dead.has(m.id)) continue;
-        const trigger = S.entities.find(e => e.player !== m.player && !dead.has(e.id) && !e.air && e.movement !== 'static' && dist2(m, e) <= minD2);
-        if (trigger) { kill(m, trigger.player, 'mine'); blast(m, CELL_W * 1.1, 2, m.player, 'mine'); }
+        m.special -= 1 / 30;
+        if (m.special > 0) continue;
+        const trigger = S.entities.find(e => e.player !== m.player && !dead.has(e.id) && e.movement !== 'static' && dist2(m, e) <= (CELL_W * RULES.mineTriggerCells) ** 2);
+        if (trigger) { blast(m, CELL_W * RULES.mineRadiusCells, RULES.mineDamage, m.player, 'mine', true); m.special = RULES.mineRearm; damage(m, 1, trigger.player, 'mine'); }
       }
-      // Glu : englue les ennemis au sol qui la traversent (vitesse ÷2).
-      for (const g of byOg(15)) for (const e of S.entities) { if (e.player === g.player || dead.has(e.id) || e.air || e.movement === 'static') continue; if (dist2(g, e) <= near2) e.slowUntil = S.time + 0.3; }
-      // Rafale : toutes les 2 s, souffle les ennemis au sol devant elle (jusqu'à 2 cases, 1 colonne de chaque côté) d'une case vers l'arrière.
+      // Glu : englue les ennemis au sol qui passent dans sa flaque (1,5 case) : vitesse ×0,4.
+      for (const g of byOg(15)) for (const e of S.entities) { if (e.player === g.player || dead.has(e.id) || e.air || e.movement === 'static') continue; if (dist2(g, e) <= (CELL_W * RULES.gluRadiusCells) ** 2) e.slowUntil = S.time + 0.3; }
+      // Rafale : toutes les 2 s, souffle les ennemis (sol et air) devant elle (jusqu'à 2 cases, 1 colonne de chaque côté, dans son
+      // camp seulement) de 3/4 de case vers l'arrière (volants : 1/2 case, brutes : pas de recul) et inflige 1 dégât. Une unité ne subit
+      // qu'un souffle à la fois (plusieurs Rafales ne se cumulent pas).
       for (const f of byOg(12)) {
         if (dead.has(f.id) || f.frozenUntil > S.time) continue;
         f.special -= 1 / 30;
@@ -552,14 +568,18 @@
         const dir = dirOf(f.player);
         let pushed = 0;
         for (const e of S.entities) {
-          if (e.player === f.player || dead.has(e.id) || e.air || e.movement === 'static') continue;
+          if (e.player === f.player || dead.has(e.id) || e.movement === 'static' || (e.gustUntil || 0) > S.time) continue;
           const forward = dir * (e.y - f.y);
-          if (forward < 0 || forward > CELL_H * 2.5 || Math.abs(e.x - f.x) > CELL_W * 1.5) continue;
-          e.y = Math.max(RADIUS, Math.min(FIELD.h - RADIUS, e.y + dir * CELL_H)); pushed += 1;
+          if (forward < 0 || forward > CELL_H * RULES.gustRangeCells || Math.abs(e.x - f.x) > CELL_W * 1.5 || !inOwnHalf(f.player, e.y)) continue;
+          const heavy = BRUTES.has(e.ogId);
+          if (!heavy) e.y = Math.max(RADIUS, Math.min(FIELD.h - RADIUS, e.y + dir * CELL_H * RULES.gustPush * (e.air ? 0.66 : 1))); // les brutes ne reculent pas, les volants moins
+          pushed += 1;
+          e.gustUntil = S.time + RULES.gustEvery;
+          hit(e, f.player, 'gust'); // le souffle blesse aussi (1 dégât, avec l'invulnérabilité courte habituelle)
         }
-        if (pushed) { f.special = 2; emit('gust', { id: f.id, x: f.x, y: f.y, player: f.player, dir }); } else f.special = 0.2;
+        if (pushed) { f.special = RULES.gustEvery; emit('gust', { id: f.id, x: f.x, y: f.y, player: f.player, dir }); } else f.special = 0.2;
       }
-      // Sirène : toutes les 8 s, charme l'ennemi au sol le plus proche (2 cases) : il change de camp et repart dans l'autre sens.
+      // Sirène : toutes les 6 s, charme l'ennemi au sol le plus proche (2 cases) : il change de camp et repart dans l'autre sens.
       for (const s of byOg(16)) {
         if (dead.has(s.id) || s.frozenUntil > S.time) continue;
         s.special -= 1 / 30;
@@ -569,7 +589,7 @@
         if (!best) { s.special = 0.3; continue; }
         best.player = s.player; best.owner = s.owner; best.vy = -best.vy; best.bounced = false; best.visitedEnemy = !inOwnHalf(s.player, best.y);
         if (best.ogId === 2) { best.vx = -best.vx; best.rot = best.vx >= 0 ? Math.PI : 0; }
-        s.special = 8;
+        s.special = 6;
         emit('charm', { id: best.id, from: s.id, x: best.x, y: best.y, player: s.player });
         emit('bounce', { id: best.id, x: best.x, y: best.y, flip: true, player: s.player });
       }
@@ -619,7 +639,7 @@
         if (dead.has(y.id)) continue;
         for (const v of violets) {
           if (v.player === y.player || dead.has(y.id)) continue;
-          if (dist2(y, v) <= minD2) hit(y, v.player, 'violet');
+          if (dist2(y, v) <= minD2) hit(y, v.player, 'violet', RULES.grompDamage);
         }
         for (const b of blues) {
           if (dead.has(y.id) || dead.has(b.id)) continue;
@@ -650,11 +670,11 @@
           if (dist2(y, g) <= minD2) { if (hit(y, g.player, 'charger')) damage(g, 1, y.player, 'runner'); }
         }
       }
-      // Runner vs runner adverse : chacun prend un coup (Zip contre Zip = destruction mutuelle).
+      // Runner vs runner adverse : destruction mutuelle, quels que soient les PV (un Zip à 10 mana répond à un Pik).
       for (let i = 0; i < yellows.length; i += 1) for (let j = i + 1; j < yellows.length; j += 1) {
         const a = yellows[i], b = yellows[j];
         if (a.player === b.player || dead.has(a.id) || dead.has(b.id)) continue;
-        if (dist2(a, b) <= minD2) { hit(a, b.player, 'runner'); hit(b, a.player, 'runner'); }
+        if (dist2(a, b) <= minD2) { kill(a, b.player, 'runner'); kill(b, a.player, 'runner'); }
       }
 
       // Rouges.
@@ -843,6 +863,7 @@
       updateMana(dt);
       updateOrbs(dt);
       updateHazard(dt);
+      for (const e of S.entities) if (e.expires <= S.time) kill(e, null, 'expire'); // structures arrivées en fin de vie
       moveEntities(dt);
       turrets(dt);
       collisions();
@@ -867,7 +888,7 @@
         k: S.tick,
         hp: [S.hp.top, S.hp.bottom],
         mana: Object.fromEntries(PLAYERS.map(k => [k, Math.round(S.mana[k] * 10) / 10])), // par joueur
-        e: S.entities.map(e => [e.id, e.ogId, e.player === 'top' ? 0 : 1, Math.round(e.x), Math.round(e.y), Math.round(e.rot * 100) / 100, e.hp, e.hpMax, e.owner === 'top' ? 0 : 1, (e.level || 1) + (e.frozenUntil > S.time ? 10 : 0) + (e.boostUntil > S.time ? 20 : 0) + (e.slowUntil > S.time ? 40 : 0), (OGS[e.ogId].hiddenFromEnemy || (OGS[e.ogId].ghost && inOwnHalf(e.player, e.y))) ? 1 : 0, e.owner]),
+        e: S.entities.map(e => [e.id, e.ogId, e.player === 'top' ? 0 : 1, Math.round(e.x), Math.round(e.y), Math.round(e.rot * 100) / 100, e.hp, e.hpMax, e.owner === 'top' ? 0 : 1, (e.level || 1) + (e.frozenUntil > S.time ? 10 : 0) + (e.boostUntil > S.time ? 20 : 0) + (e.slowUntil > S.time ? 40 : 0), (OGS[e.ogId].hiddenFromEnemy || (OGS[e.ogId].ghost && inOwnHalf(e.player, e.y))) ? 1 : 0, e.owner, e.expires === Infinity ? -1 : Math.max(0, Math.round(100 * (e.expires - S.time) / (OGS[e.ogId].lifetime || 1)))]),
         ab: Object.fromEntries(PLAYERS.map(k => [k, Object.fromEntries(Object.entries(S.abilities[k]).filter(([, until]) => until > S.time).map(([og, until]) => [og, Math.round((until - S.time) * 10) / 10]))])),
         pts: F.kingOfCenter ? [Math.round(S.points.top), Math.round(S.points.bottom)] : null,
         ot: S.overtime ? 1 : 0,
@@ -895,7 +916,7 @@
       t: s.t, k: s.k,
       hp: { top: s.hp[0], bottom: s.hp[1] },
       mana: Array.isArray(s.mana) ? { top: s.mana[0], bottom: s.mana[1] } : (s.mana || {}),
-      entities: s.e.map(a => ({ id: a[0], ogId: a[1], player: P[a[2]], x: a[3], y: a[4], rot: a[5], hp: a[6], hpMax: a[7], owner: a[11] || P[a[8]], level: (a[9] || 1) % 10, frozen: !!(Math.floor((a[9] || 1) / 10) % 2), boosted: ((a[9] || 1) % 40) >= 20, slowed: (a[9] || 1) >= 40, hiddenFromEnemy: !!a[10] })),
+      entities: s.e.map(a => ({ id: a[0], ogId: a[1], player: P[a[2]], x: a[3], y: a[4], rot: a[5], hp: a[6], hpMax: a[7], owner: a[11] || P[a[8]], level: (a[9] || 1) % 10, frozen: !!(Math.floor((a[9] || 1) / 10) % 2), boosted: ((a[9] || 1) % 40) >= 20, slowed: (a[9] || 1) >= 40, hiddenFromEnemy: !!a[10], life: a[12] === undefined || a[12] < 0 ? null : a[12] / 100 })),
       abilities: Array.isArray(s.ab) ? { top: s.ab[0], bottom: s.ab[1] } : (s.ab || {}),
       points: s.pts ? { top: s.pts[0], bottom: s.pts[1] } : null,
       overtime: !!s.ot,

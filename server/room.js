@@ -76,7 +76,7 @@ class Room {
     const decks = {};
     for (const p of this.players) decks[p.key] = p.profile && p.profile.deck ? Catalog.DECK_COSTS.map(c => Number(p.profile.deck[c]) || Catalog.DEFAULT_DECK[c]) : Object.values(Catalog.DEFAULT_DECK);
     this.game = Sim.createGame({ seed: this.seed, hazard: false, duration: this.duration, features: this.features, bans, cols: this.cols, players: this.keys, decks });
-    for (const p of this.players) if (p.bot) p.ai = AI.createAI(this.game, p.key, p.bot);
+    for (const p of this.players) if (p.bot) p.ai = AI.createAI(this.game, p.key, p.bot, decks[p.key]); // le bot joue avec sa propre équipe
     if (this.survival) this.waveRng = Sim.createRng(this.seed ^ 0x5151);
   }
 

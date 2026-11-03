@@ -50,7 +50,7 @@ let homeExit = false;
 for (let i = 0; i < 30 * 30; i++) { g4.step(1 / 30); for (const e of g4.drainEvents()) if (e.type === 'kill' && e.ogId === 1 && e.cause === 'home') homeExit = true; }
 assert.strictEqual(g4.state.hp.top, 30, 'jaune bloqué par son propre mur : pas de dégât adverse');
 assert.strictEqual(g4.state.hp.bottom, 30, 'pas de dégât à sa propre base non plus');
-assert.ok(g4.state.entities.some(e => e.ogId === 5 && e.hp === 3), 'son propre mur est intact');
+assert.ok(g4.state.entities.some(e => e.ogId === 5 && e.hp === e.hpMax), 'son propre mur est intact');
 assert.ok(homeExit, 'le jaune est sorti par sa propre base');
 
 // 5b) Riko qui rebondit sur un mur ennemi devient une créature ennemie en repassant la frontière, et va frapper la base de son ancien maître.
@@ -123,9 +123,9 @@ const wEnemy = wallAt(4, 3); // 2 lignes devant mais camp adverse -> hors zone
 const wSide = wallAt(7, 5);  // 3 colonnes à droite -> hors zone
 let shots = 0; for (let i = 0; i < 30 * 5; i++) { gk2.step(1 / 30); for (const e of gk2.drainEvents()) if (e.type === 'shot') shots += 1; }
 assert.ok(shots >= 2, 'Krak tire sur la cible derrière lui dans son camp');
-assert.ok(wIn.hp < 3 || !gk2.state.entities.includes(wIn), 'la cible dans la zone est touchée');
-assert.strictEqual(wEnemy.hp, 3, 'le camp adverse n\'est jamais visé');
-assert.strictEqual(wSide.hp, 3, 'hors zone latérale : intact');
+assert.ok(wIn.hp < wIn.hpMax || !gk2.state.entities.includes(wIn), 'la cible dans la zone est touchée');
+assert.strictEqual(wEnemy.hp, wEnemy.hpMax, 'le camp adverse n\'est jamais visé');
+assert.strictEqual(wSide.hp, wSide.hpMax, 'hors zone latérale : intact');
 console.log('portée Krak OK');
 
 // Frontière : Krak (bas, row 4) ne vise pas un ennemi à 1 case devant mais côté adverse (row 3) ; dès qu'il franchit la ligne, il tire.
@@ -182,8 +182,11 @@ function runFor(g, secs, fn) { const out = []; for (let i = 0; i < 30 * secs && 
 function alive(g, ogId, side) { return g.state.entities.filter(e => e.ogId === ogId && (!side || e.player === side)); }
 
 // Pik : 2 PV, encaisse un Gromp puis continue (un Zip, lui, meurt).
-{ const g = mk(101); g.setMana('top', 70); g.place('top', 2, 4, 3); g.setMana('bottom', 70); g.place('bottom', 8, 4, 7);
-  const ev = runFor(g, 12); const pik = alive(g, 8, 'bottom');
+{ const g = mk(101); g.setMana('bottom', 70); g.place('bottom', 8, 4, 7);
+  // On pose le Gromp sur la ligne 3 juste quand le Pik approche, pour garantir le contact.
+  const ev = []; let grompPlaced = false;
+  for (let i = 0; i < 30 * 12; i++) { g.step(1 / 30); ev.push(...g.drainEvents()); const p = alive(g, 8, 'bottom')[0]; if (p && !grompPlaced && p.y < Sim.CELL_H * 3.5 + Sim.RADIUS * 1.9) { g.setMana('top', 70); g.place('top', 2, Math.floor(p.x / Sim.CELL_W) + 1, 3); grompPlaced = true; } } // une colonne à droite : le Gromp (camp haut) part vers la gauche, droit sur le Pik
+  const pik = alive(g, 8, 'bottom');
   assert.ok(ev.some(e => e.type === 'hit' && e.ogId === 8), 'Pik a pris un coup du Gromp');
   const firstHit = ev.findIndex(e => e.type === 'hit' && e.ogId === 8), firstKill = ev.findIndex(e => e.type === 'kill' && e.ogId === 8);
   assert.ok(firstHit >= 0 && (firstKill === -1 || firstKill > firstHit) && ev[firstHit].hp === 1, 'Pik survit au premier contact (1 PV restant)');
@@ -191,15 +194,15 @@ function alive(g, ogId, side) { return g.state.entities.filter(e => e.ogId === o
 // Bulle : atteint la base adverse sans dégât et soigne la sienne de 1.
 { const g = mk(102); g.state.hp.bottom = 25; g.setMana('bottom', 70); g.place('bottom', 9, 4, 7);
   const ev = runFor(g, 40); assert.ok(ev.some(e => e.type === 'heal' && e.target === 'bottom'), 'Bulle soigne'); assert.strictEqual(g.state.hp.bottom, 26); assert.strictEqual(g.state.hp.top, 30); console.log('Bulle OK'); }
-// Zazou : volant rapide, ignore un Gromp et un mur, 1 dégât à la base.
+// Zazou : volant rapide, ignore un Gromp et un mur, 2 dégâts à la base.
 { const g = mk(103); g.setMana('top', 70); g.place('top', 5, 4, 3); g.setMana('top', 70); g.place('top', 2, 4, 2); g.setMana('bottom', 70); g.place('bottom', 10, 4, 7);
-  runFor(g, 15); assert.strictEqual(g.state.hp.top, 29, 'Zazou passe au-dessus et frappe'); console.log('Zazou OK'); }
-// Boum : explose au contact d'un Zip ennemi (2 dégâts dans la case) et disparaît.
+  runFor(g, 15); assert.strictEqual(g.state.hp.top, 28, 'Zazou passe au-dessus et frappe'); console.log('Zazou OK'); }
+// Boum : explose au passage d'un ennemi (2 dégâts dans 1,5 case, volants compris), perd une charge (PV) et se réarme.
 { const g = mk(104); g.setMana('top', 70); g.place('top', 11, 4, 3); g.setMana('bottom', 70); g.place('bottom', 8, 4, 7);
-  const ev = runFor(g, 10); assert.ok(ev.some(e => e.type === 'blast'), 'la mine explose'); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 8), 'le Pik (2 PV) est tué par l’explosion'); assert.strictEqual(alive(g, 11).length, 0); console.log('Boum OK'); }
-// Rafale : repousse un Zip ennemi vers l'arrière (il met plus longtemps à arriver).
-{ const g = mk(105); g.setMana('top', 70); g.place('top', 12, 4, 3); g.setMana('bottom', 70); g.place('bottom', 1, 4, 7);
-  const ev = runFor(g, 20); assert.ok(ev.some(e => e.type === 'gust'), 'Rafale souffle'); console.log('Rafale OK'); }
+  const ev = runFor(g, 10); assert.ok(ev.some(e => e.type === 'blast'), 'la mine explose'); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 8), 'le Pik (2 PV) est tué par l’explosion'); assert.strictEqual(alive(g, 11).length, 1); assert.strictEqual(alive(g, 11)[0].hp, 1, 'il reste 1 charge'); console.log('Boum OK'); }
+// Rafale : souffle (dans son camp seulement) un Zip ennemi vers l'arrière et le blesse (1 PV : il meurt).
+{ const g = mk(105); g.setMana('top', 70); g.place('top', 12, 4, 1); g.setMana('bottom', 70); g.place('bottom', 1, 4, 7);
+  const ev = runFor(g, 20); assert.ok(ev.some(e => e.type === 'gust'), 'Rafale souffle'); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 1 && e.cause === 'gust'), 'le Zip meurt du souffle'); assert.strictEqual(g.state.hp.top, 30); console.log('Rafale OK'); }
 // Tiktak : 3 PV, 4 dégâts à la base ; abattu par des tourelles, il explose (1 dégât autour).
 { const g = mk(106); g.setMana('bottom', 70); g.place('bottom', 13, 4, 7); runFor(g, 40); assert.strictEqual(g.state.hp.top, 26, 'Tiktak frappe la base pour 4'); 
   const g2 = mk(107); g2.setMana('top', 70); g2.place('top', 3, 4, 3); g2.setMana('top', 70); g2.place('top', 3, 3, 3); g2.setMana('top', 70); g2.place('top', 3, 5, 3); g2.setMana('top', 70); g2.place('top', 2, 4, 2); g2.setMana('bottom', 70); g2.place('bottom', 13, 4, 7);
@@ -207,7 +210,7 @@ function alive(g, ogId, side) { return g.state.entities.filter(e => e.ogId === o
 // Fantôme : traverse un mur, frappe pour 2 ; est caché dans son camp (snapshot).
 { const g = mk(108); g.setMana('top', 70); g.place('top', 5, 4, 3); g.setMana('bottom', 70); g.place('bottom', 14, 4, 7);
   const s0 = g.snapshot(); const f0 = s0.e.find(a => a[1] === 14); assert.strictEqual(f0[10], 1, 'Fantôme caché chez lui');
-  runFor(g, 20); assert.strictEqual(g.state.hp.top, 28, 'Fantôme traverse le mur et frappe 2'); console.log('Fantôme OK'); }
+  runFor(g, 20); assert.strictEqual(g.state.hp.top, 27, 'Fantôme traverse le mur et frappe 3'); console.log('Fantôme OK'); }
 // Glu : ralentit un Zip qui la traverse.
 { const g = mk(109); g.setMana('top', 70); g.place('top', 15, 4, 3); g.setMana('bottom', 70); g.place('bottom', 1, 4, 7);
   let slowed = false; for (let i = 0; i < 30 * 14; i++) { g.step(1 / 30); g.drainEvents(); const z = alive(g, 1)[0]; if (z && z.slowUntil > g.state.time) slowed = true; }
@@ -217,4 +220,8 @@ function alive(g, ogId, side) { return g.state.entities.filter(e => e.ogId === o
   const ev = runFor(g, 25); assert.ok(ev.some(e => e.type === 'charm'), 'charme'); assert.ok(g.state.hp.bottom < 30, 'le Zip charmé frappe la base du bas'); assert.strictEqual(g.state.hp.top, 30); console.log('Sirène OK'); }
 // Kraken : écrase un mur (−1 PV) et tue un Gromp, puis 3 dégâts à la base.
 { const g = mk(111); g.setMana('top', 70); g.place('top', 5, 4, 3); g.setMana('top', 70); g.place('top', 5, 3, 2); g.setMana('top', 70); g.place('top', 5, 5, 2); g.setMana('top', 70); g.place('top', 2, 4, 2); g.setMana('bottom', 70); g.place('bottom', 17, 4, 7); // Gromp coincé entre deux murs sur la colonne 4
-  const ev = runFor(g, 60); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 5 && e.cause === 'crush'), 'mur écrasé'); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 2), 'Gromp écrasé'); assert.strictEqual(g.state.hp.top, 27, 'Kraken frappe pour 3'); console.log('Kraken OK'); }
+  const ev = runFor(g, 60); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 5 && e.cause === 'crush'), 'mur écrasé'); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 2), 'Gromp écrasé'); assert.strictEqual(g.state.hp.top, 25, 'Kraken frappe pour 5'); console.log('Kraken OK'); }
+// Structures éphémères : un Krak disparaît au bout de sa durée de vie (option « lifetime »), pas si l'option est coupée.
+{ const g = mk(110, { features: { lifetime: true } }); g.setMana('top', 70); g.place('top', 3, 4, 2);
+  const ev = runFor(g, Sim.OGS[3].lifetime + 1); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 3 && e.cause === 'expire'), 'le Krak expire'); assert.strictEqual(alive(g, 3).length, 0);
+  const g2 = mk(111, { features: { lifetime: false } }); g2.setMana('top', 70); g2.place('top', 3, 4, 2); runFor(g2, Sim.OGS[3].lifetime + 1); assert.strictEqual(alive(g2, 3).length, 1, 'sans l’option, il reste'); console.log('Structures éphémères OK'); }

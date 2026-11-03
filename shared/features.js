@@ -17,6 +17,7 @@
     evolution: { enabled: true, scope: 'match', default: true, ranked: true, group: 'Règles', label: 'Évolution des unités', desc: 'Repose Krak, Blok ou Mojo sur lui-même : niveau 2 puis 3 (plus de PV, plus fort).' },
     overtime: { enabled: true, scope: 'match', default: true, ranked: true, group: 'Règles', label: 'Mort subite', desc: 'Égalité au temps écoulé : mana ×3, le premier qui prend un dégât perd.' },
     powerPatches: { enabled: true, scope: 'match', default: true, ranked: true, group: 'Règles', label: 'Patchs de pouvoir', desc: 'Gromp renvoie Riko au lieu de mourir avec, Mojo soigne ses voisins, Zéphir bombarde les Blok qu’il survole.' },
+    lifetime: { enabled: true, scope: 'match', default: true, ranked: true, group: 'Règles', label: 'Structures éphémères', desc: 'Krak, Blok, Mojo, Boum, Rafale, Glu et Sirène disparaissent après 45 à 90 s : la défense se paie, comme l’attaque.' },
     draft: { enabled: true, scope: 'match', default: false, ranked: false, group: 'Règles', label: 'Draft (bannissement)', desc: 'Avant la partie, chacun bannit une créature que l’adversaire ne pourra pas poser.' },
     // --- Modes ---
     kingOfCenter: { enabled: true, scope: 'match', default: false, ranked: false, group: 'Modes', label: 'Roi du centre', desc: 'Tes unités dans les deux lignes centrales marquent des points ; 60 points = victoire.' },

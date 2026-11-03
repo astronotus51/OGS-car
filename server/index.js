@@ -13,6 +13,7 @@ const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 
 const Catalog = require('../shared/catalog.js');
+const AI = require('../shared/ai.js');
 const Sim = require('../shared/sim.js');
 const Features = require('../shared/features.js');
 const { createStore } = require('./db.js');
@@ -493,9 +494,16 @@ function botEquipped(seed) {
 }
 
 const BOT_NAMES = { simple: ['Bot Oggy', 'Bot Pipo', 'Bot Lulu', 'Bot Nino', 'Bot Tao', 'Bot Fifi'], moyen: ['Bot Ogma', 'Bot Zorg', 'Bot Mimi', 'Bot Kiko', 'Bot Rolf', 'Bot Suzu'], difficile: ['Bot Ogzilla', 'Bot Krakor', 'Bot Vex', 'Bot Nyx', 'Bot Tyr', 'Bot Ash'] };
+// Équipe d'un bot : une créature par coût, tirée parmi les 17 (les bots classés jouent toutes les créatures) ; plus le bot est fort, plus il sort des nouvelles.
+function botDeck(difficulty, seed) {
+  const rng = Sim.createRng(seed >>> 0);
+  const list = AI.randomDeck(rng, difficulty === 'simple' ? 0.5 : difficulty === 'moyen' ? 0.65 : 0.8);
+  return Object.fromEntries(Catalog.DECK_COSTS.map((cost, i) => [cost, list[i]]));
+}
 function makeBot(difficulty, trophies, i) {
   const name = BOT_NAMES[difficulty][i % 6];
-  return { client: null, profile: { id: null, username: name, trophies: Math.max(0, trophies + Math.round((Math.random() - 0.5) * 60)), level: difficulty === 'simple' ? 3 : difficulty === 'moyen' ? 12 : 30, rank: Catalog.rankFor(trophies).name, equipped: botEquipped((Date.now() + i * 97) % 1000), avatar: `preset:og${1 + ((Date.now() + i) % 7)}_default`, bot: true, difficulty }, bot: difficulty };
+  const deck = botDeck(difficulty, Date.now() + i * 7919);
+  return { client: null, profile: { id: null, username: name, trophies: Math.max(0, trophies + Math.round((Math.random() - 0.5) * 60)), level: difficulty === 'simple' ? 3 : difficulty === 'moyen' ? 12 : 30, rank: Catalog.rankFor(trophies).name, equipped: botEquipped((Date.now() + i * 97) % 1000), avatar: `preset:og${deck[70] || 7}_default`, bot: true, difficulty, deck }, bot: difficulty };
 }
 
 async function createMatch(entries, { mode, botFill = false, bot = null, duration = Sim.RULES.matchDuration, features = null, survival = false, map = 'random', teamSize = 1 }) {

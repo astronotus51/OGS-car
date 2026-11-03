@@ -190,7 +190,7 @@
     const span = el.querySelector('span:not(.avatar-edit)');
     const av = p && p.avatar;
     if (av && av.startsWith('preset:') && window.Creatures) {
-      const skinId = av.slice(7), og = Number(skinId.replace(/^og(\d).*/, '$1')) || 1;
+      const skinId = av.slice(7), og = Number(skinId.replace(/^og(\d+).*/, "$1")) || 1;
       const c = document.createElement('canvas'); c.width = 128; c.height = 128;
       const ctx = c.getContext('2d'); ctx.fillStyle = '#1d4ed8'; ctx.fillRect(0, 0, 128, 128);
       Creatures.draw(ctx, og, skinId, 64, 70, 92, 0, { moving: false, phase: og });
@@ -745,25 +745,26 @@
     const lines = [
       [1, 'Se pose sur la ligne du fond et fonce tout droit vers la base ennemie (1 dégât). Meurt au contact des Défenseurs, Éponges, Tourelles et Chargeurs adverses. Rebondit sur tous les Murs, les tiens compris (laisse des allées !) : s’il revient de chez l’adversaire et repasse la frontière, il change de camp et devient ennemi.'],
       [2, 'Patrouille horizontalement, rebondit sur les bords et les obstacles. Mange les Runners adverses. Destruction mutuelle avec une Éponge.'],
-      [3, 'Statique, 2 PV. Tire sur tout ennemi qui entre dans un carré de 2 cases autour d’elle (devant, derrière, côtés), uniquement dans ton camp (zone affichée à la pose). Détruite au contact d’un Riko.'],
-      [4, 'Avance en diagonale en rebondissant sur les côtés, 3 PV. Détruit Tourelles et Chargeurs au contact (perd 1 PV à chaque fois). Rebondit sur tous les Murs (un mur ennemi perd 1 PV). S’il repart à contresens et repasse la frontière, il change de camp : les tourelles de son ancien maître le prennent pour cible et il attaque sa base. 2 dégâts.'],
-      [5, 'Mur statique, 3 PV. Renvoie les Runners et les Éponges, les tiens compris (ils ne le traversent plus : laisse des allées à tes alliés). Un ennemi qui rebondit dessus lui fait perdre 1 PV.'],
-      [6, 'Statique, 3 PV. +50 % de régénération de mana tant qu’il est en vie (cumulable). Cible préférée des Éponges et Ailées.'],
-      [7, 'Vole tout droit au-dessus de tout. Tire sur les Runners, Tourelles, Chargeurs et Ailées à 1 case. 5 dégâts à la base. 2 PV.'],
-      [8, 'Runner lent à 2 PV : il encaisse un premier choc (Gromp, tourelle, Riko…) et continue. 1 dégât à la base.'],
-      [9, 'Flotte lentement au-dessus de tout, 1 PV, aucun dégât : si elle atteint la base adverse, ta base récupère 1 PV.'],
-      [10, 'Moustique volant très rapide, 1 PV : ignore les unités au sol et les murs. 1 dégât à la base. Abattu par Krak et Zéphir.'],
-      [11, 'Mine invisible pour l’adversaire, 1 PV : explose au premier contact d’une unité ennemie au sol, 2 dégâts dans la case autour.'],
-      [12, 'Tourelle à vent, 2 PV : toutes les 2 s, repousse d’une case les ennemis au sol dans les 2 cases devant elle. Détruite par Riko.'],
-      [13, 'Marche lentement, 3 PV, explose à l’arrivée (4 dégâts) ou à sa mort (1 dégât autour). Frappe tout ennemi au sol qu’il touche.'],
-      [14, 'Invisible tant qu’il est dans ton camp, traverse murs et unités au sol. 2 PV, 2 dégâts. Seuls les projectiles et Riko l’atteignent.'],
-      [15, 'Flaque, 3 PV, qui ne bloque pas : les ennemis au sol qui la traversent sont ralentis de moitié.'],
-      [16, 'Toutes les 8 s, charme l’ennemi au sol le plus proche (2 cases) : il change de camp et repart frapper son ancien maître. 2 PV.'],
-      [17, 'Colosse lent, 6 PV, 3 dégâts : écrase les murs (−1 PV pour lui) et tue toute unité au sol qu’il touche (−1 PV par choc).'],
+      [3, 'Statique, 2 PV, vit 60 s. Tire (toutes les 2,2 s) sur tout ennemi, au sol ou en l’air, qui entre dans un carré de 2 cases autour d’elle (devant, derrière, côtés), uniquement dans ton camp (zone affichée à la pose). Détruite au contact d’un Riko, écrasée par Kraken.'],
+      [4, 'Avance en diagonale en rebondissant sur les côtés, 5 PV. Détruit Tourelles, Rafales et Chargeurs au contact (perd 1 PV à chaque fois). Rebondit sur tous les Murs (un mur ennemi perd 1 PV). S’il repart à contresens et repasse la frontière, il change de camp : les tourelles de son ancien maître le prennent pour cible et il attaque sa base. 3 dégâts.'],
+      [5, 'Mur statique, 5 PV, vit 45 s. Renvoie les Runners, Tiktak et les Éponges, les tiens compris (ils ne le traversent plus : laisse des allées à tes alliés). Un ennemi qui rebondit dessus lui fait perdre 1 PV. Un runner ennemi renvoyé change de camp en repassant la frontière !'],
+      [6, 'Statique, 3 PV, vit 90 s. +50 % de régénération de mana tant qu’il est en vie (cumulable) : posé tôt, il rapporte bien plus qu’il ne coûte. Cible préférée des Éponges et Ailées.'],
+      [7, 'Vole tout droit au-dessus de tout. Tire sur les Runners, Tourelles, Chargeurs et Ailées à 1 case. 6 dégâts à la base. 6 PV : il survit à une tourelle seule.'],
+      [8, 'Runner un peu plus lent à 2 PV : il encaisse un premier choc (Gromp, tourelle, Rafale…) et continue. 1 dégât à la base. Runner contre runner : destruction mutuelle, un Zip suffit à l’arrêter.'],
+      [9, 'Flotte au-dessus de tout, 2 PV, aucun dégât : si elle atteint la base adverse, ta base récupère 1 PV. Seuls Krak, Rafale, Boum et Zéphir l’arrêtent.'],
+      [10, 'Moustique volant ultra rapide, 2 PV : ignore les unités au sol et les murs. 2 dégâts à la base. Abattu par Krak, Rafale, Boum et Zéphir.'],
+      [11, 'Mine invisible pour l’adversaire, vit 60 s : saute au passage d’un ennemi (au sol ou en l’air, à 1 case) et fait 2 dégâts à tout ce qui est à 1,5 case. 2 charges (ses PV), réarmement 4 s.'],
+      [12, 'Tourelle à vent, 2 PV, vit 60 s : toutes les 1,5 s, souffle les ennemis (sol et air) dans les 3 cases devant elle, dans ton camp : ils reculent (¾ de case, les brutes ne reculent pas) et prennent 1 dégât. Détruite par Riko.'],
+      [13, 'Brute lente, 4 PV, explose à l’arrivée (4 dégâts) ou à sa mort (1 dégât autour). Frappe tout ennemi au sol qu’il touche (−1 PV par choc), rebondit sur les murs, insensible au vent des Rafales.'],
+      [14, 'Invisible tant qu’il est dans ton camp, traverse murs et unités au sol. 4 PV, 3 dégâts. Seuls les projectiles, le vent, les mines et Riko l’atteignent.'],
+      [15, 'Flaque de 1,5 case, 3 PV, vit 45 s, qui ne bloque pas : les ennemis au sol qui la traversent avancent à 40 % de leur vitesse (devant un Krak, ils encaissent bien plus de tirs).'],
+      [16, 'Toutes les 6 s, charme l’ennemi au sol le plus proche (2,5 cases, pas les brutes) : il change de camp et repart frapper son ancien maître. 2 PV, vit 50 s.'],
+      [17, 'Colosse, 8 PV, 5 dégâts : écrase les murs et les tourelles (−1 PV pour lui) et tue toute unité au sol qu’il touche (−1 PV par choc). Il survit à une tourelle seule ; le vent ne le fait pas reculer.'],
     ];
     $('rulesPage').innerHTML = `
       <h3>But</h3><p>Chaque joueur a <b>30 PV</b>. Pose des Ogs sur ta moitié pour atteindre la base adverse. En classée, après <b>3 minutes</b>, celui qui a le plus de PV gagne. En entraînement et en amical, tu choisis la durée (2, 3, 5 min ou illimitée : seul un KO termine la partie).</p>
       <h3>Mana</h3><p>Max 70, +2 / s. Clique (ou touche <kbd>O</kbd>) sur les orbes de ton côté : +10 mana. Chaque Chargeur vivant accélère ta régénération de 50 %.</p>
+      <h3>Structures éphémères</h3><p>Krak, Blok, Mojo, Boum, Rafale, Glu et Sirène ont une <b>durée de vie</b> (45 à 90 s, l’anneau autour d’elles se vide) : défendre se paie, comme attaquer. Faire évoluer une structure (Krak, Blok, Mojo) relance sa durée.</p>
       <h3>Contrôles</h3><p>Clic gauche sur une case : poser la créature choisie · clic droit : annuler. Une créature rebondie qui repasse la frontière vers son camp <b>change de camp</b>. <kbd>A</kbd> <kbd>Z</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd> (ou <kbd>1</kbd>–<kbd>7</kbd>, ou clic sur un slot) pour choisir un Og · flèches pour déplacer le curseur · <kbd>Entrée</kbd> / <kbd>Espace</kbd> ou clic pour poser · <kbd>Échap</kbd> annule. Zip, Riko et Zéphir se posent <b>uniquement sur la ligne du fond</b> (la plus éloignée de l’adversaire) ; les autres n’importe où sur ta moitié.</p>
       <h3>Les Ogs</h3>
       ${lines.map(([id, txt]) => `<div class="og-line"><canvas width="112" height="112" data-og="${id}"></canvas><div><b>${esc(Catalog.OG_NAMES[id])}</b> <span style="color:var(--muted)">· ${esc(Catalog.OG_ROLES[id])} · ${og[id].cost} mana</span><br><i style="color:#94a3b8">${esc(Catalog.OG_LORE[id])}</i><br>${txt}</div></div>`).join('')}
