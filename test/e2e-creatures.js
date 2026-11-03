@@ -12,7 +12,20 @@ const OUT = process.env.OUT || '/tmp';
   await A.click('[data-screen="collection"]'); await A.waitForTimeout(800);
   await A.screenshot({ path: path.join(OUT, 'c_collection_admin.png'), fullPage: true });
   // Kraken dans la case 70, Sirène en 60, Fantôme en 40, Pik en 10
-  for (const id of [17, 16, 14, 8]) { await A.click(`.ccard[data-id="${id}"]`); await A.waitForSelector('#btnPutInDeck', { timeout: 3000 }); await A.click('#btnPutInDeck'); await A.waitForTimeout(500); }
+  for (const [id, name] of [[17, 'Kraken'], [16, 'Sirène'], [14, 'Fantôme'], [8, 'Pik']]) { await A.fill('#colSearch', name); await A.waitForTimeout(400); await A.click(`.ccard[data-id="${id}"]`); await A.waitForTimeout(300); const put = await A.$('#btnPutInDeck'); if (put) { await put.click(); } else { await A.click('[data-close="creatureModal"]'); } await A.waitForTimeout(500); }
+  await A.fill('#colSearch', ''); await A.waitForTimeout(400);
+  // Filtres : structures de coût 30 uniquement, puis « Afficher plus » sur la liste complète
+  await A.click('#colStyle .chip[data-v="structure"]'); await A.click('#colCost .chip[data-v="30"]'); await A.waitForTimeout(400);
+  const n30 = await A.$$eval('#creatureGrid .ccard', els => els.length); console.log('structures à 30 mana :', n30);
+  await A.click('#colStyle .chip[data-v="all"]'); await A.click('#colCost .chip[data-v="all"]'); await A.waitForTimeout(400);
+  await A.click('#btnMoreCreatures'); await A.waitForTimeout(400);
+  const nAll = await A.$$eval('#creatureGrid .ccard', els => els.length); console.log('créatures affichées après « plus » :', nAll);
+  // Choix de case : la case 40 ouvre le sélecteur, on prend Scarabée
+  await A.click('#deckStrip .deck-slot[data-cost="40"]'); await A.waitForSelector('#slotModal:not(.hidden)'); await A.click('#slotGrid .slot-card[data-id="34"]'); await A.waitForTimeout(600);
+  // Équipe conseillée : la première (admin : tout est possédé)
+  await A.click('#recoDecks .reco'); await A.waitForTimeout(700);
+  const recoNames = await A.$$eval('#deckStrip .deck-slot b', els => els.map(e => e.textContent)); console.log('équipe conseillée appliquée :', recoNames.join(' · '));
+  for (const [id, name] of [[17, 'Kraken'], [16, 'Sirène'], [14, 'Fantôme'], [8, 'Pik']]) { await A.fill('#colSearch', name); await A.waitForTimeout(400); await A.click(`.ccard[data-id="${id}"]`); await A.waitForTimeout(300); const put = await A.$('#btnPutInDeck'); if (put) { await put.click(); } else { await A.click('[data-close="creatureModal"]'); } await A.waitForTimeout(500); }
   const deckNames = await A.$$eval('#deckStrip .deck-slot b', els => els.map(e => e.textContent));
   console.log('équipe :', deckNames.join(' · '));
   await A.screenshot({ path: path.join(OUT, 'c_deck.png') });

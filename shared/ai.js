@@ -27,11 +27,24 @@
   };
   const DEFAULT_DECK = [1, 2, 3, 4, 5, 6, 7];
   // Rôles tactiques (par ogId).
-  const RUNNER = new Set([1, 8]), AIR = new Set([7, 9, 10]), BRUTE = new Set([13, 17]), GHOST = new Set([14]);
-  const DEFENDER = new Set([2]), TURRET = new Set([3]), FAN = new Set([12]), WALL = new Set([5]), ECON = new Set([6]), MINE = new Set([11]), SLOW = new Set([15]), CHARM = new Set([16]), BOUNCER = new Set([4]);
-  const ATTACKERS = [1, 4, 7, 8, 9, 10, 13, 14, 17];
-  const MOVERS = new Set([1, 2, 4, 7, 8, 9, 10, 13, 14, 17]);
-  const STATIC_DEF = new Set([3, 5, 11, 12, 15, 16]);
+  // Rôles déduits des fiches des créatures (shared/sim.js), pour que l'IA joue aussi les 30 créatures ajoutées.
+  const IDS = Object.keys(OGS).map(Number);
+  const where = (pred) => new Set(IDS.filter(id => pred(OGS[id])));
+  const RUNNER = where(og => og.runner), AIR = where(og => og.air && og.movement !== 'static'), BRUTE = where(og => og.brute), GHOST = where(og => og.ghost || og.hunter);
+  const DEFENDER = where(og => og.patrol), WALL = new Set([5]), ECON = new Set([6]), MINE = new Set([11]), SLOW = new Set([15]), CHARM = new Set([16]), BOUNCER = new Set([4]), FAN = new Set([12]);
+  // Tireurs statiques : Krak et les tourelles génériques (portée, cadence, cibles air/sol).
+  const SHOOTER = { 3: { range: 2, cooldown: RULES.orangeCooldown, air: 'all' } };
+  for (const id of IDS) if (OGS[id].turretCfg && OGS[id].movement === 'static') SHOOTER[id] = OGS[id].turretCfg;
+  const TURRET = new Set(Object.keys(SHOOTER).map(Number));
+  const SPAWNER = where(og => og.spawner);
+  const MOVERS = where(og => og.movement !== 'static');
+  const ATTACKERS = IDS.filter(id => { const og = OGS[id]; return (og.movement !== 'static' && !og.patrol && (og.baseDamage > 0 || og.heals || og.manaOnBase)) || (og.spawner && OGS[og.spawner.ogId].baseDamage > 0); });
+  // Structures défensives (couvrent un couloir) et leur portée latérale en colonnes.
+  const REACH = {};
+  for (const id of IDS) { const og = OGS[id]; if (SHOOTER[id]) REACH[id] = SHOOTER[id].range; else if (og.fan) REACH[id] = 1; else if (og.mine) REACH[id] = 1; else if (og.aura && (og.aura.freezeEvery || og.aura.slowAir)) REACH[id] = Math.floor(og.aura.radius); else if (og.charmer) REACH[id] = 2; else if (og.spawner && og.spawner.ogId === 2) REACH[id] = 2; }
+  const STATIC_DEF = new Set([...Object.keys(REACH).map(Number), 5, 15]);
+  const DEF_IDS = Object.keys(REACH).map(Number).sort((a, b) => OGS[a].cost - OGS[b].cost);
+  const canHit = (sh, air) => sh.air === 'all' || (sh.air === 'only') === !!air;
   const KRAK_HIT = 0.85; // probabilité qu'un tir de Krak touche une cible qui avance tout droit
 
   // Tirage d'une équipe pour un bot : une créature par coût, parmi celles du jeu ; `variety` = part de nouvelles créatures.
@@ -100,9 +113,9 @@
 
     // ----- Lecture du terrain -----
     // Nombre de tirs de Krak qu'une unité encaisse en traversant `px` pixels couverts à `speed` px/s.
-    const shotsOver = (px, speed) => (px <= 0 ? 0 : 1 + px / Math.max(10, speed) / RULES.orangeCooldown);
+    const shotsOver = (px, speed, cooldown) => (px <= 0 ? 0 : 1 + px / Math.max(10, speed) / (cooldown || RULES.orangeCooldown));
     // Lignes (de profondeur) couvertes par un Krak posé à la profondeur d.
-    const krakRows = (d) => Math.min(ROWS_PER_SIDE - 1, d + RULES.orangeRange) - Math.max(0, d - RULES.orangeRange) + 1;
+    const krakRows = (d, range) => Math.min(ROWS_PER_SIDE - 1, d + (range || RULES.orangeRange)) - Math.max(0, d - (range || RULES.orangeRange)) + 1;
     const survival = (hp, hits) => Math.max(0.05, Math.min(1, (hp - hits + 0.5) / hp));
 
     // Valeur attendue (en "PV de base") d'une créature attaquante lancée dans la colonne c, vu la défense adverse visible.
@@ -115,10 +128,13 @@
       // Kraks adverses : tirs encaissés pendant la traversée de leur camp.
       let krakPx = 0;
       for (const k of theirs(e => TURRET.has(e.ogId))) {
-        if (Math.abs(colOf(k) - c) > RULES.orangeRange) continue;
-        krakPx += krakRows(enemyDepthOf(rowOf(k))) * CELL_H * (1 + 0.3 * ((k.level || 1) - 1));
+        const sh = SHOOTER[k.ogId];
+        if (!canHit(sh, air) || Math.abs(colOf(k) - c) > sh.range) continue;
+        const px = krakRows(enemyDepthOf(rowOf(k)), sh.range) * CELL_H * (1 + 0.3 * ((k.level || 1) - 1));
+        krakPx += px;
+        hits += shotsOver(px, speed, sh.cooldown) * (sh.pulse ? 1 : KRAK_HIT) * (BOUNCER.has(ogId) ? 0.75 : 1) * (sh.damage || 1);
       }
-      if (krakPx) hits += shotsOver(krakPx, speed) * KRAK_HIT * (BOUNCER.has(ogId) ? 0.75 : 1);
+      if (og.armor) hits *= 0.55; // carapace : un projectile sur deux ricoche
       // Glu dans la colonne : vitesse ÷2 sur une case => plus de tirs.
       if (!air && krakPx && theirs(e => SLOW.has(e.ogId) && Math.abs(colOf(e) - c) <= 1).length) hits += shotsOver(CELL_H * 1.5, speed * RULES.gluFactor) - shotsOver(CELL_H * 1.5, speed);
       // Rafale : repousse d'une case toutes les 2 s les unités au sol devant elle => les lentes n'avancent plus.
@@ -150,10 +166,20 @@
       }
       if (og.crushesWalls) value += 0.8 * theirs(e => STATIC_DEF.has(e.ogId) && !WALL.has(e.ogId) && colOf(e) === c).length;
       if (og.blastOnDeath) value += 0.3;
+      if (og.hunter) value += 1.6 * theirs(e => e.movement === 'static' && !e.air && !OGS[e.ogId].walkable && colOf(e) === c).length; // Pioche
+      if (og.wallBreaker) value += 1.5 * theirs(e => e.movement === 'static' && !e.air && Math.abs(colOf(e) - c) <= 1).length; // Dynamite
+      if (og.manaOnBase) value += og.manaOnBase / 10; // Lutin : la mana volée vaut des dégâts
+      if (og.kamikaze) value += 0.6 * theirs(e => e.movement !== 'static' && (og.kamikaze.air || !e.air) && Math.abs(colOf(e) - c) <= 1).length;
+      if (og.onDeath) value += 0.5 * og.onDeath.count * OGS[og.onDeath.ogId].baseDamage; // rejetons
+      if (og.grow) hits = Math.max(0, hits - 2); // Boule : grossit en chemin
+      if (air && theirs(e => OGS[e.ogId].aura && OGS[e.ogId].aura.slowAir && Math.abs(colOf(e) - c) <= 1).length) { if (krakPx) hits += 2; } // Nuage sous le feu
       if (og.heals) value = (S.hp[player] <= RULES.healthMax - 1 ? 1 : 0) * (S.hp[player] < 15 ? 1.4 : 1);
       // Zéphir adverse en défense (tire devant lui dans son camp) : malus pour les cibles qu'il peut toucher.
       if ((air || RUNNER.has(ogId) || ghost) && theirs(e => e.ogId === 7 && !inMyHalf(e) && Math.abs(colOf(e) - c) <= 1).length) hits += 1;
-      return Math.max(0, value * survival(hp, hits) * surv);
+      let out = Math.max(0, value * survival(hp, hits) * surv) * (og.spawnCount || 1);
+      // Pondeuses offensives (Nid, Reine) : la valeur de leurs rejetons sur la durée de vie, posées au front du couloir.
+      if (og.spawner && og.movement === 'static') out = (og.lifetime / og.spawner.every) * attackValue(og.spawner.ogId, c) * 0.8;
+      return out;
     }
 
     // Menaces : unités adverses en marche vers ma base, avec temps d'arrivée estimé et tirs que mes Kraks leur réservent.
@@ -186,6 +212,7 @@
     function myDefenseIn(col) {
       return mine(e => Math.abs(colOf(e) - col) <= 1 && STATIC_DEF.has(e.ogId));
     }
+    function weakestEnemyColFor() { const b = bestAttack(RULES.manaMax); return b ? b.col : Math.floor(COLS / 2); }
     function hottestLane() {
       let best = Math.floor(COLS / 2), bestN = -1;
       for (let c = 0; c < COLS; c += 1) { const n = lanes[c] + rng.next() * 0.5; if (n > bestN) { bestN = n; best = c; } }
@@ -201,26 +228,31 @@
       if (rng.next() > cfg.skill) return false; // les IA faibles ratent parfois la réponse
       const tried = [];
       const attempt = (id, chooser) => { if (!has(id) || tried.includes(id)) return false; tried.push(id); return place(id, chooser); };
-      const krak = () => attempt(3, cells => inCol(cells, col, krakDepth(), 1) || inCol(cells, col, 2, 2));
+      // Tireurs du deck capables de toucher ce type de cible (Krak, Flak, Oracle, Mortier, Ballon…), les moins chers d'abord.
+      const shooters = DEF_IDS.filter(id => SHOOTER[id] && canHit(SHOOTER[id], OGS[og].air) && has(id) && mine(x => x.ogId === id).length < 3);
+      const krak = () => shooters.some(id => attempt(id, cells => inCol(cells, col, id === 3 ? krakDepth() : 2, 1) || inCol(cells, col, 2, 2)));
       const fans = mine(x => FAN.has(x.ogId)).length, mines = mine(x => MINE.has(x.ogId));
       const fan = () => fans < 3 && attempt(12, cells => inCol(cells, col, 2, 1));
+      const freeze = () => !mine(x => x.ogId === 38).length && attempt(38, cells => inCol(cells, col, 3, 1)); // Gel
+      const totem = () => !mine(x => x.ogId === 43).length && attempt(43, cells => inCol(cells, col, 2, 1));
+      const patrol = (depth, spread) => attempt(2, cells => inCol(cells, col, depth, spread)) || attempt(22, cells => inCol(cells, col, depth, spread));
       // Boum (3 charges, sol et air) : une mine dans le couloir s'il n'y en a pas déjà une à portée.
       const mineHere = () => mines.length < 3 && !mines.some(m => Math.abs(colOf(m) - col) <= 1) && attempt(11, cells => inCol(cells, col, 3, 0) || inCol(cells, col, 2, 0));
-      if (AIR.has(og)) return krak() || fan() || mineHere() || attempt(7, cells => inCol(cells, col, 0, 1)); // volant : Krak, Rafale (vent), Boum, Zéphir
+      if (AIR.has(og)) return krak() || fan() || mineHere() || (!mine(x => x.ogId === 27).length && attempt(27, cells => inCol(cells, col, 2, 1))) || attempt(7, cells => inCol(cells, col, 0, 1)); // volant : tireurs anti-air, Rafale, Boum, Nuage, Zéphir
       if (GHOST.has(og)) return krak() || mineHere() || attempt(4, cells => inCol(cells, col, 0, 1)) || attempt(7, cells => inCol(cells, col, 0, 1));
-      if (BRUTE.has(og)) { // Tiktak / Kraken : mine (3 dégâts), Rafale, Krak, Blok (Tiktak rebondit), Glu, contre-brute
+      if (BRUTE.has(og)) { // brutes : mine, Rafale, tireurs, Gel, Blok (Tiktak rebondit), Glu, contre-brute
         return mineHere() || fan()
-          || krak() || (og === 13 && attempt(5, cells => inCol(cells, col, 1, 0))) || attempt(15, cells => inCol(cells, col, 2, 0)) || attempt(17, cells => inCol(cells, col, 0, 1)) || attempt(13, cells => inCol(cells, col, 0, 1));
+          || krak() || freeze() || (og === 13 && attempt(5, cells => inCol(cells, col, 1, 0))) || attempt(15, cells => inCol(cells, col, 2, 0)) || attempt(17, cells => inCol(cells, col, 0, 1)) || attempt(45, cells => inCol(cells, col, 0, 1)) || attempt(41, cells => inCol(cells, col, 0, 1)) || attempt(13, cells => inCol(cells, col, 0, 1)) || attempt(28, cells => inCol(cells, col, 0, 1));
       }
       if (BOUNCER.has(og)) { // Riko : Gromp (échange gagnant), mur, brute
-        return attempt(2, cells => inCol(cells, col, 2, 2)) || attempt(5, cells => inCol(cells, col, 1, 1)) || attempt(13, cells => inCol(cells, col, 0, 1)) || fan();
+        return patrol(2, 2) || attempt(5, cells => inCol(cells, col, 1, 1)) || attempt(13, cells => inCol(cells, col, 0, 1)) || fan();
       }
       if (RUNNER.has(og)) { // runners (1 dégât) : seulement des contres durables et pas trop chers — Gromp, Krak, Blok/Sirène dans un couloir très utilisé
         const gromps = mine(x => DEFENDER.has(x.ogId)).length;
         const hot = lanes[col] >= 3;
-        return (gromps < 1 && attempt(2, cells => inCol(cells, col, 2, 1) || inCol(cells, col, 1, 2))) || krak()
-          || (hot && mine(x => WALL.has(x.ogId)).length < 2 && attempt(5, cells => inCol(cells, col, 1, 0))) || (hot && mineHere()) || (hot && attempt(16, cells => inCol(cells, col, 2, 1))) || (hot && fan())
-          || (gromps < 2 && attempt(2, cells => inCol(cells, col, 2, 2)));
+        return (gromps < 1 && patrol(2, 2)) || krak()
+          || (hot && mine(x => WALL.has(x.ogId)).length < 2 && attempt(5, cells => inCol(cells, col, 1, 0))) || (hot && mineHere()) || (hot && attempt(16, cells => inCol(cells, col, 2, 1))) || (hot && fan()) || (hot && freeze()) || (hot && totem())
+          || (gromps < 2 && patrol(2, 2));
       }
       return false;
     }
@@ -273,16 +305,18 @@
 
     // ----- Défense préventive, économie -----
     // Structure défensive de niveau 30 du deck (Krak, Rafale ou Boum) et portée latérale (en colonnes) de chacune.
-    const DEF30 = deck.find(id => id === 3 || id === 12 || id === 11) || null;
-    const REACH = { 3: RULES.orangeRange, 12: 1, 11: 1 };
+    // Structure défensive principale du deck : la moins chère qui tire sur tout (Krak, Oracle), sinon la moins chère qui couvre un couloir.
+    const defs = DEF_IDS.filter(id => has(id));
+    const DEF30 = defs.find(id => SHOOTER[id] && SHOOTER[id].air === 'all') || defs.find(id => !SHOOTER[id] || SHOOTER[id].air !== 'only') || defs[0] || null;
+    const DEF_COST = DEF30 ? OGS[DEF30].cost : 0;
     const coveredBy = (col) => mine(e => REACH[e.ogId] !== undefined && Math.abs(colOf(e) - col) <= REACH[e.ogId]).length;
-    const placeDef = (id, col, spread) => place(id, cells => inCol(cells, col, id === 3 ? krakDepth() : id === 12 ? 2 : 3, spread === undefined ? 1 : spread) || inCol(cells, col, undefined, 2));
+    const placeDef = (id, col, spread) => place(id, cells => inCol(cells, col, id === 3 ? krakDepth() : OGS[id].mine || OGS[id].aura ? 3 : 2, spread === undefined ? 1 : spread) || inCol(cells, col, undefined, 2));
     // Mana à garder pour la fortification en attente (la première structure, ou la couverture du couloir chaud).
     function fortifyNeed() {
       if (!DEF30) return 0;
       const n = mine(e => REACH[e.ogId] !== undefined).length;
-      if (n === 0 && S.time > 4) return 30;
-      if (n < 3 && lanes[hottestLane()] >= 2 && !coveredBy(hottestLane())) return 30;
+      if (n === 0 && S.time > 4) return DEF_COST;
+      if (n < 3 && lanes[hottestLane()] >= 2 && !coveredBy(hottestLane())) return DEF_COST;
       return 0;
     }
     function fortify() {
@@ -291,9 +325,11 @@
       const hot = hottestLane();
       const structures = mine(e => REACH[e.ogId] !== undefined);
       // Une première structure défensive tôt dans le couloir le plus utilisé (ou au centre) : elle tue à elle seule les vagues de petites créatures.
-      if (DEF30 && structures.length === 0 && m >= 30 && (S.time > 6 || enemyAir)) { if (placeDef(DEF30, hot, 2)) return true; }
+      if (DEF30 && structures.length === 0 && m >= DEF_COST && (S.time > 6 || enemyAir)) { if (placeDef(DEF30, hot, 2)) return true; }
+      // Un anti-aérien (Flak) dès que l'adversaire envoie des volants et que rien ne les tire.
+      if (has(26) && enemyAir && !mine(e => SHOOTER[e.ogId] && SHOOTER[e.ogId].air !== 'none').length && m >= 20) { if (placeDef(26, hot, 2)) return true; }
       // Couvrir le couloir chaud s'il ne l'est pas (jusqu'à 3 structures).
-      if (DEF30 && structures.length >= 1 && structures.length < 3 && m >= 30 + cfg.reserve && !coveredBy(hot) && lanes[hot] >= 1) { if (placeDef(DEF30, hot, 1)) return true; }
+      if (DEF30 && structures.length >= 1 && structures.length < 3 && m >= DEF_COST + cfg.reserve && !coveredBy(hot) && lanes[hot] >= 1) { if (placeDef(DEF30, hot, 1)) return true; }
       // Mine supplémentaire dans le couloir chaud, au front (elle a 3 charges).
       if (has(11) && structures.length < 4 && m >= 30 + cfg.reserve && lanes[hot] >= 3 && rng.chance(0.5)) { if (place(11, cells => inCol(cells, hot, 3, 1))) return true; }
       // Sirène dans le couloir chaud quand l'adversaire envoie des unités au sol (chaque charme = 2 PV de différence).
@@ -310,6 +346,8 @@
       if (has(6) && chargers.length < cfg.economy && S.time < 70 && mana() >= 60 && !threats().some(t => t.eta < 8 && !t.covered)) {
         if (place(6, cells => atDepth(cells, 0))) return true;
       }
+      // Source : soigner quand la base a pris cher (elle rend 5 PV sur sa vie).
+      if (has(30) && S.hp[player] <= RULES.healthMax - 6 && !mine(e => e.ogId === 30).length && mana() >= 30 + cfg.reserve) { if (place(30, cells => atDepth(cells, 0))) return true; }
       // Protéger un chargeur sans tourelle à côté.
       const turrets = mine(e => TURRET.has(e.ogId));
       const unprotected = chargers.find(c => !turrets.some(t => Math.abs(colOf(t) - colOf(c)) <= 1));
@@ -323,6 +361,8 @@
       const kraks = mine(e => TURRET.has(e.ogId));
       if (has(3) && kraks.length < 3 && place(3, cells => inCol(cells, kraks.length ? (kraks.every(k => Math.abs(colOf(k) - hot) > 1) ? hot : (hot + Math.floor(COLS / 2)) % COLS) : hot, krakDepth(), 2))) return true;
       if (has(6) && S.time < 110 && mine(e => ECON.has(e.ogId)).length < cfg.economy + 1 && place(6, cells => atDepth(cells, 0))) return true;
+      if (has(37) && !mine(e => e.ogId === 37).length && place(37, cells => inCol(cells, weakestEnemyColFor(), 3, 2))) return true; // Phare dans mon couloir d'attaque
+      if (DEF30 && kraks.length < 3 && mine(e => REACH[e.ogId] !== undefined).length < 4 && placeDef(DEF30, (hot + Math.floor(COLS / 2)) % COLS, 2)) return true;
       if (has(5) && mine(e => WALL.has(e.ogId)).length < 2 && lanes[hot] >= 2 && place(5, cells => inCol(cells, hot, 1, 0))) return true;
       if (has(2) && mine(e => DEFENDER.has(e.ogId)).length < 2 && place(2, cells => inCol(cells, hot, 2, 2))) return true;
       if (has(16) && !mine(e => CHARM.has(e.ogId)).length && place(16, cells => inCol(cells, hot, 2, 2))) return true;

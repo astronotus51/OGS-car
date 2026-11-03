@@ -79,6 +79,8 @@ Mise en place de Google (une fois, ~5 min) :
 
 Catalogue de créatures dans `shared/catalog.js` (`CREATURES`, raretés, `DECK_COSTS`, `DEFAULT_DECK`) : les 7 de base sont acquises, 10 nouveaux types jouables (Pik, Bulle, Zazou, Boum, Rafale, Tiktak, Fantôme, Glu, Sirène, Kraken : comportements dans `shared/sim.js`, familles RUNNERS / TURRETS / BRUTES, dessins dans `public/js/creatures.js`) se gagnent en capsules et sur la route. Écran **Collection** : équipe (une créature par coût, envoyée au serveur via `POST /api/deck`, validée dans `Sim.createGame({ decks })`), cartes avec étoiles. **Capsules** : une par victoire classée/duo/trio (5 max), `POST /api/capsule/open` → 2-3 cartes (poids par rareté, garantie épique toutes les 12 cartes, légendaire toutes les 40), pièces, 30 % de chance d'un skin. **Route des trophées** : `TROPHY_ROAD` (paliers de 50 en 50 jusqu'à 2500 : pièces, capsules, skins, créatures), `POST /api/road/claim`. Colonnes `deck, collection, capsules, pity, road`.
 
+La collection se filtre (recherche, rôle attaque / défense / soutien, style sol / air / structure, coût de mana, possédées ou à débloquer, rareté) et se trie (mana, A→Z, rareté, nouveautés, étoiles), par pages de 24 (« Afficher plus »). Toucher une case de l'équipe ouvre un sélecteur qui ne montre que les créatures de ce coût (les possédées d'abord), filtrable par style. Les **équipes conseillées** (12 archétypes testés en arène, classés S / A / B avec leur taux de victoire contre l'IA) s'appliquent d'un clic si on possède leurs 7 créatures. Les 30 créatures supplémentaires (ids 18 à 47) sont décrites dans `BALANCE.md` ; 24 d'entre elles sont aussi sur la route des trophées.
+
 ## Interface
 
 Direction artistique « abysses gravées » (`public/css/style.css`) : panneaux à coins biseautés (`clip-path`), double filet, typographie Bungee + Chakra Petch, fond canvas avec rais de lumière, plancton et bulles.
@@ -145,7 +147,7 @@ Tout est piloté par `shared/features.js` : un interrupteur `enabled` par foncti
 
 Non fait, volontairement : le passe de saison.
 
-## Les créatures
+## Les créatures (47)
 
 Dessinées en vectoriel dans `public/js/creatures.js` (plus de PNG), animées par parties : Zip court et couche ses oreilles, Gromp claque des griffes, Krak oriente son canon et recule au tir, Riko tourne et a le tournis, Blok se fissure quand il perd des PV, Mojo fait tourner ses étincelles de mana, Zéphir bat des ailes et charge sa boule de feu dans son ventre.
 

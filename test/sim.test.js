@@ -191,9 +191,9 @@ function alive(g, ogId, side) { return g.state.entities.filter(e => e.ogId === o
   const firstHit = ev.findIndex(e => e.type === 'hit' && e.ogId === 8), firstKill = ev.findIndex(e => e.type === 'kill' && e.ogId === 8);
   assert.ok(firstHit >= 0 && (firstKill === -1 || firstKill > firstHit) && ev[firstHit].hp === 1, 'Pik survit au premier contact (1 PV restant)');
   console.log('Pik OK (PV restants', pik.length ? pik[0].hp : 'arrivé', ')'); }
-// Bulle : atteint la base adverse sans dégât et soigne la sienne de 1.
+// Bulle : atteint la base adverse sans dégât et soigne la sienne de 2.
 { const g = mk(102); g.state.hp.bottom = 25; g.setMana('bottom', 70); g.place('bottom', 9, 4, 7);
-  const ev = runFor(g, 40); assert.ok(ev.some(e => e.type === 'heal' && e.target === 'bottom'), 'Bulle soigne'); assert.strictEqual(g.state.hp.bottom, 26); assert.strictEqual(g.state.hp.top, 30); console.log('Bulle OK'); }
+  const ev = runFor(g, 40); assert.ok(ev.some(e => e.type === 'heal' && e.target === 'bottom'), 'Bulle soigne'); assert.strictEqual(g.state.hp.bottom, 27); assert.strictEqual(g.state.hp.top, 30); console.log('Bulle OK'); }
 // Zazou : volant rapide, ignore un Gromp et un mur, 2 dégâts à la base.
 { const g = mk(103); g.setMana('top', 70); g.place('top', 5, 4, 3); g.setMana('top', 70); g.place('top', 2, 4, 2); g.setMana('bottom', 70); g.place('bottom', 10, 4, 7);
   runFor(g, 15); assert.strictEqual(g.state.hp.top, 28, 'Zazou passe au-dessus et frappe'); console.log('Zazou OK'); }
@@ -225,3 +225,26 @@ function alive(g, ogId, side) { return g.state.entities.filter(e => e.ogId === o
 { const g = mk(110, { features: { lifetime: true } }); g.setMana('top', 70); g.place('top', 3, 4, 2);
   const ev = runFor(g, Sim.OGS[3].lifetime + 1); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 3 && e.cause === 'expire'), 'le Krak expire'); assert.strictEqual(alive(g, 3).length, 0);
   const g2 = mk(111, { features: { lifetime: false } }); g2.setMana('top', 70); g2.place('top', 3, 4, 2); runFor(g2, Sim.OGS[3].lifetime + 1); assert.strictEqual(alive(g2, 3).length, 1, 'sans l’option, il reste'); console.log('Structures éphémères OK'); }
+// ----- 30 créatures de plus : mécaniques génériques -----
+// Nid : pond des Zip ; Reine : des Pik.
+{ const g = mk(120); g.setMana('bottom', 70); g.place('bottom', 23, 4, 6); const ev = runFor(g, 25); assert.ok(ev.filter(e => e.type === 'place' && e.spawned && e.ogId === 1).length >= 2, 'le Nid a pondu au moins 2 Zip'); console.log('Nid OK'); }
+// Pétard : explose sur un Krak ennemi (4 dégâts) et meurt.
+{ const g = mk(121); g.setMana('top', 70); g.place('top', 3, 4, 3); g.setMana('bottom', 70); g.place('bottom', 24, 4, 7); const ev = runFor(g, 15); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 24 && e.cause === 'kamikaze'), 'Pétard explose'); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 3 && e.cause === 'kamikaze'), 'le Krak y passe'); console.log('Pétard OK'); }
+// Scarabée : carapace, un projectile sur deux ricoche (il survit à 4 tirs).
+{ const g = mk(122); g.setMana('top', 70); g.place('top', 3, 4, 1); g.setMana('bottom', 70); g.place('bottom', 34, 4, 7); const ev = runFor(g, 30); const armored = ev.filter(e => e.type === 'hit' && e.armor).length; assert.ok(armored >= 1, 'au moins un ricochet'); console.log('Scarabée OK (ricochets', armored, ')'); }
+// Pioche : casse un Krak ennemi au contact et continue (−1 PV).
+{ const g = mk(123); g.setMana('top', 70); g.place('top', 3, 4, 3); g.setMana('bottom', 70); g.place('bottom', 29, 4, 7); const ev = runFor(g, 20); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 3 && e.cause === 'crush'), 'le Krak est cassé'); console.log('Pioche OK'); }
+// Lutin : +20 mana en arrivant.
+{ const g = mk(124); g.setMana('bottom', 70); g.place('bottom', 25, 4, 7); g.setMana('bottom', 0); const ev = runFor(g, 15); assert.ok(ev.some(e => e.type === 'mana' && e.amount === 20), 'mana volée'); assert.ok(g.state.mana.bottom >= 20, 'la mana est créditée'); console.log('Lutin OK'); }
+// Hydre : deux Zip à sa mort.
+{ const g = mk(125); g.setMana('top', 70); g.place('top', 11, 4, 3); g.setMana('top', 70); g.place('top', 11, 4, 2); g.setMana('bottom', 70); g.place('bottom', 36, 4, 7); const ev = runFor(g, 25); if (ev.some(e => e.type === 'kill' && e.ogId === 36)) assert.ok(ev.filter(e => e.type === 'place' && e.spawned && e.ogId === 1).length === 2, 'deux Zip sortent'); console.log('Hydre OK'); }
+// Flak : tire sur un Zazou, pas sur un Zip.
+{ const g = mk(126); g.setMana('top', 70); g.place('top', 26, 4, 2); g.setMana('bottom', 70); g.place('bottom', 10, 4, 7); g.setMana('bottom', 70); g.place('bottom', 1, 3, 7); const ev = runFor(g, 12); assert.ok(ev.some(e => e.type === 'kill' && e.ogId === 10 && e.cause === 'projectile'), 'le Zazou est abattu'); assert.ok(!ev.some(e => e.type === 'kill' && e.ogId === 1 && e.cause === 'projectile'), 'le Zip est ignoré'); console.log('Flak OK'); }
+// Phare : un allié à portée avance plus vite.
+{ const g = mk(127); g.setMana('bottom', 70); g.place('bottom', 37, 4, 6); g.setMana('bottom', 70); g.place('bottom', 8, 4, 7); const g2 = mk(128); g2.setMana('bottom', 70); g2.place('bottom', 8, 4, 7); runFor(g, 3); runFor(g2, 3); const y1 = alive(g, 8)[0].y, y2 = alive(g2, 8)[0].y; assert.ok(y1 < y2 - 20, 'le Pik accéléré est plus loin'); console.log('Phare OK'); }
+// Gel : gèle un Zip ennemi (il s'arrête un moment).
+{ const g = mk(129); g.setMana('top', 70); g.place('top', 38, 4, 3); g.setMana('bottom', 70); g.place('bottom', 1, 4, 7); const ev = runFor(g, 12); assert.ok(ev.some(e => e.type === 'ability' && e.ogId === 38), 'le Gel s’active'); console.log('Gel OK'); }
+// Oracle : révèle une mine ennemie dans le snapshot.
+{ const g = mk(130); g.setMana('bottom', 70); g.place('bottom', 11, 4, 4); const hiddenBefore = Sim.decodeSnapshot(JSON.parse(JSON.stringify(g.snapshot()))).entities[0].hiddenFromEnemy; g.setMana('top', 70); g.place('top', 40, 4, 3); runFor(g, 1); const hiddenAfter = Sim.decodeSnapshot(JSON.parse(JSON.stringify(g.snapshot()))).entities.find(e => e.ogId === 11).hiddenFromEnemy; assert.ok(hiddenBefore && !hiddenAfter, 'la mine est révélée'); console.log('Oracle OK'); }
+// Essaim : six unités d'un coup.
+{ const g = mk(131); g.setMana('bottom', 70); g.place('bottom', 46, 4, 7); assert.strictEqual(alive(g, 46).length, 6); console.log('Essaim OK'); }

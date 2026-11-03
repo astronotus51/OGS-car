@@ -471,29 +471,104 @@
   }
   setInterval(drawCollectionCanvases, 1000 / 30);
   function starsHtml(n) { return '★'.repeat(n) + '<span class="dim">' + '★'.repeat(5 - n) + '</span>'; }
-  async function openCollection() {
+  // Filtres / tri de la collection (mémorisés pour la session).
+  const colFilter = { search: '', kind: 'all', style: 'all', cost: 'all', owned: 'all', sort: 'cost', page: 1 };
+  const PAGE = 24;
+  const RARITY_ORDER = { legendaire: 0, epique: 1, rare: 2, commune: 3 };
+  function styleOf(id) { const og = Sim.OGS[id]; return og.movement === 'static' ? 'structure' : og.air ? 'air' : 'sol'; }
+  const STYLE_LABEL = { sol: 'Sol', air: 'Air', structure: 'Structure' };
+  const KIND_LABEL = { attaque: 'Attaque', 'défense': 'Défense', soutien: 'Soutien' };
+  function filteredCreatures(col) {
+    const q = colFilter.search.trim().toLowerCase();
+    let list = Catalog.CREATURES.filter(c => (rarityFilter === 'all' || c.rarity === rarityFilter)
+      && (colFilter.kind === 'all' || c.kind === colFilter.kind)
+      && (colFilter.style === 'all' || styleOf(c.id) === colFilter.style)
+      && (colFilter.cost === 'all' || c.cost === Number(colFilter.cost))
+      && (colFilter.owned === 'all' || (colFilter.owned === 'owned') === !!col[c.id])
+      && (!q || c.name.toLowerCase().includes(q) || c.role.toLowerCase().includes(q) || c.power.toLowerCase().includes(q)));
+    const by = {
+      cost: (a, b) => a.cost - b.cost || a.id - b.id,
+      'cost-desc': (a, b) => b.cost - a.cost || a.id - b.id,
+      name: (a, b) => a.name.localeCompare(b.name, 'fr'),
+      rarity: (a, b) => RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity] || a.cost - b.cost,
+      new: (a, b) => b.id - a.id,
+      stars: (a, b) => (col[b.id] ? Catalog.cardStars(b, col[b.id]) : 0) - (col[a.id] ? Catalog.cardStars(a, col[a.id]) : 0) || a.cost - b.cost,
+    };
+    return list.sort(by[colFilter.sort] || by.cost);
+  }
+  async function openCollection(keepPage) {
     show('collection');
     try { profile = (await Net.api('/api/me')).profile; } catch (e) { /* ignore */ }
     collectionCanvases.length = 0;
+    if (!keepPage) colFilter.page = 1;
     const col = profile.collection || {}, deck = profile.deck || Catalog.DEFAULT_DECK;
     $('collectionCount').textContent = `${Object.keys(col).length} / ${Catalog.CREATURES.length}`;
     $('capsuleCount2').textContent = profile.capsules || 0;
     // Équipe : 7 cases par coût
     $('deckStrip').innerHTML = Catalog.DECK_COSTS.map((cost, i) => { const c = Catalog.CREATURE_BY_ID[deck[cost]]; return `<button class="deck-slot" data-cost="${cost}"><canvas width="120" height="120"></canvas><span class="deck-key">${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][i]}</span><span class="deck-cost">${cost}</span><b>${esc(c.name)}</b></button>`; }).join('');
-    $('deckStrip').querySelectorAll('.deck-slot').forEach(b => { const cost = Number(b.dataset.cost), id = deck[cost]; collectionCanvases.push({ canvas: b.querySelector('canvas'), ogId: id, skin: profile.equipped[id] || `og${id}_default`, size: 78, alpha: 1 }); b.addEventListener('click', () => openCreature(id, cost)); });
-    // Grille
-    const list = Catalog.CREATURES.filter(c => rarityFilter === 'all' || c.rarity === rarityFilter);
-    $('creatureGrid').innerHTML = list.map(c => { const owned = !!col[c.id], R = Catalog.RARITIES[c.rarity], inDeck = deck[c.cost] === c.id; return `<button class="ccard rarity-${c.rarity} ${owned ? '' : 'locked'} ${inDeck ? 'in-deck' : ''}" data-id="${c.id}" style="--rc:${R.color}">
+    $('deckStrip').querySelectorAll('.deck-slot').forEach(b => { const cost = Number(b.dataset.cost), id = deck[cost]; collectionCanvases.push({ canvas: b.querySelector('canvas'), ogId: id, skin: profile.equipped[id] || `og${id}_default`, size: 78, alpha: 1 }); b.addEventListener('click', () => openSlotPicker(cost)); });
+    // Équipes conseillées
+    const deckKey = Catalog.DECK_COSTS.map(c => deck[c]).join(',');
+    const recoAll = Catalog.RECOMMENDED_DECKS.slice().sort((a, b) => (b.wr + b.rr) - (a.wr + a.rr));
+    $('recoDecks').innerHTML = recoAll.slice(0, colFilter.allReco ? recoAll.length : 3).map((d, i) => {
+      const ids = Catalog.DECK_COSTS.map(c => d.deck[c]);
+      const missing = ids.filter(id => !col[id]);
+      const tier = d.wr + d.rr >= 130 ? 'S' : d.wr + d.rr >= 110 ? 'A' : 'B';
+      return `<button class="reco ${ids.join(',') === deckKey ? 'current' : ''}" data-reco="${i}"><div class="reco-name">${esc(d.name)} <span class="reco-tier ${tier.toLowerCase()}">${tier}</span></div><div class="reco-style">${esc(d.style)}</div><div class="reco-desc">${esc(d.desc)}</div><div class="reco-strip">${ids.map(id => `<canvas width="64" height="64" data-og="${id}" class="${col[id] ? '' : 'missing'}"></canvas>`).join('')}</div><div class="reco-foot"><span>${missing.length ? `${missing.length} créature(s) à débloquer` : ids.join(',') === deckKey ? 'Équipe actuelle' : 'Prête à jouer'}</span><b>${d.wr} % vs IA</b></div></button>`;
+    }).join('') + (recoAll.length > 3 ? `<button class="btn reco-more" id="btnRecoMore">${colFilter.allReco ? 'Réduire' : `Voir les ${recoAll.length - 3} autres équipes`}</button>` : '');
+    const rm = $('btnRecoMore'); if (rm) rm.addEventListener('click', () => { colFilter.allReco = !colFilter.allReco; openCollection(true); });
+    $('recoDecks').querySelectorAll('canvas[data-og]').forEach(cv => collectionCanvases.push({ canvas: cv, ogId: Number(cv.dataset.og), skin: `og${cv.dataset.og}_default`, size: 44, alpha: cv.classList.contains('missing') ? 0.35 : 1 }));
+    $('recoDecks').querySelectorAll('.reco').forEach(b => b.addEventListener('click', () => applyRecommended(Number(b.dataset.reco))));
+    // Grille filtrée, triée, paginée
+    const list = filteredCreatures(col);
+    const shown = list.slice(0, colFilter.page * PAGE);
+    $('creatureGrid').innerHTML = shown.map(c => { const owned = !!col[c.id], R = Catalog.RARITIES[c.rarity], inDeck = deck[c.cost] === c.id, st = styleOf(c.id); return `<button class="ccard rarity-${c.rarity} ${owned ? '' : 'locked'} ${inDeck ? 'in-deck' : ''}" data-id="${c.id}" style="--rc:${R.color}">
       <span class="ccard-cost">${c.cost}</span>${inDeck ? '<span class="ccard-deck">ÉQUIPE</span>' : ''}${!c.playable ? '<span class="ccard-soon">BIENTÔT</span>' : ''}
       <canvas width="150" height="150"></canvas>
+      <span class="ccard-tags"><span class="tag k-${c.kind}">${KIND_LABEL[c.kind] || ''}</span><span class="tag">${STYLE_LABEL[st]}</span></span>
       <b>${esc(c.name)}</b><small>${R.name}</small>
-      <span class="ccard-stars">${owned ? starsHtml(Catalog.cardStars(c, col[c.id])) : '<span class="dim">verrouillée</span>'}</span></button>`; }).join('');
+      <span class="ccard-stars">${owned ? starsHtml(Catalog.cardStars(c, col[c.id])) : '<span class="dim">verrouillée</span>'}</span></button>`; }).join('') || '<p class="muted">Aucune créature ne correspond à ces filtres.</p>';
     $('creatureGrid').querySelectorAll('.ccard').forEach(b => { const id = Number(b.dataset.id); collectionCanvases.push({ canvas: b.querySelector('canvas'), ogId: id, skin: profile.equipped[id] || `og${id}_default`, size: 96, alpha: col[id] ? 1 : 0.35 }); b.addEventListener('click', () => openCreature(id)); });
+    $('creatureMore').innerHTML = list.length > shown.length ? `<button class="btn" id="btnMoreCreatures">Afficher plus (${list.length - shown.length} restantes)</button>` : `<span class="muted">${list.length} créature(s)</span>`;
+    const more = $('btnMoreCreatures'); if (more) more.addEventListener('click', () => { colFilter.page += 1; openCollection(true); });
     $('rarityTabs').querySelectorAll('.rtab').forEach(t => t.classList.toggle('active', t.dataset.rarity === rarityFilter));
+    for (const [box, key] of [['colKind', 'kind'], ['colStyle', 'style'], ['colCost', 'cost'], ['colOwned', 'owned']]) $(box).querySelectorAll('.chip').forEach(ch => ch.classList.toggle('active', ch.dataset.v === colFilter[key]));
+    $('colSort').value = colFilter.sort; if ($('colSearch').value !== colFilter.search) $('colSearch').value = colFilter.search;
     drawCollectionCanvases();
   }
   $('rarityTabs').addEventListener('click', (ev) => { const t = ev.target.closest('.rtab'); if (!t) return; rarityFilter = t.dataset.rarity; openCollection(); });
+  for (const [box, key] of [['colKind', 'kind'], ['colStyle', 'style'], ['colCost', 'cost'], ['colOwned', 'owned']]) $(box).addEventListener('click', (ev) => { const ch = ev.target.closest('.chip'); if (!ch) return; colFilter[key] = ch.dataset.v; openCollection(); });
+  $('colSort').addEventListener('change', () => { colFilter.sort = $('colSort').value; openCollection(); });
+  let searchTimer = null;
+  $('colSearch').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { colFilter.search = $('colSearch').value; openCollection(); }, 180); });
   $('btnCapsulesFromCollection').addEventListener('click', openCapsules);
+  // Appliquer une équipe conseillée (il faut posséder ses 7 créatures).
+  async function applyRecommended(i) {
+    const d = Catalog.RECOMMENDED_DECKS.slice().sort((a, b) => (b.wr + b.rr) - (a.wr + a.rr))[i];
+    const col = profile.collection || {};
+    const missing = Catalog.DECK_COSTS.map(c => d.deck[c]).filter(id => !col[id]);
+    if (missing.length) { toast(`Il te manque : ${missing.map(id => Catalog.CREATURE_BY_ID[id].name).join(', ')} (capsules ou route des trophées)`, 'warn'); return; }
+    try { profile = (await Net.api('/api/deck', { deck: d.deck })).profile; toast(`Équipe « ${d.name} » appliquée`, 'good'); Audio.sfx('coin'); openCollection(true); }
+    catch (e) { toast(e.message, 'bad'); }
+  }
+  // Choix d'une créature pour une case de l'équipe : les possédées de ce coût d'abord, puis celles à débloquer, filtrables par style et triables.
+  const slotFilter = { style: 'all', sort: 'name', cost: 10 };
+  function openSlotPicker(cost) {
+    slotFilter.cost = cost;
+    for (let i = collectionCanvases.length - 1; i >= 0; i -= 1) if (collectionCanvases[i].canvas.closest('#slotGrid')) collectionCanvases.splice(i, 1);
+    const col = profile.collection || {}, deck = profile.deck || Catalog.DEFAULT_DECK;
+    $('slotTitle').innerHTML = `Case <span class="amber">${cost}</span> mana <small class="muted">· touche ${['A', 'Z', 'E', 'R', 'T', 'Y', 'U'][Catalog.DECK_COSTS.indexOf(cost)]}</small>`;
+    let list = Catalog.CREATURES.filter(c => c.cost === cost && c.playable && (slotFilter.style === 'all' || styleOf(c.id) === slotFilter.style));
+    const by = { name: (a, b) => a.name.localeCompare(b.name, 'fr'), rarity: (a, b) => RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity], stars: (a, b) => (col[b.id] ? Catalog.cardStars(b, col[b.id]) : 0) - (col[a.id] ? Catalog.cardStars(a, col[a.id]) : 0) };
+    list.sort((a, b) => (!!col[b.id] - !!col[a.id]) || by[slotFilter.sort](a, b));
+    $('slotGrid').innerHTML = list.map(c => { const owned = !!col[c.id], R = Catalog.RARITIES[c.rarity]; return `<button class="slot-card ${deck[cost] === c.id ? 'current' : ''} ${owned ? '' : 'locked'}" data-id="${c.id}" style="--rc:${R.color}"><canvas width="110" height="110"></canvas><b>${esc(c.name)}</b><small>${R.name} · ${STYLE_LABEL[styleOf(c.id)]} · ${KIND_LABEL[c.kind] || ''}</small><small>${owned ? starsHtml(Catalog.cardStars(c, col[c.id])) : 'à débloquer'}</small></button>`; }).join('');
+    $('slotGrid').querySelectorAll('.slot-card').forEach(b => { const id = Number(b.dataset.id); collectionCanvases.push({ canvas: b.querySelector('canvas'), ogId: id, skin: profile.equipped[id] || `og${id}_default`, size: 70, alpha: col[id] ? 1 : 0.4 }); b.addEventListener('click', () => { if (!col[id]) { openCreature(id); return; } if (deck[cost] === id) { closeModal('slotModal'); openCreature(id); return; } setDeckSlot(cost, id); closeModal('slotModal'); }); });
+    $('slotStyle').querySelectorAll('.chip').forEach(ch => ch.classList.toggle('active', ch.dataset.v === slotFilter.style));
+    $('slotSort').value = slotFilter.sort;
+    openModal('slotModal');
+  }
+  $('slotStyle').addEventListener('click', (ev) => { const ch = ev.target.closest('.chip'); if (!ch) return; slotFilter.style = ch.dataset.v; openSlotPicker(slotFilter.cost); });
+  $('slotSort').addEventListener('change', () => { slotFilter.sort = $('slotSort').value; openSlotPicker(slotFilter.cost); });
   let detailCanvas = null;
   function openCreature(id, pickForCost) {
     const c = Catalog.CREATURE_BY_ID[id], col = profile.collection || {}, R = Catalog.RARITIES[c.rarity], deck = profile.deck || Catalog.DEFAULT_DECK;
@@ -760,6 +835,7 @@
       [15, 'Flaque de 1,5 case, 3 PV, vit 45 s, qui ne bloque pas : les ennemis au sol qui la traversent avancent à 40 % de leur vitesse (devant un Krak, ils encaissent bien plus de tirs).'],
       [16, 'Toutes les 6 s, charme l’ennemi au sol le plus proche (2,5 cases, pas les brutes) : il change de camp et repart frapper son ancien maître. 2 PV, vit 50 s.'],
       [17, 'Colosse, 8 PV, 5 dégâts : écrase les murs et les tourelles (−1 PV pour lui) et tue toute unité au sol qu’il touche (−1 PV par choc). Il survit à une tourelle seule ; le vent ne le fait pas reculer.'],
+      ...Catalog.CREATURES.filter(c => c.id >= 18).map(c => [c.id, c.power]),
     ];
     $('rulesPage').innerHTML = `
       <h3>But</h3><p>Chaque joueur a <b>30 PV</b>. Pose des Ogs sur ta moitié pour atteindre la base adverse. En classée, après <b>3 minutes</b>, celui qui a le plus de PV gagne. En entraînement et en amical, tu choisis la durée (2, 3, 5 min ou illimitée : seul un KO termine la partie).</p>
@@ -770,7 +846,7 @@
       ${lines.map(([id, txt]) => `<div class="og-line"><canvas width="112" height="112" data-og="${id}"></canvas><div><b>${esc(Catalog.OG_NAMES[id])}</b> <span style="color:var(--muted)">· ${esc(Catalog.OG_ROLES[id])} · ${og[id].cost} mana</span><br><i style="color:#94a3b8">${esc(Catalog.OG_LORE[id])}</i><br>${txt}</div></div>`).join('')}
       
       <h3>Capacités actives (Maj + touche, ou ⚡ sur le slot)</h3><p>10 mana, 20 s de recharge, il faut au moins une créature de ce type en jeu.</p>
-      ${[1, 2, 3, 4, 5, 6, 7].map(id => `<p><b>${esc(Catalog.OG_NAMES[id])} – ${esc(Sim.ABILITIES[id].name)}</b> : ${esc(Sim.ABILITIES[id].desc)}</p>`).join('')}<p class="muted">Les 10 nouvelles créatures n’ont pas de capacité active : leur pouvoir est passif.</p>
+      ${[1, 2, 3, 4, 5, 6, 7].map(id => `<p><b>${esc(Catalog.OG_NAMES[id])} – ${esc(Sim.ABILITIES[id].name)}</b> : ${esc(Sim.ABILITIES[id].desc)}</p>`).join('')}<p class="muted">Les 40 autres créatures n’ont pas de capacité active : leur pouvoir est passif.</p>
       <h3>Collection, équipe, capsules</h3><p>Chaque créature a un <b>coût</b> (10 à 70 mana) et une <b>rareté</b>. Ton <b>équipe</b> contient une créature par coût : ce sont les 7 cases de ta barre en partie (touches A Z E R T Y U). Les nouvelles créatures se gagnent dans les <b>capsules</b> (une par victoire classée, duo ou trio, 5 en stock maximum ; tirage par rareté avec garanties) et sur la <b>route des trophées</b> (paliers de ton record). Les exemplaires en double donnent des étoiles à la carte.</p>
       <h3>Modes</h3><p><b>Classée 1v1</b> : trophées et ligues. <b>Duo 2v2</b> et <b>Trio 3v3</b> : classés aussi, sur une arène de 13 ou 17 colonnes ; chaque joueur a sa propre mana, les PV de la base sont partagés par l’équipe, les capacités profitent à toute l’équipe, et l’abandon n’est effectif que si tous les coéquipiers abandonnent. S’il manque des joueurs après quelques secondes, des bots complètent les équipes (trophées divisés par 2). <b>Entraînement</b> et <b>Amical</b> existent aussi en 2v2 / 3v3 (format dans les options : en amical, l’hôte peut lancer avec des bots aux places vides).</p>
       <h3>Options de partie</h3>

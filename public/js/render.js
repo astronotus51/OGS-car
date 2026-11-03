@@ -89,8 +89,10 @@
           break;
         }
         case 'shot': { const a = animOf(ev.id); a.shot = now; break; }
-        case 'blast': { burst(ev.x, ev.y, '#fb923c', 26, { speed: 420, life: 0.6, size: 14, grav: 200 }); burst(ev.x, ev.y, '#fff7ed', 10, { speed: 200, life: 0.4, size: 7 }); ring(ev.x, ev.y, '#fb923c', ev.radius * 1.3, 0.45); shake = Math.max(shake, 12); break; }
+        case 'blast': if (ev.pulse) { ring(ev.x, ev.y, '#a5f3fc', ev.radius, 0.35); burst(ev.x, ev.y, '#e0f2fe', 8, { speed: 160, life: 0.35, size: 6 }); shake = Math.max(shake, 3); break; }
+        { burst(ev.x, ev.y, '#fb923c', 26, { speed: 420, life: 0.6, size: 14, grav: 200 }); burst(ev.x, ev.y, '#fff7ed', 10, { speed: 200, life: 0.4, size: 7 }); ring(ev.x, ev.y, '#fb923c', ev.radius * 1.3, 0.45); shake = Math.max(shake, 12); break; }
         case 'gust': { for (let i = 0; i < 10; i += 1) particles.push({ x: ev.x + (Math.random() - 0.5) * 120, y: ev.y, vx: (Math.random() - 0.5) * 60, vy: ev.dir * (400 + Math.random() * 300), life: 0, max: 0.5, color: 'rgba(219,234,254,0.8)', size: 5, grav: 0 }); const a = animOf(ev.id); a.shot = now; break; }
+        case 'mana': { floater(ev.x, ev.y, `+${ev.amount} mana`, '#4ade80', 56); burst(ev.x, ev.y, '#bbf7d0', 10, { speed: 180, life: 0.5, size: 7 }); break; }
         case 'charm': { floater(ev.x, ev.y, '♥', '#f0abfc', 64); ring(ev.x, ev.y, '#f0abfc', 140, 0.5); burst(ev.x, ev.y, '#f0abfc', 14, { speed: 200, life: 0.6, size: 8 }); break; }
         case 'heal': { const edgeY = ev.target === 'top' ? 0 : FIELD.h; floater(ev.x, edgeY + (ev.target === 'top' ? 90 : -90), `+${ev.amount}`, '#86efac', 70); burst(ev.x, edgeY, '#4ade80', 16, { speed: 240, life: 0.6, size: 9 }); break; }
         case 'bounce': { const a = animOf(ev.id); a.bounce = now; if (ev.flip) { floater(ev.x, ev.y, '↩', '#fde68a', 56); ring(ev.x, ev.y, '#93c5fd', 100, 0.3); } break; }
